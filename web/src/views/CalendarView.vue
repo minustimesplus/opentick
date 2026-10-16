@@ -1,22 +1,31 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue'
+import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Check, ChevronDown, ChevronLeft, ChevronRight, ListTodo, MoreHorizontal, PanelLeft, Plus, Inbox, Menu} from 'lucide-vue-next'
+import {
+	AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Inbox, ListTodo, MapPin, Menu,
+	MoreHorizontal, PanelLeft, Pencil, Plus, Repeat,
+} from 'lucide-vue-next'
 import TimeGrid from '@/components/calendar/TimeGrid.vue'
 import MonthGrid from '@/components/calendar/MonthGrid.vue'
 import MiniMonth from '@/components/calendar/MiniMonth.vue'
 import Popover from '@/components/Popover.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
-import type {Task} from '@/api/types'
+import SubscriptionDialog from '@/components/SubscriptionDialog.vue'
+import type {CalendarSubscription, Task} from '@/api/types'
 import {useData} from '@/stores/data'
+import {calendarColor, useCalendars, type CalEvent} from '@/stores/calendars'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
-import {addDays, addMonths, dateKey, fmtMonthYear, getSchedule, schedulePatch, startOfDay, startOfMonth, startOfWeek} from '@/lib/dates'
+import {
+	addDays, addMonths, dateKey, fmtLongDate, fmtMonthYear, fmtTime, getSchedule, isSameDay, schedulePatch, startOfDay,
+	startOfMonth, startOfWeek,
+} from '@/lib/dates'
 import {hasColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {openTaskDrawer} from '@/lib/ui'
 
 const data = useData()
+const calendars = useCalendars()
 const route = useRoute()
 const router = useRouter()
 
@@ -68,6 +77,63 @@ const visibleTasks = computed<Task[]>(() => data.allTasks.filter(task => {
 	const end = s.end ?? s.date
 	return end >= range.value.start && s.start < range.value.end
 }))
+
+// ---- subscribed calendars ----
+onMounted(() => {
+	if (!calendars.loaded) calendars.load()
+})
+
+const hiddenSubs = computed(() => new Set(prefs.calendarHiddenSubs))
+const visibleSubs = computed(() => calendars.subscriptions.filter(s => !hiddenSubs.value.has(s.id)))
+
+// Keyed on the url too, so editing a subscription's address reloads it.
+watch(
+	() => [range.value.start.getTime(), range.value.end.getTime(), visibleSubs.value.map(s => `${s.id}:${s.url}`).join(',')],
+	() => calendars.loadEvents(range.value.start, range.value.end, visibleSubs.value.map(s => s.id)),
+	{immediate: true},
+)
+
+const visibleEvents = computed<CalEvent[]>(() => visibleSubs.value.flatMap(sub => {
+	const color = calendarColor(sub)
+	return (calendars.events.get(sub.id) ?? []).map(e => ({...e, color}))
+}))
+
+function toggleSub(id: number) {
+	prefs.calendarHiddenSubs = hiddenSubs.value.has(id)
+		? prefs.calendarHiddenSubs.filter(x => x !== id)
+		: [...prefs.calendarHiddenSubs, id]
+}
+
+const subDialog = ref<{subscription: CalendarSubscription | null} | null>(null)
+
+function openSubscribe() {
+	pop.value = null
+	subDialog.value = {subscription: null}
+}
+
+// ---- event details ----
+const openedEvent = ref<{event: CalEvent, x: number, y: number} | null>(null)
+
+function openEvent(event: CalEvent, e: MouseEvent) {
+	openedEvent.value = {event, x: e.clientX, y: e.clientY}
+}
+
+function eventWhen(e: CalEvent): string {
+	if (e.allDay) {
+		const last = addDays(e.end, -1)
+		return isSameDay(e.start, last) || last < e.start
+			? `${fmtLongDate(e.start)} · ${t('allDay')}`
+			: `${fmtLongDate(e.start)} – ${fmtLongDate(last)}`
+	}
+	if (isSameDay(e.start, e.end) || e.end <= e.start) {
+		return `${fmtLongDate(e.start)} · ${fmtTime(e.start)}${e.end > e.start ? ' – ' + fmtTime(e.end) : ''}`
+	}
+	return `${fmtLongDate(e.start)} ${fmtTime(e.start)} – ${fmtLongDate(e.end)} ${fmtTime(e.end)}`
+}
+
+function safeLink(url: string): string | null {
+	return /^https?:\/\//i.test(url.trim()) ? url.trim() : null
+}
 
 const title = computed(() => fmtMonthYear(mode.value === 'month' ? anchor.value : days.value[0] ?? anchor.value))
 
@@ -157,6 +223,22 @@ const addDefaults = computed(() => {
 				<span v-if="hasColor(p)" class="cdot" :style="{background: projectColor(p)}" />
 				<span class="box" :class="{on: !hidden.has(p.id)}"><Check v-if="!hidden.has(p.id)" :size="12" /></span>
 			</button>
+			<div class="side-head with-action">
+				{{ t('calendars') }}
+				<button class="side-add" :title="t('subscribeCalendar')" @click="openSubscribe"><Plus :size="15" /></button>
+			</div>
+			<div v-for="sub in calendars.subscriptions" :key="'s' + sub.id" class="side-row sub-row" role="button" tabindex="0" @click="toggleSub(sub.id)" @keydown.enter="toggleSub(sub.id)">
+				<CalendarDays :size="15" class="ic" />
+				<span class="name" :title="sub.title">{{ sub.title }}</span>
+				<span v-if="calendars.errors.has(sub.id)" class="sub-error" :title="calendars.errors.get(sub.id) || t('calendarError')"><AlertCircle :size="15" /></span>
+				<button class="sub-edit" :title="t('editCalendar')" @click.stop="subDialog = {subscription: sub}"><Pencil :size="13" /></button>
+				<span class="cdot" :style="{background: calendarColor(sub)}" />
+				<span class="box" :class="{on: !hiddenSubs.has(sub.id)}"><Check v-if="!hiddenSubs.has(sub.id)" :size="12" /></span>
+			</div>
+			<button v-if="!calendars.subscriptions.length" class="side-row add-sub" @click="openSubscribe">
+				<Plus :size="15" class="ic" />
+				<span class="name">{{ t('subscribeCalendar') }}</span>
+			</button>
 		</aside>
 
 		<section class="cal-main">
@@ -176,8 +258,8 @@ const addDefaults = computed(() => {
 			</header>
 
 			<div class="cal-body">
-				<TimeGrid v-if="mode !== 'month'" :days="days" :tasks="visibleTasks" />
-				<MonthGrid v-else :month="anchor" :tasks="visibleTasks" @day="openDay" />
+				<TimeGrid v-if="mode !== 'month'" :days="days" :tasks="visibleTasks" :events="visibleEvents" @open-event="openEvent" />
+				<MonthGrid v-else :month="anchor" :tasks="visibleTasks" :events="visibleEvents" @day="openDay" @open-event="openEvent" />
 			</div>
 		</section>
 
@@ -217,6 +299,9 @@ const addDefaults = computed(() => {
 				<button class="menu-item" @click="prefs.calendarShowWeekends = !prefs.calendarShowWeekends">
 					<Check :size="15" :style="{visibility: prefs.calendarShowWeekends ? 'visible' : 'hidden'}" /> {{ t('showWeekends') }}
 				</button>
+				<button class="menu-item" @click="openSubscribe">
+					<CalendarDays :size="15" /> {{ t('subscribeCalendar') }}
+				</button>
 			</div>
 		</Popover>
 		<Popover v-if="pop === 'add'" :anchor="addEl" placement="bottom-end" @close="pop = null">
@@ -224,6 +309,25 @@ const addDefaults = computed(() => {
 				<QuickAdd :defaults="addDefaults" @created="pop = null" />
 			</div>
 		</Popover>
+		<Popover v-if="openedEvent" :anchor="{x: openedEvent.x, y: openedEvent.y}" @close="openedEvent = null">
+			<div class="evp">
+				<div class="evp-cal">
+					<span class="cdot" :style="{background: openedEvent.event.color}" />
+					{{ calendars.subscription(openedEvent.event.subscriptionId)?.title }}
+				</div>
+				<div class="evp-title">{{ openedEvent.event.title }}</div>
+				<div class="evp-when">
+					{{ eventWhen(openedEvent.event) }}
+					<span v-if="openedEvent.event.recurring" class="evp-rec" :title="t('recurringEvent')"><Repeat :size="13" /></span>
+				</div>
+				<div v-if="openedEvent.event.location" class="evp-row"><MapPin :size="14" /> <span>{{ openedEvent.event.location }}</span></div>
+				<div v-if="openedEvent.event.description" class="evp-desc">{{ openedEvent.event.description }}</div>
+				<a v-if="safeLink(openedEvent.event.url)" class="evp-link" :href="safeLink(openedEvent.event.url)!" target="_blank" rel="noopener noreferrer">
+					<ExternalLink :size="13" /> {{ t('openLink') }}
+				</a>
+			</div>
+		</Popover>
+		<SubscriptionDialog v-if="subDialog" :subscription="subDialog.subscription" @close="subDialog = null" />
 	</div>
 </template>
 
@@ -250,6 +354,58 @@ const addDefaults = computed(() => {
 .side-head {
 	padding: 10px 8px 4px;
 	font-size: 13px;
+	color: var(--text-3);
+}
+
+.side-head.with-action {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-top: 16px;
+}
+
+.side-add {
+	display: inline-flex;
+	padding: 2px;
+	border-radius: 4px;
+	color: var(--text-3);
+}
+
+.side-add:hover {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+
+.sub-row {
+	cursor: pointer;
+}
+
+.sub-edit {
+	display: none;
+	padding: 2px;
+	color: var(--text-3);
+}
+
+.sub-row:hover .sub-edit,
+.sub-row:focus-within .sub-edit {
+	display: inline-flex;
+}
+
+.sub-edit:hover {
+	color: var(--text);
+}
+
+.sub-error {
+	display: inline-flex;
+	color: var(--danger);
+	flex-shrink: 0;
+}
+
+.evp-rec {
+	display: inline-flex;
+}
+
+.add-sub {
 	color: var(--text-3);
 }
 
@@ -448,6 +604,74 @@ h1 {
 .ar-list-name {
 	font-size: 12px;
 	color: var(--text-3);
+}
+
+.evp {
+	width: 320px;
+	padding: 14px 16px;
+	background: var(--bg-elev);
+	border-radius: 10px;
+	box-shadow: var(--shadow);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	user-select: text;
+}
+
+.evp-cal {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	color: var(--text-3);
+}
+
+.evp-title {
+	font-size: 16px;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.evp-when {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	color: var(--text-2);
+}
+
+.evp-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	font-size: 13px;
+	color: var(--text-2);
+	overflow-wrap: anywhere;
+}
+
+.evp-row svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+.evp-desc {
+	max-height: 200px;
+	overflow: auto;
+	font-size: 13px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--text-2);
+	border-top: 1px solid var(--border);
+	padding-top: 8px;
+}
+
+.evp-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	color: var(--accent);
 }
 
 .add-pop {

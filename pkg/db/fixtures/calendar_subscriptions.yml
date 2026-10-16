@@ -1,0 +1,19 @@
+- id: 1
+  user_id: 1
+  title: Work
+  url: https://calendar.example.com/work.ics
+  hex_color: 1973ff
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+- id: 2
+  user_id: 1
+  title: Holidays
+  url: https://calendar.example.com/holidays.ics
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+- id: 3
+  user_id: 2
+  title: Someone else's calendar
+  url: https://calendar.example.com/secret-token.ics
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12

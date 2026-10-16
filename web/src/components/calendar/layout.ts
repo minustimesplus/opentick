@@ -1,11 +1,15 @@
 import type {Task} from '@/api/types'
+import type {CalEvent} from '@/stores/calendars'
 import {addDays, getSchedule, minutesOfDay, startOfDay, type Schedule} from '@/lib/dates'
 
 /** Visual length used for tasks that have a time but no duration. */
 export const POINT_MINUTES = 25
 
+/** A block on the grid: either a task or a read-only event from a subscribed calendar. */
 export interface TimedItem {
-	task: Task
+	key: string
+	task?: Task
+	event?: CalEvent
 	schedule: Schedule
 	/** Minutes from the start of the column day (clamped to 0..1440). */
 	startMin: number
@@ -18,25 +22,34 @@ export interface TimedItem {
 	clippedEnd: boolean
 }
 
-/** Timed tasks intersecting `day`, with overlap columns assigned. */
-export function layoutDay(tasks: Task[], day: Date): TimedItem[] {
+function eventSchedule(e: CalEvent): Schedule {
+	return {date: e.start, allDay: e.allDay, start: e.start, end: e.end > e.start ? e.end : null}
+}
+
+/** Timed tasks and events intersecting `day`, with overlap columns assigned. */
+export function layoutDay(tasks: Task[], day: Date, events: CalEvent[] = []): TimedItem[] {
 	const dayStart = startOfDay(day)
 	const dayEnd = addDays(dayStart, 1)
 	const items: TimedItem[] = []
-	for (const task of tasks) {
-		const s = getSchedule(task)
-		if (!s || s.allDay) continue
+	const add = (s: Schedule, item: Pick<TimedItem, 'key' | 'task' | 'event'>) => {
 		const point = !s.end
 		const end = s.end ?? new Date(s.start.getTime() + POINT_MINUTES * 60_000)
-		if (end <= dayStart || s.start >= dayEnd) continue
+		if (end <= dayStart || s.start >= dayEnd) return
 		const clippedStart = s.start < dayStart
 		const clippedEnd = end > dayEnd
 		const startMin = clippedStart ? 0 : minutesOfDay(s.start)
 		let endMin = clippedEnd ? 1440 : minutesOfDay(end) || 1440
 		if (endMin <= startMin) endMin = Math.min(1440, startMin + POINT_MINUTES)
-		items.push({task, schedule: s, startMin, endMin, point, col: 0, cols: 1, clippedStart, clippedEnd})
+		items.push({...item, schedule: s, startMin, endMin, point, col: 0, cols: 1, clippedStart, clippedEnd})
 	}
-	items.sort((a, b) => a.startMin - b.startMin || (b.endMin - b.startMin) - (a.endMin - a.startMin) || a.task.id - b.task.id)
+	for (const task of tasks) {
+		const s = getSchedule(task)
+		if (s && !s.allDay) add(s, {key: `t${task.id}`, task})
+	}
+	for (const event of events) {
+		if (!event.allDay) add(eventSchedule(event), {key: `e${event.key}`, event})
+	}
+	items.sort((a, b) => a.startMin - b.startMin || (b.endMin - b.startMin) - (a.endMin - a.startMin) || a.key.localeCompare(b.key))
 
 	// Group into clusters of transitively overlapping items, then pack columns.
 	let cluster: TimedItem[] = []
@@ -65,6 +78,13 @@ export function layoutDay(tasks: Task[], day: Date): TimedItem[] {
 	}
 	if (cluster.length) flush()
 	return items
+}
+
+/** All-day events covering `day`. Their end is exclusive. */
+export function allDayEventsFor(events: CalEvent[], day: Date): CalEvent[] {
+	const d0 = startOfDay(day)
+	const d1 = addDays(d0, 1)
+	return events.filter(e => e.allDay && e.start < d1 && e.end > d0)
 }
 
 /** All-day tasks covering `day`. */

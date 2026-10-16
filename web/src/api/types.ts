@@ -80,3 +80,33 @@ export interface AppNotification {
 	read_at?: string | null
 	created?: string
 }
+
+export interface CalendarSubscription {
+	id: number
+	title: string
+	url: string
+	hex_color?: string
+	created?: string
+	updated?: string
+}
+
+/** One occurrence of an event from a subscribed calendar, as the API returns it. */
+export interface ExternalEvent {
+	id: string
+	uid: string
+	title: string
+	description: string
+	location: string
+	url: string
+	start: string
+	/** Exclusive. For all-day events: midnight after the last day. */
+	end: string
+	all_day: boolean
+	recurring: boolean
+}
+
+export interface CalendarSubscriptionEvents {
+	subscription_id: number
+	calendar_name: string
+	events: ExternalEvent[] | null
+}

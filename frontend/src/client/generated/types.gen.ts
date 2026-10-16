@@ -424,6 +424,91 @@ export type BulkTaskCreation = {
     tasks?: Array<Task> | null;
 };
 
+export type CalendarSubscription = {
+    /**
+     * A URL to the JSON Schema for this object.
+     */
+    readonly $schema?: string;
+    /**
+     * A timestamp when this subscription was created. You cannot change this value.
+     */
+    readonly created?: string;
+    /**
+     * The color the calendar's events are shown in, in hex format.
+     */
+    hex_color?: string;
+    /**
+     * The unique, numeric id of this calendar subscription.
+     */
+    readonly id?: number;
+    /**
+     * The display name of the calendar.
+     */
+    title?: string;
+    /**
+     * A timestamp when this subscription was last updated. You cannot change this value.
+     */
+    readonly updated?: string;
+    /**
+     * The http(s) or webcal(s) url of the ICS feed. webcal urls are stored as https. Private feed urls often contain a secret token; only the owner can read it.
+     */
+    url?: string;
+};
+
+export type CalendarSubscriptionEvents = {
+    /**
+     * A URL to the JSON Schema for this object.
+     */
+    readonly $schema?: string;
+    /**
+     * The calendar's own name from the feed (X-WR-CALNAME), if it sets one.
+     */
+    calendar_name?: string;
+    /**
+     * The event occurrences overlapping the requested range, sorted by start. Recurring events are expanded into one entry per occurrence.
+     */
+    events?: Array<Event> | null;
+    /**
+     * The id of the calendar subscription these events belong to.
+     */
+    subscription_id?: number;
+};
+
+export type CalendarSubscriptionReadBody = {
+    /**
+     * A URL to the JSON Schema for this object.
+     */
+    readonly $schema?: string;
+    /**
+     * A timestamp when this subscription was created. You cannot change this value.
+     */
+    readonly created?: string;
+    /**
+     * The color the calendar's events are shown in, in hex format.
+     */
+    hex_color?: string;
+    /**
+     * The unique, numeric id of this calendar subscription.
+     */
+    readonly id?: number;
+    /**
+     * The maximum permission the requesting user has on this subscription. Always 2 (admin), as only the owner can read it.
+     */
+    readonly max_permission?: number;
+    /**
+     * The display name of the calendar.
+     */
+    title?: string;
+    /**
+     * A timestamp when this subscription was last updated. You cannot change this value.
+     */
+    readonly updated?: string;
+    /**
+     * The http(s) or webcal(s) url of the ICS feed. webcal urls are stored as https. Private feed urls often contain a secret token; only the owner can read it.
+     */
+    url?: string;
+};
+
 export type Callback = {
     /**
      * A URL to the JSON Schema for this object.
@@ -629,6 +714,49 @@ export type ErrorDetail = {
      * The value at the given location
      */
     value?: unknown;
+};
+
+export type Event = {
+    /**
+     * Whether this is an all-day event.
+     */
+    all_day?: boolean;
+    /**
+     * The event description as plain text.
+     */
+    description?: string;
+    /**
+     * End of the occurrence (exclusive). For all-day events this is midnight after the last day in the requested timezone.
+     */
+    end?: string;
+    /**
+     * Identifier of this occurrence, unique within the feed: the event UID plus the occurrence start.
+     */
+    id?: string;
+    /**
+     * The event location as plain text.
+     */
+    location?: string;
+    /**
+     * Whether this occurrence belongs to a recurring event.
+     */
+    recurring?: boolean;
+    /**
+     * Start of the occurrence. For all-day events this is midnight in the requested timezone.
+     */
+    start?: string;
+    /**
+     * The event summary.
+     */
+    title?: string;
+    /**
+     * The UID of the event in the feed. Shared by all occurrences of a recurring event.
+     */
+    uid?: string;
+    /**
+     * The URL attached to the event, if any.
+     */
+    url?: string;
 };
 
 export type File = {
@@ -1200,6 +1328,18 @@ export type PaginatedBucket = {
      */
     readonly $schema?: string;
     items?: Array<Bucket> | null;
+    page?: number;
+    per_page?: number;
+    total?: number;
+    total_pages?: number;
+};
+
+export type PaginatedCalendarSubscription = {
+    /**
+     * A URL to the JSON Schema for this object.
+     */
+    readonly $schema?: string;
+    items?: Array<CalendarSubscription> | null;
     page?: number;
     per_page?: number;
     total?: number;
@@ -3720,6 +3860,51 @@ export type BulkTaskCreationWritable = {
     tasks?: Array<TaskWritable> | null;
 };
 
+export type CalendarSubscriptionWritable = {
+    /**
+     * The color the calendar's events are shown in, in hex format.
+     */
+    hex_color?: string;
+    /**
+     * The display name of the calendar.
+     */
+    title?: string;
+    /**
+     * The http(s) or webcal(s) url of the ICS feed. webcal urls are stored as https. Private feed urls often contain a secret token; only the owner can read it.
+     */
+    url?: string;
+};
+
+export type CalendarSubscriptionEventsWritable = {
+    /**
+     * The calendar's own name from the feed (X-WR-CALNAME), if it sets one.
+     */
+    calendar_name?: string;
+    /**
+     * The event occurrences overlapping the requested range, sorted by start. Recurring events are expanded into one entry per occurrence.
+     */
+    events?: Array<Event> | null;
+    /**
+     * The id of the calendar subscription these events belong to.
+     */
+    subscription_id?: number;
+};
+
+export type CalendarSubscriptionReadBodyWritable = {
+    /**
+     * The color the calendar's events are shown in, in hex format.
+     */
+    hex_color?: string;
+    /**
+     * The display name of the calendar.
+     */
+    title?: string;
+    /**
+     * The http(s) or webcal(s) url of the ICS feed. webcal urls are stored as https. Private feed urls often contain a secret token; only the owner can read it.
+     */
+    url?: string;
+};
+
 export type CallbackWritable = {
     code?: string;
     redirect_url?: string;
@@ -4035,6 +4220,14 @@ export type PaginatedBotUserWritable = {
 
 export type PaginatedBucketWritable = {
     items?: Array<BucketWritable> | null;
+    page?: number;
+    per_page?: number;
+    total?: number;
+    total_pages?: number;
+};
+
+export type PaginatedCalendarSubscriptionWritable = {
+    items?: Array<CalendarSubscriptionWritable> | null;
     page?: number;
     per_page?: number;
     total?: number;
@@ -5702,6 +5895,235 @@ export type BackgroundsUnsplashSearchResponses = {
 };
 
 export type BackgroundsUnsplashSearchResponse = BackgroundsUnsplashSearchResponses[keyof BackgroundsUnsplashSearchResponses];
+
+export type CalendarSubscriptionsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * 1-based page number.
+         */
+        page?: number;
+        /**
+         * Items per page. Defaults to the instance's configured maximum (service.maxitemsperpage, reported as max_items_per_page by /info) and is silently capped at it; asking for more is not an error.
+         */
+        per_page?: number;
+        /**
+         * Search query; filters the list to items matching this string.
+         */
+        q?: string;
+    };
+    url: '/calendar-subscriptions';
+};
+
+export type CalendarSubscriptionsListErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type CalendarSubscriptionsListError = CalendarSubscriptionsListErrors[keyof CalendarSubscriptionsListErrors];
+
+export type CalendarSubscriptionsListResponses = {
+    /**
+     * OK
+     */
+    200: PaginatedCalendarSubscription;
+};
+
+export type CalendarSubscriptionsListResponse = CalendarSubscriptionsListResponses[keyof CalendarSubscriptionsListResponses];
+
+export type CalendarSubscriptionsCreateData = {
+    body: CalendarSubscriptionWritable;
+    path?: never;
+    query?: never;
+    url: '/calendar-subscriptions';
+};
+
+export type CalendarSubscriptionsCreateErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type CalendarSubscriptionsCreateError = CalendarSubscriptionsCreateErrors[keyof CalendarSubscriptionsCreateErrors];
+
+export type CalendarSubscriptionsCreateResponses = {
+    /**
+     * Created
+     */
+    201: CalendarSubscription;
+};
+
+export type CalendarSubscriptionsCreateResponse = CalendarSubscriptionsCreateResponses[keyof CalendarSubscriptionsCreateResponses];
+
+export type CalendarSubscriptionsDeleteData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/calendar-subscriptions/{id}';
+};
+
+export type CalendarSubscriptionsDeleteErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type CalendarSubscriptionsDeleteError = CalendarSubscriptionsDeleteErrors[keyof CalendarSubscriptionsDeleteErrors];
+
+export type CalendarSubscriptionsDeleteResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type CalendarSubscriptionsDeleteResponse = CalendarSubscriptionsDeleteResponses[keyof CalendarSubscriptionsDeleteResponses];
+
+export type CalendarSubscriptionsReadData = {
+    body?: never;
+    headers?: {
+        /**
+         * Succeeds if the server's resource matches one of the passed values.
+         */
+        'If-Match'?: Array<string> | null;
+        /**
+         * Succeeds if the server's resource matches none of the passed values. On writes, the special value * may be used to match any existing value.
+         */
+        'If-None-Match'?: Array<string> | null;
+        /**
+         * Succeeds if the server's resource date is more recent than the passed date.
+         */
+        'If-Modified-Since'?: string;
+        /**
+         * Succeeds if the server's resource date is older or the same as the passed date.
+         */
+        'If-Unmodified-Since'?: string;
+    };
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/calendar-subscriptions/{id}';
+};
+
+export type CalendarSubscriptionsReadErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type CalendarSubscriptionsReadError = CalendarSubscriptionsReadErrors[keyof CalendarSubscriptionsReadErrors];
+
+export type CalendarSubscriptionsReadResponses = {
+    /**
+     * OK
+     */
+    200: CalendarSubscriptionReadBody;
+};
+
+export type CalendarSubscriptionsReadResponse = CalendarSubscriptionsReadResponses[keyof CalendarSubscriptionsReadResponses];
+
+export type PatchCalendarSubscriptionsReadData = {
+    body: Array<JsonPatchOp> | null;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/calendar-subscriptions/{id}';
+};
+
+export type PatchCalendarSubscriptionsReadErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type PatchCalendarSubscriptionsReadError = PatchCalendarSubscriptionsReadErrors[keyof PatchCalendarSubscriptionsReadErrors];
+
+export type PatchCalendarSubscriptionsReadResponses = {
+    /**
+     * OK
+     */
+    200: CalendarSubscription;
+};
+
+export type PatchCalendarSubscriptionsReadResponse = PatchCalendarSubscriptionsReadResponses[keyof PatchCalendarSubscriptionsReadResponses];
+
+export type CalendarSubscriptionsUpdateData = {
+    body: CalendarSubscriptionReadBodyWritable;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/calendar-subscriptions/{id}';
+};
+
+export type CalendarSubscriptionsUpdateErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type CalendarSubscriptionsUpdateError = CalendarSubscriptionsUpdateErrors[keyof CalendarSubscriptionsUpdateErrors];
+
+export type CalendarSubscriptionsUpdateResponses = {
+    /**
+     * OK
+     */
+    200: CalendarSubscription;
+};
+
+export type CalendarSubscriptionsUpdateResponse = CalendarSubscriptionsUpdateResponses[keyof CalendarSubscriptionsUpdateResponses];
+
+export type CalendarSubscriptionsEventsData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query: {
+        /**
+         * Start of the range (inclusive), RFC 3339.
+         */
+        from: string;
+        /**
+         * End of the range (exclusive), RFC 3339.
+         */
+        to: string;
+        /**
+         * IANA timezone (e.g. Europe/Berlin) to place all-day and floating events in. Defaults to the user's timezone setting.
+         */
+        timezone?: string;
+    };
+    url: '/calendar-subscriptions/{id}/events';
+};
+
+export type CalendarSubscriptionsEventsErrors = {
+    /**
+     * Error
+     */
+    default: VikunjaErrorModel;
+};
+
+export type CalendarSubscriptionsEventsError = CalendarSubscriptionsEventsErrors[keyof CalendarSubscriptionsEventsErrors];
+
+export type CalendarSubscriptionsEventsResponses = {
+    /**
+     * OK
+     */
+    200: CalendarSubscriptionEvents;
+};
+
+export type CalendarSubscriptionsEventsResponse = CalendarSubscriptionsEventsResponses[keyof CalendarSubscriptionsEventsResponses];
 
 export type FiltersCreateData = {
     body: SavedFilterWritable;

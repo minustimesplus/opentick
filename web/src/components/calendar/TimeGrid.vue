@@ -12,9 +12,11 @@ import {projectColor} from '@/lib/tasks'
 import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
-import {allDayFor, layoutDay, minOf, POINT_MINUTES, snap, totalHeight, yOf, type Scale, type TimedItem} from './layout'
+import type {CalEvent} from '@/stores/calendars'
+import {allDayEventsFor, allDayFor, layoutDay, minOf, POINT_MINUTES, snap, totalHeight, yOf, type Scale, type TimedItem} from './layout'
 
-const props = defineProps<{days: Date[], tasks: Task[]}>()
+const props = withDefaults(defineProps<{days: Date[], tasks: Task[], events?: CalEvent[]}>(), {events: () => []})
+const emit = defineEmits<{openEvent: [CalEvent, MouseEvent]}>()
 const data = useData()
 
 const GUTTER = 72
@@ -100,8 +102,11 @@ const columns = computed(() => props.days.map(day => ({
 	day,
 	key: dateKey(day),
 	today: isSameDay(day, now.value),
-	items: layoutDay(props.tasks, day),
-	allDay: allDayFor(props.tasks, day),
+	items: layoutDay(props.tasks, day, props.events),
+	allDay: [
+		...allDayEventsFor(props.events, day).map(event => ({key: `e${event.key}`, event, task: undefined})),
+		...allDayFor(props.tasks, day).map(task => ({key: `t${task.id}`, task, event: undefined})),
+	],
 })))
 
 const allDayExpanded = ref(false)
@@ -123,7 +128,7 @@ function itemStyle(it: TimedItem) {
 		height: `${Math.max(it.point ? 20 : 22, bottom - top - gap)}px`,
 		left: `calc(${it.col * width}% + 2px)`,
 		width: `calc(${width}% - 6px)`,
-		'--c': color(it.task),
+		'--c': it.event ? it.event.color : color(it.task!),
 	}
 }
 
@@ -394,18 +399,28 @@ const today0 = computed(() => startOfDay(now.value))
 				<div class="wd">{{ fmtWeekdayShort(col.day) }}</div>
 				<div class="dn"><span :class="{today: col.today, past: col.day < today0}">{{ col.day.getDate() }}</span></div>
 				<div class="ad-list">
-					<div
-						v-for="task in (allDayExpanded ? col.allDay : col.allDay.slice(0, maxAllDay > ALLDAY_VISIBLE + 1 ? ALLDAY_VISIBLE : ALLDAY_VISIBLE + 1))"
-						:key="task.id"
-						class="ad-chip"
-						:class="{done: task.done}"
-						:style="{'--c': color(task)}"
-						@pointerdown="startOnAllDay($event, task, i)"
-						@contextmenu="openTaskMenu(task.id, $event)"
-					>
-						<TaskCheckbox :done="task.done" on-color :size="13" @toggle="data.toggleDone(task.id)" />
-						<span class="ad-title">{{ task.title }}</span>
-					</div>
+					<template v-for="entry in (allDayExpanded ? col.allDay : col.allDay.slice(0, maxAllDay > ALLDAY_VISIBLE + 1 ? ALLDAY_VISIBLE : ALLDAY_VISIBLE + 1))" :key="entry.key">
+						<div
+							v-if="entry.event"
+							class="ad-chip ext"
+							:style="{'--c': entry.event.color}"
+							:title="entry.event.title"
+							@click.stop="emit('openEvent', entry.event!, $event)"
+						>
+							<span class="ad-title">{{ entry.event.title }}</span>
+						</div>
+						<div
+							v-else-if="entry.task"
+							class="ad-chip"
+							:class="{done: entry.task.done}"
+							:style="{'--c': color(entry.task)}"
+							@pointerdown="startOnAllDay($event, entry.task!, i)"
+							@contextmenu="openTaskMenu(entry.task!.id, $event)"
+						>
+							<TaskCheckbox :done="entry.task.done" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
+							<span class="ad-title">{{ entry.task.title }}</span>
+						</div>
+					</template>
 					<button
 						v-if="!allDayExpanded && maxAllDay > ALLDAY_VISIBLE + 1 && col.allDay.length > ALLDAY_VISIBLE"
 						class="ad-more"
@@ -442,22 +457,35 @@ const today0 = computed(() => startOfDay(now.value))
 				</div>
 
 				<div v-for="(col, i) in columns" :key="col.key" class="col" :class="{today: col.today}" :data-idx="i">
-					<div
-						v-for="it in col.items"
-						:key="it.task.id"
-						class="ev"
-						:class="{point: it.point, done: it.task.done, ghost: preview?.task?.id === it.task.id, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
-						:style="itemStyle(it)"
-						@pointerdown.stop="startOnItem($event, it, i, 'move')"
-						@contextmenu="openTaskMenu(it.task.id, $event)"
-					>
-						<div class="ev-top">
-							<TaskCheckbox :done="it.task.done" on-color :size="13" @toggle="data.toggleDone(it.task.id)" />
-							<span class="ev-title">{{ it.task.title }}</span>
+					<template v-for="it in col.items" :key="it.key">
+						<div
+							v-if="it.event"
+							class="ev ext"
+							:class="{point: it.point, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
+							:style="itemStyle(it)"
+							:title="it.event.title"
+							@pointerdown.stop
+							@click="emit('openEvent', it.event!, $event)"
+						>
+							<div class="ev-top"><span class="ev-title">{{ it.event.title }}</span></div>
+							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
 						</div>
-						<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
-						<div class="resize" @pointerdown.stop="startOnItem($event, it, i, 'resize')" />
-					</div>
+						<div
+							v-else-if="it.task"
+							class="ev"
+							:class="{point: it.point, done: it.task.done, ghost: preview?.task?.id === it.task.id, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
+							:style="itemStyle(it)"
+							@pointerdown.stop="startOnItem($event, it, i, 'move')"
+							@contextmenu="openTaskMenu(it.task!.id, $event)"
+						>
+							<div class="ev-top">
+								<TaskCheckbox :done="it.task.done" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
+								<span class="ev-title">{{ it.task.title }}</span>
+							</div>
+							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
+							<div class="resize" @pointerdown.stop="startOnItem($event, it, i, 'resize')" />
+						</div>
+					</template>
 
 					<div
 						v-if="preview && !preview.allDay && preview.dayIdx === i"
@@ -733,6 +761,20 @@ const today0 = computed(() => startOfDay(now.value))
 
 .short .ev-time {
 	display: none;
+}
+
+.ev.ext,
+.ad-chip.ext {
+	/* Read-only calendar events: a lighter fill with a colored edge, so they
+	   read as context rather than as tasks to act on. */
+	--bgc: color-mix(in srgb, var(--c) 22%, var(--bg));
+	color: var(--text);
+	border-left: 3px solid var(--c);
+	cursor: pointer;
+}
+
+.ev.ext .ev-time {
+	padding-left: 0;
 }
 
 .resize {

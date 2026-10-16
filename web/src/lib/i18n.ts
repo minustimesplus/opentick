@@ -138,6 +138,18 @@ const en = {
 	error: 'Something went wrong',
 	clearDate: 'Clear date',
 	wontDo: "Won't do",
+	calendars: 'Calendars',
+	subscribeCalendar: 'Subscribe to calendar',
+	editCalendar: 'Edit calendar',
+	calendarUrl: 'iCal address (.ics)',
+	calendarUrlHint: 'Paste the public or secret iCal address of a calendar, e.g. from Google Calendar, Outlook or iCloud. Events are shown read-only.',
+	calendarNameHint: 'Leave empty to use the calendar\'s own name',
+	subscribe: 'Subscribe',
+	unsubscribe: 'Unsubscribe',
+	unsubscribeConfirm: 'Unsubscribe from "{name}"?',
+	calendarError: 'Could not load this calendar',
+	openLink: 'Open link',
+	recurringEvent: 'Recurring event',
 }
 
 type Dict = typeof en
@@ -279,6 +291,18 @@ const fr: Dict = {
 	error: 'Une erreur est survenue',
 	clearDate: 'Effacer la date',
 	wontDo: 'Abandonnée',
+	calendars: 'Calendriers',
+	subscribeCalendar: "S'abonner à un calendrier",
+	editCalendar: 'Modifier le calendrier',
+	calendarUrl: 'Adresse iCal (.ics)',
+	calendarUrlHint: "Collez l'adresse iCal publique ou secrète d'un calendrier, par ex. Google Agenda, Outlook ou iCloud. Les événements sont affichés en lecture seule.",
+	calendarNameHint: 'Laisser vide pour utiliser le nom du calendrier',
+	subscribe: "S'abonner",
+	unsubscribe: 'Se désabonner',
+	unsubscribeConfirm: 'Se désabonner de « {name} » ?',
+	calendarError: 'Impossible de charger ce calendrier',
+	openLink: 'Ouvrir le lien',
+	recurringEvent: 'Événement récurrent',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

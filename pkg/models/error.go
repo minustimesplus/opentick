@@ -2967,3 +2967,112 @@ func (err ErrUserDataExportDoesNotExist) HTTPError() web.HTTPError {
 		Message:  "No user data export found.",
 	}
 }
+
+// =============================
+// Calendar subscription errors
+// =============================
+
+// ErrCalendarSubscriptionDoesNotExist represents an error where a calendar subscription does not exist.
+type ErrCalendarSubscriptionDoesNotExist struct {
+	ID int64
+}
+
+// IsErrCalendarSubscriptionDoesNotExist checks if an error is ErrCalendarSubscriptionDoesNotExist.
+func IsErrCalendarSubscriptionDoesNotExist(err error) bool {
+	_, ok := err.(ErrCalendarSubscriptionDoesNotExist)
+	return ok
+}
+
+func (err ErrCalendarSubscriptionDoesNotExist) Error() string {
+	return fmt.Sprintf("Calendar subscription does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeCalendarSubscriptionDoesNotExist holds the unique world-error code of this error
+const ErrCodeCalendarSubscriptionDoesNotExist = 20001
+
+// HTTPError holds the http error description
+func (err ErrCalendarSubscriptionDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeCalendarSubscriptionDoesNotExist,
+		Message:  "This calendar subscription does not exist.",
+	}
+}
+
+// ErrCalendarSubscriptionInvalidURL represents an error where a calendar subscription url is not an http(s) or webcal url.
+type ErrCalendarSubscriptionInvalidURL struct{}
+
+// IsErrCalendarSubscriptionInvalidURL checks if an error is ErrCalendarSubscriptionInvalidURL.
+func IsErrCalendarSubscriptionInvalidURL(err error) bool {
+	_, ok := err.(ErrCalendarSubscriptionInvalidURL)
+	return ok
+}
+
+func (err ErrCalendarSubscriptionInvalidURL) Error() string {
+	return "Calendar subscription url is invalid"
+}
+
+// ErrCodeCalendarSubscriptionInvalidURL holds the unique world-error code of this error
+const ErrCodeCalendarSubscriptionInvalidURL = 20002
+
+// HTTPError holds the http error description
+func (err ErrCalendarSubscriptionInvalidURL) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeCalendarSubscriptionInvalidURL,
+		Message:  "The calendar url must be an http, https or webcal url.",
+	}
+}
+
+// ErrCalendarSubscriptionFetchFailed represents an error where a subscribed calendar feed could not be loaded.
+type ErrCalendarSubscriptionFetchFailed struct {
+	Reason string
+}
+
+// IsErrCalendarSubscriptionFetchFailed checks if an error is ErrCalendarSubscriptionFetchFailed.
+func IsErrCalendarSubscriptionFetchFailed(err error) bool {
+	_, ok := err.(ErrCalendarSubscriptionFetchFailed)
+	return ok
+}
+
+func (err ErrCalendarSubscriptionFetchFailed) Error() string {
+	return "Could not load the subscribed calendar: " + err.Reason
+}
+
+// ErrCodeCalendarSubscriptionFetchFailed holds the unique world-error code of this error
+const ErrCodeCalendarSubscriptionFetchFailed = 20003
+
+// HTTPError holds the http error description
+func (err ErrCalendarSubscriptionFetchFailed) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode:   http.StatusBadGateway,
+		Code:       ErrCodeCalendarSubscriptionFetchFailed,
+		Message:    "Could not load the calendar: " + err.Reason,
+		I18nParams: map[string]string{"reason": err.Reason},
+	}
+}
+
+// ErrCalendarSubscriptionInvalidRange represents an error where calendar events were requested for an invalid time range.
+type ErrCalendarSubscriptionInvalidRange struct{}
+
+// IsErrCalendarSubscriptionInvalidRange checks if an error is ErrCalendarSubscriptionInvalidRange.
+func IsErrCalendarSubscriptionInvalidRange(err error) bool {
+	_, ok := err.(ErrCalendarSubscriptionInvalidRange)
+	return ok
+}
+
+func (err ErrCalendarSubscriptionInvalidRange) Error() string {
+	return "Calendar event range is invalid"
+}
+
+// ErrCodeCalendarSubscriptionInvalidRange holds the unique world-error code of this error
+const ErrCodeCalendarSubscriptionInvalidRange = 20004
+
+// HTTPError holds the http error description
+func (err ErrCalendarSubscriptionInvalidRange) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeCalendarSubscriptionInvalidRange,
+		Message:  "The end of the range must be after its start, and the range can span at most 366 days.",
+	}
+}

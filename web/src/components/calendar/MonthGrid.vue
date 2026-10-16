@@ -12,9 +12,10 @@ import {projectColor} from '@/lib/tasks'
 import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
+import type {CalEvent} from '@/stores/calendars'
 
-const props = defineProps<{month: Date, tasks: Task[]}>()
-const emit = defineEmits<{day: [Date]}>()
+const props = withDefaults(defineProps<{month: Date, tasks: Task[], events?: CalEvent[]}>(), {events: () => []})
+const emit = defineEmits<{day: [Date], openEvent: [CalEvent, MouseEvent]}>()
 const data = useData()
 const MAX = 4
 
@@ -24,24 +25,35 @@ const weeks = computed(() => {
 		.filter(d => prefs.calendarShowWeekends || (d.getDay() !== 0 && d.getDay() !== 6)))
 })
 
+interface DayEntry {
+	key: string
+	task?: Task
+	event?: CalEvent
+	allDay: boolean
+	start: Date
+}
+
 const byDay = computed(() => {
-	const map = new Map<string, Task[]>()
+	const map = new Map<string, DayEntry[]>()
+	const add = (first: Date, last: Date, entry: DayEntry) => {
+		for (let d = startOfDay(first); d <= last; d = addDays(d, 1)) {
+			const k = dateKey(d)
+			if (!map.has(k)) map.set(k, [])
+			map.get(k)!.push(entry)
+		}
+	}
 	for (const task of props.tasks) {
 		const s = getSchedule(task)
 		if (!s) continue
-		const last = s.end && s.allDay ? s.end : s.date
-		for (let d = startOfDay(s.start); d <= last; d = addDays(d, 1)) {
-			const k = dateKey(d)
-			if (!map.has(k)) map.set(k, [])
-			map.get(k)!.push(task)
-		}
+		add(s.start, s.end && s.allDay ? s.end : s.date, {key: `t${task.id}`, task, allDay: s.allDay, start: s.start})
+	}
+	for (const event of props.events) {
+		// The end is exclusive: an event ending at midnight does not show on the next day.
+		const last = event.end > event.start ? new Date(event.end.getTime() - 1) : event.start
+		add(event.start, last, {key: `e${event.key}`, event, allDay: event.allDay, start: event.start})
 	}
 	for (const list of map.values()) {
-		list.sort((a, b) => {
-			const sa = getSchedule(a)!
-			const sb = getSchedule(b)!
-			return Number(!sa.allDay) - Number(!sb.allDay) || sa.start.getTime() - sb.start.getTime()
-		})
+		list.sort((a, b) => Number(!a.allDay) - Number(!b.allDay) || a.start.getTime() - b.start.getTime())
 	}
 	return map
 })
@@ -52,9 +64,8 @@ function color(task: Task) {
 	return projectColor(data.project(task.project_id))
 }
 
-function chipTime(task: Task) {
-	const s = getSchedule(task)
-	return s && !s.allDay ? fmtTime(s.start) : ''
+function chipTime(entry: DayEntry) {
+	return entry.allDay ? '' : fmtTime(entry.start)
 }
 
 function onDragStart(e: DragEvent, task: Task) {
@@ -107,22 +118,35 @@ async function submit() {
 					@drop.prevent="onDrop($event, d)"
 				>
 					<button class="num" :class="{today: isSameDay(d, today)}" @click="emit('day', d)">{{ d.getDate() }}</button>
-					<div
-						v-for="task in (byDay.get(dateKey(d)) ?? []).slice(0, MAX)"
-						:key="task.id"
-						class="chip"
-						:class="{timed: !!chipTime(task), done: task.done}"
-						:style="{'--c': color(task)}"
-						draggable="true"
-						@dragstart="onDragStart($event, task)"
-						@click="openTaskDrawer(task.id)"
-						@contextmenu="openTaskMenu(task.id, $event)"
-					>
-						<TaskCheckbox v-if="!chipTime(task)" :done="task.done" on-color :size="12" @toggle="data.toggleDone(task.id)" />
-						<span v-else class="dot" />
-						<span class="title">{{ task.title }}</span>
-						<span v-if="chipTime(task)" class="time">{{ chipTime(task) }}</span>
-					</div>
+					<template v-for="entry in (byDay.get(dateKey(d)) ?? []).slice(0, MAX)" :key="entry.key">
+						<div
+							v-if="entry.event"
+							class="chip ext"
+							:class="{timed: !!chipTime(entry)}"
+							:style="{'--c': entry.event.color}"
+							:title="entry.event.title"
+							@click="emit('openEvent', entry.event!, $event)"
+						>
+							<span v-if="chipTime(entry)" class="dot" />
+							<span class="title">{{ entry.event.title }}</span>
+							<span v-if="chipTime(entry)" class="time">{{ chipTime(entry) }}</span>
+						</div>
+						<div
+							v-else-if="entry.task"
+							class="chip"
+							:class="{timed: !!chipTime(entry), done: entry.task.done}"
+							:style="{'--c': color(entry.task)}"
+							draggable="true"
+							@dragstart="onDragStart($event, entry.task!)"
+							@click="openTaskDrawer(entry.task!.id)"
+							@contextmenu="openTaskMenu(entry.task!.id, $event)"
+						>
+							<TaskCheckbox v-if="!chipTime(entry)" :done="entry.task.done" on-color :size="12" @toggle="data.toggleDone(entry.task!.id)" />
+							<span v-else class="dot" />
+							<span class="title">{{ entry.task.title }}</span>
+							<span v-if="chipTime(entry)" class="time">{{ chipTime(entry) }}</span>
+						</div>
+					</template>
 					<button v-if="(byDay.get(dateKey(d))?.length ?? 0) > MAX" class="more" @click="emit('day', d)">
 						{{ t('more', {n: byDay.get(dateKey(d))!.length - MAX}) }}
 					</button>
@@ -218,6 +242,12 @@ async function submit() {
 
 .chip.timed:hover {
 	background: var(--bg-hover);
+}
+
+.chip.ext:not(.timed) {
+	background: color-mix(in srgb, var(--c) 22%, var(--bg));
+	color: var(--text);
+	border-left: 3px solid var(--c);
 }
 
 .chip.done {

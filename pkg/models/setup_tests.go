@@ -72,6 +72,7 @@ func SetupTests() {
 		"user_invite_link_teams",
 		"users_projects",
 		"buckets",
+		"calendar_subscriptions",
 		"saved_filters",
 		"subscriptions",
 		"favorites",

@@ -8,6 +8,8 @@ export interface Prefs {
 	defaultListId: number | null
 	calendarMode: 'day' | 'week' | 'month'
 	calendarHidden: number[]
+	/** Subscribed calendars hidden from the calendar view. */
+	calendarHiddenSubs: number[]
 	calendarShowCompleted: boolean
 	calendarShowWeekends: boolean
 	calendarSidebar: boolean
@@ -30,6 +32,7 @@ const defaults: Prefs = {
 	defaultListId: null,
 	calendarMode: 'week',
 	calendarHidden: [],
+	calendarHiddenSubs: [],
 	calendarShowCompleted: true,
 	calendarShowWeekends: true,
 	calendarSidebar: false,
