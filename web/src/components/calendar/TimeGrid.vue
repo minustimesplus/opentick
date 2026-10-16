@@ -138,7 +138,7 @@ function timeRange(s: Schedule) {
 
 // ---- pointer interactions ----
 interface DragState {
-	kind: 'move' | 'resize' | 'create' | 'move-allday'
+	kind: 'move' | 'resize' | 'create' | 'create-allday' | 'move-allday'
 	task?: Task
 	x0: number
 	y0: number
@@ -151,6 +151,8 @@ interface DragState {
 
 interface Preview {
 	dayIdx: number
+	/** Last day of an all-day range being created. */
+	endDayIdx?: number
 	startMin: number
 	endMin: number
 	allDay: boolean
@@ -158,7 +160,6 @@ interface Preview {
 }
 
 let drag: DragState | null = null
-let justDragged = false
 const preview = ref<Preview | null>(null)
 const dragging = ref(false)
 
@@ -217,6 +218,13 @@ function startOnAllDay(e: PointerEvent, task: Task, dayIdx: number) {
 	attach()
 }
 
+function startCreateAllDay(e: PointerEvent, dayIdx: number) {
+	if (e.button !== 0 || (e.target as HTMLElement).closest('.ad-chip, .ad-more')) return
+	e.preventDefault()
+	drag = {kind: 'create-allday', x0: e.clientX, y0: e.clientY, started: false, grabMin: 0, dur: null, dayIdx0: dayIdx, min0: 0}
+	attach()
+}
+
 function startCreate(e: PointerEvent) {
 	if (e.button !== 0 || (e.target as HTMLElement).closest('.ev')) return
 	e.preventDefault()
@@ -233,7 +241,10 @@ function onMove(e: PointerEvent) {
 		dragging.value = true
 	}
 	const p = pos(e)
-	if (drag.kind === 'create') {
+	if (drag.kind === 'create-allday') {
+		const a = Math.min(drag.dayIdx0, p.dayIdx)
+		preview.value = {dayIdx: a, endDayIdx: Math.max(drag.dayIdx0, p.dayIdx), startMin: 0, endMin: 0, allDay: true}
+	} else if (drag.kind === 'create') {
 		const a = snap(Math.min(drag.min0, p.min))
 		const b = snap(Math.max(drag.min0, p.min))
 		preview.value = {dayIdx: drag.dayIdx0, startMin: a, endMin: Math.max(a + 15, b), allDay: false}
@@ -260,24 +271,15 @@ function onUp(e: PointerEvent) {
 	const pv = preview.value
 	preview.value = null
 	if (!d) return
-	if (d.started) {
-		justDragged = true
-		setTimeout(() => { justDragged = false }, 0)
-	}
-
+	// A plain click on empty space does nothing; creating needs a drag.
 	if (!d.started) {
-		if (d.task) {
-			openTaskDrawer(d.task.id)
-		} else if (d.kind === 'create') {
-			const start = Math.floor(d.min0 / 30) * 30
-			openCreate(e, {dayIdx: d.dayIdx0, startMin: start, endMin: start, allDay: false}, true)
-		}
+		if (d.task) openTaskDrawer(d.task.id)
 		return
 	}
 	if (!pv) return
 	const day = props.days[pv.dayIdx]
-	if (d.kind === 'create') {
-		openCreate(e, pv, false)
+	if (d.kind === 'create' || d.kind === 'create-allday') {
+		openCreate(e, pv)
 		return
 	}
 	const task = d.task!
@@ -297,6 +299,7 @@ function onUp(e: PointerEvent) {
 interface Creating {
 	anchor: {x: number, y: number}
 	day: Date
+	endDay: Date
 	start: Date | null
 	end: Date | null
 	allDay: boolean
@@ -304,22 +307,23 @@ interface Creating {
 const creating = ref<Creating | null>(null)
 const newTitle = ref('')
 
-function openCreate(e: PointerEvent | MouseEvent, pv: Preview, point: boolean) {
+function openCreate(e: PointerEvent, pv: Preview) {
 	const day = props.days[pv.dayIdx]
 	creating.value = {
 		anchor: {x: e.clientX, y: e.clientY},
 		day,
+		endDay: props.days[pv.endDayIdx ?? pv.dayIdx],
 		start: pv.allDay ? null : withMinutes(day, pv.startMin),
-		end: point || pv.allDay ? null : withMinutes(day, pv.endMin),
+		end: pv.allDay ? null : withMinutes(day, pv.endMin),
 		allDay: pv.allDay,
 	}
 	newTitle.value = ''
-	preview.value = point ? null : pv
+	preview.value = pv
 }
 
-function onAllDayClick(e: MouseEvent, dayIdx: number) {
-	if (justDragged || (e.target as HTMLElement).closest('.ad-chip, .ad-more')) return
-	openCreate(e, {dayIdx, startMin: 0, endMin: 0, allDay: true}, true)
+function inAllDayPreview(i: number) {
+	const pv = preview.value
+	return !!pv?.allDay && i >= pv.dayIdx && i <= (pv.endDayIdx ?? pv.dayIdx)
 }
 
 async function submitCreate() {
@@ -328,7 +332,7 @@ async function submitCreate() {
 	creating.value = null
 	preview.value = null
 	if (!c || !title) return
-	const patch = c.allDay ? schedulePatch(c.day, true) : schedulePatch(c.start, false, c.end)
+	const patch = c.allDay ? schedulePatch(c.day, true, c.endDay) : schedulePatch(c.start, false, c.end)
 	await data.createTask({title, ...patch, project_id: prefs.defaultListId || data.inboxId})
 }
 
@@ -340,7 +344,10 @@ function closeCreate() {
 const creatingLabel = computed(() => {
 	const c = creating.value
 	if (!c) return ''
-	if (c.allDay) return `${fmtWeekdayShort(c.day)} ${c.day.getDate()} · ${t('allDay')}`
+	if (c.allDay) {
+		const end = isSameDay(c.day, c.endDay) ? '' : ` - ${fmtWeekdayShort(c.endDay)} ${c.endDay.getDate()}`
+		return `${fmtWeekdayShort(c.day)} ${c.day.getDate()}${end} · ${t('allDay')}`
+	}
 	return `${fmtWeekdayShort(c.day)} ${c.day.getDate()} · ${fmtTime(c.start!)}${c.end ? ' - ' + fmtTime(c.end) : ''}`
 })
 
@@ -390,8 +397,8 @@ const today0 = computed(() => startOfDay(now.value))
 				v-for="(col, i) in columns"
 				:key="col.key"
 				class="col-head"
-				:class="{drop: dropAllDay === i, 'drop-preview': preview?.allDay && preview.dayIdx === i}"
-				@click="onAllDayClick($event, i)"
+				:class="{drop: dropAllDay === i, 'drop-preview': inAllDayPreview(i)}"
+				@pointerdown="startCreateAllDay($event, i)"
 				@dragover="onAllDayDragOver($event, i)"
 				@dragleave="dropAllDay = null"
 				@drop="onAllDayDrop($event, i)"

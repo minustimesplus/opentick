@@ -99,6 +99,10 @@ export function fmtMonthYear(d: Date): string {
 	return new Intl.DateTimeFormat(intlLocale.value, {month: 'long', year: 'numeric'}).format(d)
 }
 
+export function fmtMonthShort(d: Date): string {
+	return new Intl.DateTimeFormat(intlLocale.value, {month: 'short'}).format(d)
+}
+
 export function fmtWeekdayShort(d: Date): string {
 	return new Intl.DateTimeFormat(intlLocale.value, {weekday: 'short'}).format(d)
 }

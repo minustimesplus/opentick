@@ -69,13 +69,17 @@ watch(range, r => { data.loadDoneInRange(r.start, r.end).catch(() => {}) }, {imm
 
 const hidden = computed(() => new Set(prefs.calendarHidden))
 
+// The month grid scrolls continuously and renders more weeks than the anchor month.
+const monthSpan = ref<{start: Date, end: Date} | null>(null)
+const taskRange = computed(() => mode.value === 'month' && monthSpan.value ? monthSpan.value : range.value)
+
 const visibleTasks = computed<Task[]>(() => data.allTasks.filter(task => {
 	if (!data.projectMap.has(task.project_id) || hidden.value.has(task.project_id)) return false
 	if (task.done && !prefs.calendarShowCompleted) return false
 	const s = getSchedule(task)
 	if (!s) return false
 	const end = s.end ?? s.date
-	return end >= range.value.start && s.start < range.value.end
+	return end >= taskRange.value.start && s.start < taskRange.value.end
 }))
 
 // ---- subscribed calendars ----
@@ -86,10 +90,16 @@ onMounted(() => {
 const hiddenSubs = computed(() => new Set(prefs.calendarHiddenSubs))
 const visibleSubs = computed(() => calendars.subscriptions.filter(s => !hiddenSubs.value.has(s.id)))
 
+// The scrolling month grid can show a few weeks before and after the anchor
+// month (whose month is the one of its third row), so load a wider window there.
+const eventRange = computed(() => mode.value === 'month'
+	? {start: addDays(range.value.start, -21), end: addDays(range.value.start, 70)}
+	: range.value)
+
 // Keyed on the url too, so editing a subscription's address reloads it.
 watch(
-	() => [range.value.start.getTime(), range.value.end.getTime(), visibleSubs.value.map(s => `${s.id}:${s.url}`).join(',')],
-	() => calendars.loadEvents(range.value.start, range.value.end, visibleSubs.value.map(s => s.id)),
+	() => [eventRange.value.start.getTime(), eventRange.value.end.getTime(), visibleSubs.value.map(s => `${s.id}:${s.url}`).join(',')],
+	() => calendars.loadEvents(eventRange.value.start, eventRange.value.end, visibleSubs.value.map(s => s.id)),
 	{immediate: true},
 )
 
@@ -145,6 +155,10 @@ function step(dir: number) {
 
 function goToday() {
 	anchor.value = startOfDay(new Date())
+}
+
+function onMonthScrolled(d: Date) {
+	if (d.getFullYear() !== anchor.value.getFullYear() || d.getMonth() !== anchor.value.getMonth()) anchor.value = d
 }
 
 function openDay(d: Date) {
@@ -259,7 +273,16 @@ const addDefaults = computed(() => {
 
 			<div class="cal-body">
 				<TimeGrid v-if="mode !== 'month'" :days="days" :tasks="visibleTasks" :events="visibleEvents" @open-event="openEvent" />
-				<MonthGrid v-else :month="anchor" :tasks="visibleTasks" :events="visibleEvents" @day="openDay" @open-event="openEvent" />
+				<MonthGrid
+					v-else
+					:month="anchor"
+					:tasks="visibleTasks"
+					:events="visibleEvents"
+					@day="openDay"
+					@month="onMonthScrolled"
+					@range="r => monthSpan = r"
+					@open-event="openEvent"
+				/>
 			</div>
 		</section>
 
