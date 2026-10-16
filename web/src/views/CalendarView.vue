@@ -92,14 +92,34 @@ const visibleSubs = computed(() => calendars.subscriptions.filter(s => !hiddenSu
 
 // The scrolling month grid can show a few weeks before and after the anchor
 // month (whose month is the one of its third row), so load a wider window there.
-const eventRange = computed(() => mode.value === 'month'
-	? {start: addDays(range.value.start, -21), end: addDays(range.value.start, 70)}
-	: range.value)
+// Day and week views load whole weeks, so stepping through days stays in cache.
+function eventRangeFor(m: typeof mode.value, at: Date) {
+	if (m === 'month') {
+		const s = startOfWeek(startOfMonth(at))
+		return {start: addDays(s, -21), end: addDays(s, 70)}
+	}
+	const s = startOfWeek(at)
+	return {start: s, end: addDays(s, 7)}
+}
+
+const eventRange = computed(() => eventRangeFor(mode.value, anchor.value))
 
 // Keyed on the url too, so editing a subscription's address reloads it.
 watch(
 	() => [eventRange.value.start.getTime(), eventRange.value.end.getTime(), visibleSubs.value.map(s => `${s.id}:${s.url}`).join(',')],
-	() => calendars.loadEvents(eventRange.value.start, eventRange.value.end, visibleSubs.value.map(s => s.id)),
+	async () => {
+		const ids = visibleSubs.value.map(s => s.id)
+		await calendars.loadEvents(eventRange.value.start, eventRange.value.end, ids)
+		// Prefetch the neighbouring ranges (the next two weeks, or the adjacent
+		// months) so navigating shows events immediately.
+		const neighbours = mode.value === 'month'
+			? [addMonths(startOfMonth(anchor.value), 1), addMonths(startOfMonth(anchor.value), -1)]
+			: [addDays(anchor.value, 7), addDays(anchor.value, 14), addDays(anchor.value, -7)]
+		for (const at of neighbours) {
+			const r = eventRangeFor(mode.value, at)
+			calendars.prefetchEvents(r.start, r.end, ids)
+		}
+	},
 	{immediate: true},
 )
 

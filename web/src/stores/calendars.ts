@@ -60,6 +60,7 @@ export const useCalendars = defineStore('calendars', () => {
 		errors.clear()
 		events.value = new Map()
 		cache.clear()
+		inflight.clear()
 		autoNamed.clear()
 	}
 
@@ -80,11 +81,31 @@ export const useCalendars = defineStore('calendars', () => {
 		return subscriptions.value.find(s => s.id === id)
 	}
 
-	async function fetchEvents(sub: CalendarSubscription, start: Date, end: Date): Promise<CalEvent[]> {
-		const key = `${sub.id}|${sub.url}|${start.toISOString()}|${end.toISOString()}`
-		const hit = cache.get(key)
-		if (hit && Date.now() - hit.at < CLIENT_TTL) return hit.events
+	function cacheKey(sub: CalendarSubscription, start: Date, end: Date) {
+		return `${sub.id}|${sub.url}|${start.toISOString()}|${end.toISOString()}`
+	}
 
+	function cached(sub: CalendarSubscription, start: Date, end: Date): CalEvent[] | undefined {
+		const hit = cache.get(cacheKey(sub, start, end))
+		return hit && Date.now() - hit.at < CLIENT_TTL ? hit.events : undefined
+	}
+
+	/** Requests in flight by cache key, so a prefetch and a navigation share one request. */
+	const inflight = new Map<string, Promise<CalEvent[]>>()
+
+	function fetchEvents(sub: CalendarSubscription, start: Date, end: Date): Promise<CalEvent[]> {
+		const hit = cached(sub, start, end)
+		if (hit) return Promise.resolve(hit)
+		const key = cacheKey(sub, start, end)
+		let pending = inflight.get(key)
+		if (!pending) {
+			pending = requestEvents(sub, start, end, key).finally(() => inflight.delete(key))
+			inflight.set(key, pending)
+		}
+		return pending
+	}
+
+	async function requestEvents(sub: CalendarSubscription, start: Date, end: Date, key: string): Promise<CalEvent[]> {
 		const res = await api<CalendarSubscriptionEvents>('GET', `/calendar-subscriptions/${sub.id}/events`, {
 			query: {from: start.toISOString(), to: end.toISOString(), timezone},
 		})
@@ -113,6 +134,14 @@ export const useCalendars = defineStore('calendars', () => {
 	async function loadEvents(start: Date, end: Date, ids: number[]) {
 		const request = ++latestRequest
 		const subs = subscriptions.value.filter(s => ids.includes(s.id))
+		// Everything already cached (e.g. prefetched): swap synchronously so the
+		// grid never renders a frame without its events.
+		const hits = subs.map(sub => [sub.id, cached(sub, start, end)] as const)
+		if (hits.every(([, list]) => list)) {
+			for (const sub of subs) errors.delete(sub.id)
+			events.value = new Map(hits as [number, CalEvent[]][])
+			return
+		}
 		const results = await Promise.all(subs.map(async sub => {
 			try {
 				const list = await fetchEvents(sub, start, end)
@@ -126,6 +155,13 @@ export const useCalendars = defineStore('calendars', () => {
 		// Navigating quickly fires overlapping requests; only the latest may land.
 		if (request !== latestRequest) return
 		events.value = new Map(results)
+	}
+
+	/** Warms the cache for a range the user is likely to navigate to next. */
+	function prefetchEvents(start: Date, end: Date, ids: number[]) {
+		for (const sub of subscriptions.value) {
+			if (ids.includes(sub.id)) fetchEvents(sub, start, end).catch(() => {})
+		}
 	}
 
 	async function create(input: {title: string, url: string, hex_color: string}): Promise<CalendarSubscription | null> {
@@ -165,5 +201,5 @@ export const useCalendars = defineStore('calendars', () => {
 		}
 	}
 
-	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, create, update, remove}
+	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, create, update, remove}
 })
