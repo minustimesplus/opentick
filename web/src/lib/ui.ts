@@ -1,0 +1,23 @@
+import {reactive} from 'vue'
+
+export const ui = reactive({
+	/** Task shown in the floating detail drawer (matrix, calendar, search). */
+	drawerTaskId: null as number | null,
+	/** Increments to ask the active view to focus its quick-add input. */
+	focusQuickAdd: 0,
+	/** Right-click task menu. */
+	ctx: null as {taskId: number, x: number, y: number} | null,
+})
+
+export function openTaskMenu(taskId: number, e: MouseEvent) {
+	e.preventDefault()
+	ui.ctx = {taskId, x: e.clientX, y: e.clientY}
+}
+
+export function openTaskDrawer(id: number) {
+	ui.drawerTaskId = id
+}
+
+export function closeTaskDrawer() {
+	ui.drawerTaskId = null
+}

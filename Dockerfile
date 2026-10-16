@@ -3,16 +3,11 @@ FROM --platform=$BUILDPLATFORM node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65
 
 WORKDIR /build
 
-ENV PNPM_CACHE_FOLDER=.cache/pnpm/
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV CYPRESS_INSTALL_BINARY=0
-
-COPY frontend/pnpm-lock.yaml frontend/package.json frontend/pnpm-workspace.yaml ./
-RUN npm install -g corepack && corepack enable && \
-    pnpm install --frozen-lockfile
-COPY frontend/ ./
-ARG RELEASE_VERSION=dev
-RUN echo "{\"VERSION\": \"${RELEASE_VERSION/-g/-}\"}" > src/version.json && pnpm run build
+# This fork ships the TickTick-style frontend from web/ instead of the upstream frontend/.
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
 
 FROM --platform=$BUILDPLATFORM ghcr.io/techknowlogick/xgo:go-1.27.x@sha256:8cc742b41f043a4fd45d2f63f1fcd12cb27949342df09efb5561f2aadfbe6da3 AS apibuilder
 

@@ -1,0 +1,63 @@
+import {reactive, watch} from 'vue'
+
+export interface Prefs {
+	language: 'auto' | 'en' | 'fr'
+	theme: 'dark' | 'light' | 'system'
+	weekStart: 0 | 1 | 6
+	hour12: boolean
+	defaultListId: number | null
+	calendarMode: 'day' | 'week' | 'month'
+	calendarHidden: number[]
+	calendarShowCompleted: boolean
+	calendarShowWeekends: boolean
+	calendarSidebar: boolean
+	calendarExpandNight: boolean
+	tasksSidebar: boolean
+	listSort: Record<string, 'date' | 'priority' | 'title' | 'created'>
+	listShowCompleted: Record<string, boolean>
+	collapsed: Record<string, boolean>
+	matrixLists: number[]
+	matrixShowDone: boolean
+}
+
+const KEY = 'tt.prefs'
+
+const defaults: Prefs = {
+	language: 'auto',
+	theme: 'dark',
+	weekStart: 1,
+	hour12: false,
+	defaultListId: null,
+	calendarMode: 'week',
+	calendarHidden: [],
+	calendarShowCompleted: true,
+	calendarShowWeekends: true,
+	calendarSidebar: false,
+	calendarExpandNight: false,
+	tasksSidebar: true,
+	listSort: {},
+	listShowCompleted: {},
+	collapsed: {},
+	matrixLists: [],
+	matrixShowDone: false,
+}
+
+function load(): Prefs {
+	try {
+		const raw = localStorage.getItem(KEY)
+		if (raw) return {...defaults, ...JSON.parse(raw)}
+	} catch {
+		// storage unavailable or corrupt
+	}
+	return {...defaults}
+}
+
+export const prefs = reactive<Prefs>(load())
+
+watch(prefs, value => {
+	try {
+		localStorage.setItem(KEY, JSON.stringify(value))
+	} catch {
+		// ignore
+	}
+}, {deep: true})
