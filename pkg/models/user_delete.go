@@ -23,6 +23,7 @@ import (
 	"code.vikunja.io/api/pkg/cron"
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/events"
+	"code.vikunja.io/api/pkg/files"
 	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/notifications"
 	"code.vikunja.io/api/pkg/user"
@@ -181,6 +182,13 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 	for _, entity := range relatedEntities {
 		_, err = s.Where(entity.column+" = ?", u.ID).Delete(entity.model)
 		if err != nil {
+			return err
+		}
+	}
+
+	if u.BackgroundFileID != 0 {
+		bg := &files.File{ID: u.BackgroundFileID}
+		if err = bg.Delete(s); err != nil && !files.IsErrFileDoesNotExist(err) {
 			return err
 		}
 	}

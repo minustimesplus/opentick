@@ -7,8 +7,12 @@ interface DesktopBridge {
 	setServerUrl(url: string): Promise<string>
 	onUpdateReady(callback: (version: string) => void): void
 	installUpdate(): Promise<void>
-	/** Recolors the window background. Missing in builds before frameless windows. */
-	setTheme?(theme: 'dark' | 'light'): void
+	/**
+	 * Recolors the window background to the frame color (#rrggbb). Builds before
+	 * color series only understand 'dark' and 'light' and ignore anything else.
+	 * Missing in builds before frameless windows.
+	 */
+	setTheme?(theme: string): void
 	// Window controls drawn by the page (WindowControls.vue). Missing in older builds.
 	getWindowInfo?(): Promise<{platform: string, maximized: boolean}>
 	onMaximizedChange?(callback: (maximized: boolean) => void): void

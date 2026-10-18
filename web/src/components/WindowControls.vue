@@ -43,7 +43,7 @@ import {t} from '@/lib/i18n'
 	justify-content: center;
 	width: 42px;
 	height: 24px;
-	color: var(--text-2);
+	color: var(--frame-glyph);
 }
 
 .wc-btn svg {
@@ -55,8 +55,8 @@ import {t} from '@/lib/i18n'
 }
 
 .wc-btn:hover {
-	background: var(--bg-hover);
-	color: var(--text);
+	background: var(--frame-hover);
+	color: var(--rail-active);
 }
 
 .wc-btn.close:hover {

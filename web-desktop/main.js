@@ -255,7 +255,8 @@ ipcMain.handle('server:set', (_event, input) => {
 })
 
 ipcMain.on('theme:set', (_event, theme) => {
-	const color = FRAME_COLORS[theme]
+	// Color series send their frame color; older pages send 'dark' / 'light'.
+	const color = /^#[0-9a-f]{6}$/i.test(theme) ? theme : FRAME_COLORS[theme]
 	if (!color || !mainWindow) return
 	mainWindow.setBackgroundColor(color)
 })

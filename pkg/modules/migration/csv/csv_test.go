@@ -19,6 +19,7 @@ package csv
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -578,4 +579,53 @@ func TestDoneTask(t *testing.T) {
 	assert.Equal(t, "Done Task", task.Title)
 	assert.True(t, task.Done)
 	assert.False(t, task.DoneAt.IsZero()) // DoneAt should be set
+}
+
+// The OpenTick web client's CSV backup (web/src/lib/backup.ts) relies on
+// detection mapping every one of its columns without user input.
+func TestDetectOpenTickBackup(t *testing.T) {
+	csvContent := "﻿Title,Description,Due Date,Start Date,End Date,Done,Priority,Labels,Project,Reminder\r\n" +
+		"\"Buy milk, eggs\",\"<p>From the \"\"good\"\" shop</p>\",2026-10-20T08:30:00Z,,,false,3,\"home, errands\",Groceries,2026-10-20T08:00:00Z\r\n" +
+		"Ship it,,,2026-10-01T00:00:00Z,2026-10-02T00:00:00Z,true,5,,Work,\r\n"
+
+	reader := bytes.NewReader([]byte(csvContent))
+	result, err := DetectCSVStructure(reader, int64(len(csvContent)))
+	require.NoError(t, err)
+
+	attrs := make([]TaskAttribute, len(result.SuggestedMapping))
+	for i, m := range result.SuggestedMapping {
+		attrs[i] = m.Attribute
+	}
+	assert.Equal(t, []TaskAttribute{
+		AttrTitle, AttrDescription, AttrDueDate, AttrStartDate, AttrEndDate,
+		AttrDone, AttrPriority, AttrLabels, AttrProject, AttrReminder,
+	}, attrs)
+
+	config := &ImportConfig{
+		Delimiter:  result.Delimiter,
+		QuoteChar:  result.QuoteChar,
+		DateFormat: result.DateFormat,
+		Mapping:    result.SuggestedMapping,
+	}
+	projects, err := projectsFromCSV(bytes.NewReader([]byte(csvContent)), int64(len(csvContent)), config)
+	require.NoError(t, err)
+	require.Len(t, projects, 3) // parent + Groceries + Work
+
+	groceries := projects[1]
+	assert.Equal(t, "Groceries", groceries.Title)
+	require.Len(t, groceries.Tasks, 1)
+	task := groceries.Tasks[0].Task
+	assert.Equal(t, "Buy milk, eggs", task.Title)
+	assert.Equal(t, `<p>From the "good" shop</p>`, task.Description)
+	assert.Equal(t, int64(3), task.Priority)
+	assert.False(t, task.Done)
+	assert.True(t, task.DueDate.Equal(time.Date(2026, 10, 20, 8, 30, 0, 0, time.UTC)))
+	require.Len(t, task.Labels, 2)
+	assert.Equal(t, "errands", task.Labels[1].Title)
+	require.Len(t, task.Reminders, 1)
+	assert.True(t, task.Reminders[0].Reminder.Equal(time.Date(2026, 10, 20, 8, 0, 0, 0, time.UTC)))
+
+	work := projects[2].Tasks[0].Task
+	assert.True(t, work.Done)
+	assert.True(t, work.StartDate.Equal(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)))
 }

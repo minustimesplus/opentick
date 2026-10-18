@@ -40,6 +40,8 @@ export interface RequestOptions {
 	body?: unknown
 	contentType?: string
 	auth?: boolean
+	/** Return the response body as a Blob instead of parsed JSON. */
+	blob?: boolean
 }
 
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
@@ -80,10 +82,13 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 async function send(method: string, path: string, opts: RequestOptions): Promise<Response> {
-	const headers: Record<string, string> = {Accept: 'application/json'}
+	const headers: Record<string, string> = {Accept: opts.blob ? '*/*' : 'application/json'}
 	if (opts.auth !== false && token) headers.Authorization = `Bearer ${token}`
 	let body: BodyInit | undefined
-	if (opts.body !== undefined) {
+	if (opts.body instanceof FormData) {
+		// The browser sets the multipart boundary itself.
+		body = opts.body
+	} else if (opts.body !== undefined) {
 		headers['Content-Type'] = opts.contentType ?? 'application/json'
 		body = JSON.stringify(opts.body)
 	}
@@ -126,6 +131,7 @@ export async function api<T = unknown>(method: string, path: string, opts: Reque
 		throw new ApiError(res.status, message, code)
 	}
 	if (res.status === 204 || res.status === 304) return undefined as T
+	if (opts.blob) return await res.blob() as T
 	const text = await res.text()
 	return (text ? JSON.parse(text) : undefined) as T
 }

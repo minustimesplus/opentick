@@ -236,22 +236,8 @@ func (bp *BackgroundProvider) UploadBackground(c *echo.Context) error {
 
 // ValidateAndSaveBackgroundUpload is shared by the v1 and v2 upload handlers.
 func ValidateAndSaveBackgroundUpload(s *xorm.Session, auth web.Auth, project *models.Project, srcf io.ReadSeeker, filename string, _ uint64) error {
-	mime, err := mimetype.DetectReader(srcf)
-	if err != nil {
+	if err := validateBackgroundMime(srcf); err != nil {
 		return err
-	}
-	if !strings.HasPrefix(mime.String(), "image") {
-		return ErrFileIsNoImage{Mime: mime.String()}
-	}
-	supported := false
-	for _, m := range allowedImageMimes {
-		if mime.Is(m) {
-			supported = true
-			break
-		}
-	}
-	if !supported {
-		return ErrFileUnsupportedImageFormat{Mime: mime.String()}
 	}
 
 	// SaveBackgroundFile rewinds after DetectReader.
@@ -262,30 +248,57 @@ func ValidateAndSaveBackgroundUpload(s *xorm.Session, auth web.Auth, project *mo
 	return project.ReadOne(s, auth)
 }
 
-func SaveBackgroundFile(s *xorm.Session, auth web.Auth, project *models.Project, srcf io.ReadSeeker, filename string) (storedSize int64, err error) {
+// validateBackgroundMime rejects anything that is not one of the allowed raster formats.
+func validateBackgroundMime(srcf io.ReadSeeker) error {
+	mime, err := mimetype.DetectReader(srcf)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(mime.String(), "image") {
+		return ErrFileIsNoImage{Mime: mime.String()}
+	}
+	for _, m := range allowedImageMimes {
+		if mime.Is(m) {
+			return nil
+		}
+	}
+	return ErrFileUnsupportedImageFormat{Mime: mime.String()}
+}
+
+// encodeBackgroundImage decodes an uploaded image, scales it down to the
+// maximum background size and re-encodes it as JPEG. It returns the decoded
+// source too, so callers can derive a blur hash without decoding twice.
+func encodeBackgroundImage(srcf io.ReadSeeker) (jpeg *bytes.Buffer, src image.Image, err error) {
 	mime, _ := mimetype.DetectReader(srcf)
 	_, _ = srcf.Seek(0, io.SeekStart)
 
 	// Reject hostile dimensions before decoding (GHSA-4vh2-39rq-rq8j).
 	if _, err := imageutils.ValidateReader(srcf); err != nil {
 		if !imageutils.IsErrImageTooLarge(err) && strings.Contains(err.Error(), "unknown format") {
-			return 0, ErrFileUnsupportedImageFormat{Mime: mime.String()}
+			return nil, nil, ErrFileUnsupportedImageFormat{Mime: mime.String()}
 		}
-		return 0, err
+		return nil, nil, err
 	}
 	_, _ = srcf.Seek(0, io.SeekStart)
-	src, err := imaging.Decode(srcf)
+	src, err = imaging.Decode(srcf)
 	if err != nil {
 		if strings.Contains(err.Error(), "unknown format") {
-			return 0, ErrFileUnsupportedImageFormat{Mime: mime.String()}
+			return nil, nil, ErrFileUnsupportedImageFormat{Mime: mime.String()}
 		}
-		return 0, err
+		return nil, nil, err
 	}
 
-	buf := bytes.Buffer{}
+	jpeg = &bytes.Buffer{}
 	// Fit bounds both dimensions without upscaling.
 	dst := imaging.Fit(src, background.MaxBackgroundImageHeight, background.MaxBackgroundImageHeight, imaging.Lanczos)
-	err = imaging.Encode(&buf, dst, imaging.JPEG, imaging.JPEGQuality(80))
+	if err := imaging.Encode(jpeg, dst, imaging.JPEG, imaging.JPEGQuality(80)); err != nil {
+		return nil, nil, err
+	}
+	return jpeg, src, nil
+}
+
+func SaveBackgroundFile(s *xorm.Session, auth web.Auth, project *models.Project, srcf io.ReadSeeker, filename string) (storedSize int64, err error) {
+	buf, src, err := encodeBackgroundImage(srcf)
 	if err != nil {
 		return 0, err
 	}

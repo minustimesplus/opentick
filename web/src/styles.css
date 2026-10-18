@@ -30,6 +30,12 @@
 	--event-text: #ffffff;
 	--grid-line: #2a2a2a;
 	--now: #e5484d;
+	/* Window frame: rail icons and the self-drawn window controls sit on it. */
+	--rail-active: var(--text);
+	--frame-glyph: var(--text-2);
+	--frame-hover: var(--bg-hover);
+	/* Pane fill over the background image (see App.vue .main.has-bg). */
+	--glass: rgba(28, 28, 28, 0.62);
 	color-scheme: dark;
 }
 
@@ -55,8 +61,39 @@
 	--event-mix: 26%;
 	--event-text: #1f1f1f;
 	--grid-line: #eeeeee;
+	--glass: rgba(255, 255, 255, 0.66);
 	color-scheme: light;
 }
+
+/* Color series (Settings → Appearance): a light theme tinted by --tint, on a
+   saturated window frame with white rail icons. */
+:root[data-color] {
+	--frame: var(--tint-frame);
+	--accent: var(--tint);
+	--accent-soft: color-mix(in srgb, var(--tint) 14%, transparent);
+	--bg: color-mix(in srgb, var(--tint) 4%, #ffffff);
+	--bg-panel: color-mix(in srgb, var(--tint) 8%, #ffffff);
+	--bg-hover: color-mix(in srgb, var(--tint) 9%, #f3f3f3);
+	--bg-active: color-mix(in srgb, var(--tint) 18%, #ffffff);
+	--bg-input: color-mix(in srgb, var(--tint) 7%, #f3f3f3);
+	--border: color-mix(in srgb, var(--tint) 10%, #ececec);
+	--rail-icon: rgba(255, 255, 255, 0.7);
+	--rail-active: #ffffff;
+	--frame-glyph: rgba(255, 255, 255, 0.9);
+	--frame-hover: rgba(255, 255, 255, 0.16);
+	--glass: color-mix(in srgb, var(--tint) 6%, rgba(255, 255, 255, 0.68));
+}
+
+:root[data-color="sky"] { --tint: #4a6cf7; --tint-frame: #4a6cf7; }
+:root[data-color="turquoise"] { --tint: #2fbf98; --tint-frame: #2fb592; }
+:root[data-color="teal"] { --tint: #3fa9bb; --tint-frame: #3a9fb0; }
+:root[data-color="matcha"] { --tint: #8a9e78; --tint-frame: #879a76; }
+:root[data-color="sunshine"] { --tint: #f0a53a; --tint-frame: #e89c34; }
+:root[data-color="peach"] { --tint: #f06e88; --tint-frame: #d9688a; }
+:root[data-color="lilac"] { --tint: #8f80d8; --tint-frame: #8b7dd0; }
+:root[data-color="ebony"] { --tint: #9b7a63; --tint-frame: #8a6b56; }
+:root[data-color="navy"] { --tint: #3b4b94; --tint-frame: #283262; }
+:root[data-color="gray"] { --tint: #5b6070; --tint-frame: #393c44; }
 
 * {
 	box-sizing: border-box;

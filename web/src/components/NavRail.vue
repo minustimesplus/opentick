@@ -3,6 +3,7 @@ import {computed, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import {CircleArrowDown, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
+import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
 import {BellIcon, CalendarIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
@@ -25,7 +26,6 @@ const items = computed(() => [
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
 
-const initial = computed(() => (data.user?.name || data.user?.username || '?').charAt(0).toUpperCase())
 const unread = computed(() => data.notifications.filter(n => !n.read_at).length)
 
 function notificationText(n: {name: string, notification: Record<string, unknown>}) {
@@ -90,7 +90,7 @@ const shortcuts = [
 
 <template>
 	<nav class="rail">
-		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'">{{ initial }}</button>
+		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'"><UserAvatar :size="30" /></button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
 			<component :is="i.icon" :size="24" />
 		</RouterLink>
@@ -171,14 +171,9 @@ const shortcuts = [
 }
 
 .avatar {
-	width: 30px;
-	height: 30px;
+	display: flex;
 	margin-bottom: 5px;
 	border-radius: 50%;
-	background: linear-gradient(135deg, #4772fa, #8b5cf6);
-	color: #fff;
-	font-weight: 600;
-	font-size: 14px;
 }
 
 .rail-btn {
@@ -193,11 +188,11 @@ const shortcuts = [
 }
 
 .rail-btn:hover {
-	color: var(--text);
+	color: var(--rail-active);
 }
 
 .rail-btn.active {
-	color: var(--text);
+	color: var(--rail-active);
 }
 
 .rail-btn.update {

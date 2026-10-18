@@ -953,3 +953,30 @@ func (err ErrNoPendingEmail) HTTPError() web.HTTPError {
 		Message:  "There is no pending email change to confirm.",
 	}
 }
+
+// ErrUserHasNoBackground represents an error where a user has no background image set.
+type ErrUserHasNoBackground struct {
+	UserID int64
+}
+
+// IsErrUserHasNoBackground checks if an error is a ErrUserHasNoBackground.
+func IsErrUserHasNoBackground(err error) bool {
+	_, ok := err.(*ErrUserHasNoBackground)
+	return ok
+}
+
+func (err *ErrUserHasNoBackground) Error() string {
+	return fmt.Sprintf("User has no background [UserID: %d]", err.UserID)
+}
+
+// ErrCodeUserHasNoBackground holds the unique world-error code of this error
+const ErrCodeUserHasNoBackground = 1041
+
+// HTTPError holds the http error description
+func (err *ErrUserHasNoBackground) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeUserHasNoBackground,
+		Message:  "User background not found",
+	}
+}

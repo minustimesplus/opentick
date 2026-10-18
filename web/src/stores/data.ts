@@ -25,6 +25,9 @@ export const useData = defineStore('data', () => {
 	const loading = ref(false)
 	const loaded = ref(false)
 	const notifications = ref<AppNotification[]>([])
+	/** Object URL of the user's uploaded avatar, null when they have none. */
+	const avatarUrl = ref<string | null>(null)
+	let avatarLoadedFor: string | null = null
 	/**
 	 * Done tasks come from several scoped queries (per project, per calendar
 	 * range, ...). They are kept here, most recent last, so a sync can re-run
@@ -48,6 +51,8 @@ export const useData = defineStore('data', () => {
 		tasks.clear()
 		loaded.value = false
 		doneQueries.clear()
+		setAvatarUrl(null)
+		avatarLoadedFor = null
 	}
 
 	// ---------- auth ----------
@@ -116,6 +121,7 @@ export const useData = defineStore('data', () => {
 			for (const t of fresh) tasks.set(t.id, t)
 			loaded.value = true
 			loadNotifications()
+			if (avatarLoadedFor !== u.username) loadAvatar()
 		} finally {
 			loading.value = false
 		}
@@ -391,6 +397,43 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
+	// ---------- avatar ----------
+
+	function setAvatarUrl(url: string | null) {
+		if (avatarUrl.value) URL.revokeObjectURL(avatarUrl.value)
+		avatarUrl.value = url
+	}
+
+	/** Fetches the avatar image, but only an uploaded one: other providers fall back to the initial. */
+	async function loadAvatar() {
+		const username = user.value?.username
+		if (!username) return
+		avatarLoadedFor = username
+		try {
+			const {avatar_provider: provider} = await api<{avatar_provider: string}>('GET', '/user/settings/avatar/provider')
+			if (provider !== 'upload') {
+				setAvatarUrl(null)
+				return
+			}
+			const blob = await api<Blob>('GET', `/avatar/${encodeURIComponent(username)}`, {query: {size: 256}, blob: true})
+			setAvatarUrl(URL.createObjectURL(blob))
+		} catch {
+			avatarLoadedFor = null
+		}
+	}
+
+	async function uploadAvatar(file: File) {
+		const body = new FormData()
+		body.append('avatar', file)
+		await api('PUT', '/user/settings/avatar', {body})
+		await loadAvatar()
+	}
+
+	async function removeAvatar() {
+		await api('PUT', '/user/settings/avatar/provider', {body: {avatar_provider: 'initials'}})
+		setAvatarUrl(null)
+	}
+
 	async function markNotificationsRead() {
 		try {
 			await api('POST', '/notifications')
@@ -401,10 +444,11 @@ export const useData = defineStore('data', () => {
 	}
 
 	return {
-		authed, user, projects, labels, tasks, loading, loaded, notifications,
+		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
 		login, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,
+		uploadAvatar, removeAvatar,
 	}
 })

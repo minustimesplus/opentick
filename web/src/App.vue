@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, watchEffect} from 'vue'
-import {useRouter} from 'vue-router'
+import {computed, onBeforeUnmount, onMounted, watch, watchEffect} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
 import NavRail from './components/NavRail.vue'
 import LoginView from './views/LoginView.vue'
 import TaskDrawer from './components/TaskDrawer.vue'
@@ -12,20 +12,30 @@ import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
-import {desktop, ownWindowControls} from './lib/desktop'
+import {ownWindowControls} from './lib/desktop'
+import {applyTheme} from './lib/theme'
+import {background, clearBackground, loadBackground} from './lib/background'
 
 const data = useData()
 const router = useRouter()
+const route = useRoute()
 
-const media = window.matchMedia('(prefers-color-scheme: dark)')
+applyTheme()
 watchEffect(() => {
-	const theme = prefs.theme === 'system' ? (media.matches ? 'dark' : 'light') : prefs.theme
-	document.documentElement.dataset.theme = theme
-	desktop?.setTheme?.(theme)
 	document.documentElement.lang = locale.value
 })
 
 const showApp = computed(() => data.authed)
+
+watch(() => data.authed, authed => {
+	if (authed) loadBackground()
+	else clearBackground()
+}, {immediate: true})
+
+// Like TickTick, the background shows behind the task list and the matrix,
+// but not the calendar, whose grid needs a calm surface.
+const showBackground = computed(() =>
+	!!background.url && (route.name === 'tasks' || route.name === 'matrix'))
 
 let timer: number | undefined
 
@@ -74,7 +84,13 @@ onBeforeUnmount(() => {
 <template>
 	<div v-if="showApp" class="shell">
 		<NavRail />
-		<main class="main">
+		<main class="main" :class="{'has-bg': showBackground}">
+			<div
+				v-if="showBackground"
+				class="main-bg"
+				:class="{blur: prefs.backgroundBlur}"
+				:style="{backgroundImage: `url(${background.url})`}"
+			/>
 			<RouterView v-if="data.loaded" />
 			<div v-else class="boot">
 				<div class="spinner" />
@@ -114,6 +130,41 @@ onBeforeUnmount(() => {
 	overflow: hidden;
 	position: relative;
 	border: 1px solid var(--border-strong);
+}
+
+/* Panes turn translucent so the image layer below shows through. The
+   variables cascade into every view; teleported popovers keep solid colors. */
+.main.has-bg {
+	isolation: isolate;
+	--bg: var(--glass);
+	--bg-panel: var(--glass);
+	--bg-input: var(--glass);
+	--bg-hover: rgba(128, 128, 128, 0.16);
+	--bg-active: color-mix(in srgb, var(--accent) 22%, transparent);
+	--border: rgba(128, 128, 128, 0.2);
+}
+
+.main-bg {
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	background-position: center;
+	background-size: cover;
+}
+
+/* A veil keeps text readable on busy photos, even where no pane covers it. */
+.main-bg::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: var(--glass);
+	opacity: 0.5;
+}
+
+.main-bg.blur {
+	/* Scale up so the blur doesn't fade the edges to transparent. */
+	inset: -40px;
+	filter: blur(18px);
 }
 
 .boot {

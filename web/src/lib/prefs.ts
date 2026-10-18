@@ -1,11 +1,17 @@
 import {reactive, watch} from 'vue'
+import type {ThemeColor} from './theme'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
 
 export interface Prefs {
 	language: 'auto' | 'en' | 'fr'
-	theme: 'dark' | 'light' | 'system'
+	/** TickTick-style color series; 'default' is plain light, 'dark' is dark mode. */
+	themeColor: ThemeColor
+	/** Switch to dark while the OS is in dark mode, otherwise use themeColor. */
+	followSystemDark: boolean
+	/** Blur the background image behind the task list and matrix. */
+	backgroundBlur: boolean
 	weekStart: 0 | 1 | 6
 	hour12: boolean
 	/** Order of numeric dates: 12/31/2026, 31/12/2026 or 2026/12/31. */
@@ -36,7 +42,9 @@ const KEY = 'tt.prefs'
 
 const defaults: Prefs = {
 	language: 'auto',
-	theme: 'dark',
+	themeColor: 'dark',
+	followSystemDark: false,
+	backgroundBlur: true,
 	weekStart: 1,
 	hour12: false,
 	dateFormat: navigator.language === 'en-US' ? 'mdy' : 'dmy',
@@ -59,10 +67,22 @@ const defaults: Prefs = {
 	mcpClient: '',
 }
 
+// Before color series, `theme` was 'dark' | 'light' | 'system'.
+function migrate(stored: Prefs & {theme?: string}): Prefs {
+	const {theme, ...rest} = stored
+	if (theme === 'light') rest.themeColor = 'default'
+	if (theme === 'dark') rest.themeColor = 'dark'
+	if (theme === 'system') {
+		rest.themeColor = 'default'
+		rest.followSystemDark = true
+	}
+	return rest
+}
+
 function load(): Prefs {
 	try {
 		const raw = localStorage.getItem(KEY)
-		if (raw) return {...defaults, ...JSON.parse(raw)}
+		if (raw) return migrate({...defaults, ...JSON.parse(raw)})
 	} catch {
 		// storage unavailable or corrupt
 	}
