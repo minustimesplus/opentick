@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Bell, CalendarDays, CircleHelp, Clover, RefreshCw, Search, Settings, SquareCheckBig, LogOut} from 'lucide-vue-next'
+import {Bell, CalendarDays, CircleHelp, RefreshCw, Search, Settings, SquareCheckBig, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
+import {MatrixIcon} from '@/lib/icons'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 
 const data = useData()
@@ -18,7 +19,7 @@ const menu = ref<'avatar' | 'bell' | 'help' | null>(null)
 
 const items = computed(() => [
 	{key: 'tasks', icon: SquareCheckBig, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
-	{key: 'matrix', icon: Clover, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
+	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', icon: CalendarDays, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
 	{key: 'search', icon: Search, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
