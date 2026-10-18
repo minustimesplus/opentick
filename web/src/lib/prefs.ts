@@ -28,6 +28,8 @@ export interface Prefs {
 	collapsed: Record<string, boolean>
 	matrixLists: number[]
 	matrixShowDone: boolean
+	/** Client last picked in the MCP setup guide. */
+	mcpClient: string
 }
 
 const KEY = 'tt.prefs'
@@ -54,6 +56,7 @@ const defaults: Prefs = {
 	collapsed: {},
 	matrixLists: [],
 	matrixShowDone: false,
+	mcpClient: '',
 }
 
 function load(): Prefs {

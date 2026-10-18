@@ -207,7 +207,7 @@ func TestMCP_Initialize(t *testing.T) {
 	rec := c.post(initializeBody)
 	require.Equal(t, http.StatusOK, rec.Code)
 	result := readMCPJSON(t, rec.Body.String())["result"].(map[string]any)
-	assert.Equal(t, "vikunja", result["serverInfo"].(map[string]any)["name"])
+	assert.Equal(t, "opentick", result["serverInfo"].(map[string]any)["name"])
 	assert.Contains(t, result["instructions"], `format: "markdown"`)
 }
 func TestMCP_ToolsListMatchesScopes(t *testing.T) {

@@ -110,3 +110,26 @@ export interface CalendarSubscriptionEvents {
 	calendar_name: string
 	events: ExternalEvent[] | null
 }
+
+export type ApiPermissions = Record<string, string[]>
+
+export interface ApiToken {
+	id: number
+	title: string
+	token?: string
+	permissions: ApiPermissions
+	expires_at: string
+	created?: string
+}
+
+export interface McpInfo {
+	endpoint: string
+	/** Token permission groups usable by MCP tools, keyed group → permission → route. */
+	routes: Record<string, Record<string, unknown>>
+	presets: {
+		/** Wildcard group `*` expands against routes. */
+		read_only: Record<string, string[]>
+		typed: ApiPermissions
+		full: Record<string, string>
+	}
+}

@@ -3,6 +3,7 @@ import {computed, onBeforeUnmount, onMounted, type Component} from 'vue'
 import {
 	Bell, CircleUserRound, Clock, Crown, Funnel, Import, Info, Keyboard, LayoutGrid, PaintRoller, Server, Sparkles, Users, X,
 } from 'lucide-vue-next'
+import AiFeaturesSettings from './AiFeaturesSettings.vue'
 import DateTimeSettings from './DateTimeSettings.vue'
 import {t, type MessageKey} from '@/lib/i18n'
 import {ui, type SettingsSection} from '@/lib/ui'
@@ -40,6 +41,7 @@ const groups: NavItem[][] = [
 // Sections without a panel yet render an empty page.
 const panels: Partial<Record<SettingsSection, Component>> = {
 	dateTime: DateTimeSettings,
+	aiFeatures: AiFeaturesSettings,
 }
 
 const panel = computed(() => (ui.settings ? panels[ui.settings] : undefined))
