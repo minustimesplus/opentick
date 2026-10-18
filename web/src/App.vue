@@ -6,6 +6,7 @@ import LoginView from './views/LoginView.vue'
 import TaskDrawer from './components/TaskDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import TaskContextMenu from './components/TaskContextMenu.vue'
+import SettingsDialog from './components/settings/SettingsDialog.vue'
 import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
@@ -35,6 +36,7 @@ function onKey(e: KeyboardEvent) {
 	const target = e.target as HTMLElement
 	if (target.closest('input, textarea, [contenteditable="true"]')) return
 	if (e.metaKey || e.ctrlKey || e.altKey) return
+	if (ui.settings) return
 	if (e.key === '/' ) {
 		e.preventDefault()
 		router.push('/search')
@@ -79,6 +81,7 @@ onBeforeUnmount(() => {
 		</main>
 		<TaskDrawer v-if="ui.drawerTaskId !== null" :key="ui.drawerTaskId" :task-id="ui.drawerTaskId" />
 		<TaskContextMenu v-if="ui.ctx" :key="ui.ctx.taskId + ':' + ui.ctx.x + ':' + ui.ctx.y" />
+		<SettingsDialog v-if="ui.settings" />
 	</div>
 	<LoginView v-else />
 	<Toasts />

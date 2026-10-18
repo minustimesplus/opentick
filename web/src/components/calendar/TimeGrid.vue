@@ -5,8 +5,8 @@ import Popover from '@/components/Popover.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {
-	addMinutes, dateKey, fmtHourLabel, fmtTime, fmtWeekdayShort, isSameDay, minutesOfDay, schedulePatch, startOfDay,
-	withMinutes, type Schedule,
+	addMinutes, altDayLabel, dateKey, fmtHourLabel, fmtTime, fmtWeekdayShort, isSameDay, minutesOfDay, schedulePatch, startOfDay,
+	weekNumber, withMinutes, type Schedule,
 } from '@/lib/dates'
 import {projectColor} from '@/lib/tasks'
 import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
@@ -392,7 +392,9 @@ const today0 = computed(() => startOfDay(now.value))
 <template>
 	<div class="tg" :class="{dragging}">
 		<div class="tg-head" :style="gridCols">
-			<div class="g-head" />
+			<div class="g-head">
+				<div v-if="prefs.showWeekNumbers && days.length" class="wk">{{ t('weekShort') }}{{ weekNumber(days[0]) }}</div>
+			</div>
 			<div
 				v-for="(col, i) in columns"
 				:key="col.key"
@@ -404,7 +406,10 @@ const today0 = computed(() => startOfDay(now.value))
 				@drop="onAllDayDrop($event, i)"
 			>
 				<div class="wd">{{ fmtWeekdayShort(col.day) }}</div>
-				<div class="dn"><span :class="{today: col.today, past: col.day < today0}">{{ col.day.getDate() }}</span></div>
+				<div class="dn">
+					<span :class="{today: col.today, past: col.day < today0}">{{ col.day.getDate() }}</span>
+					<small v-if="prefs.altCalendar !== 'none'" class="alt">{{ altDayLabel(col.day) }}</small>
+				</div>
 				<div class="ad-list">
 					<template v-for="entry in (allDayExpanded ? col.allDay : col.allDay.slice(0, maxAllDay > ALLDAY_VISIBLE + 1 ? ALLDAY_VISIBLE : ALLDAY_VISIBLE + 1))" :key="entry.key">
 						<div
@@ -583,6 +588,23 @@ const today0 = computed(() => startOfDay(now.value))
 	min-width: 28px;
 	height: 28px;
 	border-radius: 14px;
+}
+
+.dn .alt {
+	margin-left: 6px;
+	font-size: 11px;
+	font-weight: 400;
+	color: var(--text-3);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.wk {
+	padding: 8px 10px 14px 0;
+	text-align: right;
+	font-size: 12px;
+	color: var(--text-3);
 }
 
 .dn span.today {

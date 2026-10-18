@@ -7,7 +7,19 @@ export const ui = reactive({
 	focusQuickAdd: 0,
 	/** Right-click task menu. */
 	ctx: null as {taskId: number, x: number, y: number} | null,
+	/** Section shown in the settings dialog, null while it is closed. */
+	settings: null as SettingsSection | null,
 })
+
+export type SettingsSection =
+	| 'account' | 'premium'
+	| 'features' | 'smartList' | 'notifications' | 'dateTime' | 'appearance' | 'aiFeatures' | 'more'
+	| 'integrations' | 'collaborate' | 'shortcuts'
+	| 'about'
+
+export function openSettings(section: SettingsSection = 'dateTime') {
+	ui.settings = section
+}
 
 export function openTaskMenu(taskId: number, e: MouseEvent) {
 	e.preventDefault()
