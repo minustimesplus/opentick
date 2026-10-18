@@ -31,6 +31,14 @@ const MIME_TYPES = {
 	'.webmanifest': 'application/manifest+json',
 }
 
+// Native window controls drawn over the page instead of a title bar; the
+// page leaves a strip of this height free at the top (web/src/App.vue).
+const TITLE_BAR_HEIGHT = 28
+const TITLE_BAR_THEMES = {
+	dark: {color: '#161616', symbolColor: '#b8b8b8'},
+	light: {color: '#f3f3f3', symbolColor: '#4a4a4a'},
+}
+
 let mainWindow = null
 let origin = null
 let downloadedVersion = null
@@ -140,6 +148,9 @@ function createMainWindow() {
 		height: 900,
 		icon: path.join(__dirname, 'icon.png'),
 		autoHideMenuBar: true,
+		backgroundColor: TITLE_BAR_THEMES.dark.color,
+		titleBarStyle: 'hidden',
+		titleBarOverlay: {...TITLE_BAR_THEMES.dark, height: TITLE_BAR_HEIGHT},
 		webPreferences: {
 			preload: path.join(__dirname, 'preload.js'),
 			contextIsolation: true,
@@ -218,6 +229,13 @@ ipcMain.handle('server:set', (_event, input) => {
 		saveConfig(config)
 	}
 	return serverUrl
+})
+
+ipcMain.on('theme:set', (_event, theme) => {
+	const colors = TITLE_BAR_THEMES[theme]
+	if (!colors || !mainWindow) return
+	mainWindow.setBackgroundColor(colors.color)
+	mainWindow.setTitleBarOverlay({...colors, height: TITLE_BAR_HEIGHT})
 })
 
 ipcMain.handle('update:install', () => {

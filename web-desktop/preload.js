@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('ttDesktop', {
 		ipcRenderer.on('update:ready', (_event, version) => callback(version))
 	},
 	installUpdate: () => ipcRenderer.invoke('update:install'),
+	setTheme: theme => ipcRenderer.send('theme:set', theme),
 })

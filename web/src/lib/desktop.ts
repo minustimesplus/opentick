@@ -7,6 +7,8 @@ interface DesktopBridge {
 	setServerUrl(url: string): Promise<string>
 	onUpdateReady(callback: (version: string) => void): void
 	installUpdate(): Promise<void>
+	/** Recolors the window controls drawn over the page. Missing in builds before frameless windows. */
+	setTheme?(theme: 'dark' | 'light'): void
 }
 
 declare global {
@@ -16,6 +18,9 @@ declare global {
 }
 
 export const desktop = window.ttDesktop
+
+// Lets styles reserve room for the window controls drawn over the page.
+if (desktop) document.documentElement.classList.add('desktop')
 
 /** Version of a downloaded update waiting to be installed, if any. */
 export const updateReady = ref<string | null>(null)
