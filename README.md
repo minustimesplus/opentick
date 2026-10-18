@@ -1,63 +1,136 @@
-<img src="https://vikunja.io/images/vikunja-logo.svg" alt="" style="display: block;width: 50%;margin: 0 auto;" width="50%"/>
+# OpenTick
 
-[![Build Status](https://github.com/go-vikunja/vikunja/actions/workflows/ci.yml/badge.svg)](https://github.com/go-vikunja/vikunja/actions/workflows/ci.yml)
-[![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Install](https://img.shields.io/badge/download-v2.7.0-brightgreen.svg)](https://vikunja.io/docs/installing)
-[![Docker Pulls](https://img.shields.io/docker/pulls/vikunja/vikunja.svg)](https://hub.docker.com/r/vikunja/vikunja/)
-[![OpenAPI Docs](https://img.shields.io/badge/swagger-docs-brightgreen.svg)](https://try.vikunja.io/api/v2/docs)
+> A clean, open source implementation of TickTick, built on [Vikunja](https://vikunja.io).
 
-# Vikunja
-
-> The task manager you actually own. 
-
-If Vikunja is useful to you, please consider [supporting the project](https://vikunja.io/support/). You can [buy a coffee](https://www.buymeacoffee.com/kolaente), [sponsor on GitHub](https://github.com/sponsors/kolaente) or buy [a sticker pack](https://vikunja.io/stickers).
-We're also offering [a hosted version of Vikunja](https://vikunja.cloud/) if you want a hassle-free solution for yourself or your team.
-If you or your company needs admin panel, audit logs or time tracking, check out [Vikunja Pro](https://vikunja.io/pro/).
+OpenTick pairs a TickTick-style web frontend (lists, calendar, Eisenhower matrix,
+subscribed ICS calendars) with the Vikunja Go API as its backend. You host it
+yourself, and your data stays with you.
 
 > [!NOTE]
-> For the development of Vikunja, we're using LLM-Assisted coding tools in various parts of the codebase.
-> Most contributions made @tink-bot are built that way.
+> OpenTick is developed with LLM-assisted coding tools in various parts of the codebase.
 
 ## Table of contents
 
-- [Security Reports](#security-reports)
-- [Features](#features)
-- [Docs](#docs)
-	- [Roadmap](#roadmap)
+- [Installing](#installing)
+	- [Docker](#docker)
+	- [Desktop app (Linux)](#desktop-app-linux)
+- [Building from source](#building-from-source)
+- [Development setup](#development-setup)
 - [Contributing](#contributing)
 - [License](#license)
 	- [Unsplash Images](#unsplash-images)
 
-## Security Reports
+## Installing
 
-If you find any security-related issues you don't want to disclose publicly, please use [the contact information on our website](https://vikunja.io/contact/#security).
+### Docker
 
-## Features
+Build the image from the repository and run it:
 
-See [the features page](https://vikunja.io/features/) on our website for a more exhaustive list or 
-try it on [try.vikunja.io](https://try.vikunja.io)!
+```sh
+git clone https://github.com/minustimesplus/vikunja-ticktick.git opentick
+cd opentick
+docker build -t opentick .
+docker run -d --name opentick \
+  -p 3456:3456 \
+  -v opentick-db:/db \
+  -v opentick-files:/app/vikunja/files \
+  opentick
+```
 
-## Docs
+OpenTick is then available at <http://localhost:3456>. The image uses SQLite by
+default; PostgreSQL and MySQL are supported too. Configure the server with
+`VIKUNJA_*` environment variables or a `config.yml` (see
+[`config.yml.sample`](config.yml.sample) for every option).
 
-* [Installing](https://vikunja.io/docs/installing/)
-* [Build from source](https://vikunja.io/docs/build-from-sources/)
-* [Development setup](https://vikunja.io/docs/development/)
-* [Magefile](https://vikunja.io/docs/magefile/)
-* [Testing](https://vikunja.io/docs/testing/)
+### Desktop app (Linux)
 
-All docs can be found on [the Vikunja home page](https://vikunja.io/docs/).
+Every push to `main` publishes a GitHub release with a `.deb` and an AppImage.
+Download one from the [releases page](https://github.com/minustimesplus/vikunja-ticktick/releases),
+install it, and enter the URL of your OpenTick server on the login screen.
+The app updates itself in the background.
 
-### Roadmap
+## Building from source
 
-See [the roadmap](https://my.vikunja.cloud/share/QFyzYEmEYfSyQfTOmIRSwLUpkFjboaBqQCnaPmWd/auth) (hosted on Vikunja!) for more!
+Requirements:
+
+- Go (version in [`go.mod`](go.mod))
+- Node.js 24 and npm
+- [Mage](https://magefile.org/)
+
+```sh
+# 1. Build the frontend into the directory the Go binary embeds
+cd web
+npm ci
+WEB_OUT_DIR=../frontend/dist npm run build
+cd ..
+
+# 2. Build the server binary
+mage build
+
+# 3. Run it
+./vikunja
+```
+
+The resulting binary contains both the API and the frontend and serves them on
+port 3456.
+
+To build the desktop app instead, see [`web-desktop/README.md`](web-desktop/README.md):
+
+```sh
+cd web-desktop
+npm ci
+npm run build:web   # builds ../web into ./app
+npm run dist        # .deb + AppImage in ./dist
+```
+
+## Development setup
+
+The quickest way to get every tool (Go, Node.js, Mage, linters) is
+[devenv](https://devenv.sh/) (`devenv shell`) or [mise](https://mise.jdx.dev/)
+(`mise install`). Otherwise install the requirements from
+[Building from source](#building-from-source) manually.
+
+Run the backend and frontend in two terminals:
+
+```sh
+# Terminal 1: API on http://localhost:3456
+mage build && ./vikunja
+
+# Terminal 2: frontend dev server on http://localhost:5180
+cd web
+npm ci
+npm run dev
+```
+
+The dev server proxies `/api` to `http://localhost:3456`. Point it at another
+backend with `VIKUNJA_API=https://your-server npm run dev`.
+
+Useful commands:
+
+```sh
+mage -l                      # list all backend tasks
+mage test:feature            # backend feature tests
+mage test:web                # backend web/API tests
+mage test:filter "TestName"  # a single backend test
+mage lint:fix                # lint the backend
+cd web && npm run typecheck  # type-check the frontend
+```
+
+Plain `go test` does not work; always go through `mage test:*`.
 
 ## Contributing
 
-Please check out the contribution guidelines on [the website](https://vikunja.io/docs/development/).
+Contributions go through [GitHub issues](https://github.com/minustimesplus/vikunja-ticktick/issues).
+Open an issue for bug reports, feature ideas, or before starting on a change so
+we can agree on it first.
 
 ## License
 
-Most of this repository is licensed under [AGPL‑3.0‑or‑later](LICENSE).
+OpenTick is licensed under [AGPL‑3.0‑or‑later](LICENSE), the same license as
+Vikunja, which it is built on. You can use, modify, and self-host it freely; if
+you distribute it or run a modified version as a network service, you must
+make your source code available under the same license.
+
 The contents of [`desktop/`](desktop/) are licensed under
 [GPL‑3.0‑or‑later](desktop/LICENSE).
 
