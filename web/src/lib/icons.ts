@@ -1,9 +1,39 @@
 import {createLucideIcon} from 'lucide-vue-next'
 
-// Lucide's clover with the stem cut short: the stock stem runs out to (2,22),
-// well past the leaves, which looks lopsided at nav-rail size.
-export const MatrixIcon = createLucideIcon('matrix-clover', [
-	['path', {d: 'M16.17 7.83 5 19', key: 'stem'}],
-	['path', {d: 'M4.02 12a2.827 2.827 0 1 1 3.81-4.17A2.827 2.827 0 1 1 12 4.02a2.827 2.827 0 1 1 4.17 3.81A2.827 2.827 0 1 1 19.98 12a2.827 2.827 0 1 1-3.81 4.17A2.827 2.827 0 1 1 12 19.98a2.827 2.827 0 1 1-4.17-3.81A1 1 0 1 1 4 12', key: 'leaves'}],
-	['path', {d: 'm7.83 7.83 8.34 8.34', key: 'vein'}],
+// Nav-rail icons drawn after TickTick's: solid shapes with the details cut
+// out (even-odd fill), rather than Lucide's outlines.
+const solid = {fill: 'currentColor', stroke: 'none', 'fill-rule': 'evenodd'}
+
+export const TasksIcon = createLucideIcon('rail-tasks', [
+	['path', {
+		...solid,
+		key: 'box',
+		d: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z'
+			+ 'M8.1 11.4 10.5 13.8l5.4-5.4a.85.85 0 0 1 1.2 1.2L10.5 16.2l-3.6-3.6a.85.85 0 0 1 1.2-1.2z',
+	}],
+])
+
+// Four petals, each a circle with its inner corner squared off.
+export const MatrixIcon = createLucideIcon('rail-matrix', [
+	['path', {...solid, key: 'tl', d: 'M11.2 11.2H7.1A4.1 4.1 0 0 1 3 7.1a4.1 4.1 0 0 1 4.1-4.1 4.1 4.1 0 0 1 4.1 4.1z'}],
+	['path', {...solid, key: 'tr', d: 'M12.8 11.2V7.1A4.1 4.1 0 0 1 16.9 3 4.1 4.1 0 0 1 21 7.1a4.1 4.1 0 0 1-4.1 4.1z'}],
+	['path', {...solid, key: 'bl', d: 'M11.2 12.8v4.1A4.1 4.1 0 0 1 7.1 21 4.1 4.1 0 0 1 3 16.9a4.1 4.1 0 0 1 4.1-4.1z'}],
+	['path', {...solid, key: 'br', d: 'M12.8 12.8h4.1a4.1 4.1 0 0 1 4.1 4.1 4.1 4.1 0 0 1-4.1 4.1 4.1 4.1 0 0 1-4.1-4.1z'}],
+])
+
+const dot = (x: number, y: number) => `M${x - 1} ${y - 1}h2v2h-2z`
+
+export const CalendarIcon = createLucideIcon('rail-calendar', [
+	['path', {...solid, key: 'head', d: 'M3 7.2V7a3.5 3.5 0 0 1 3.5-3.5h11A3.5 3.5 0 0 1 21 7v.2z'}],
+	['path', {
+		...solid,
+		key: 'body',
+		d: 'M3 8.6h18V17a3.5 3.5 0 0 1-3.5 3.5h-11A3.5 3.5 0 0 1 3 17z'
+			+ dot(8, 12.4) + dot(12, 12.4) + dot(16, 12.4) + dot(8, 16.4) + dot(12, 16.4),
+	}],
+])
+
+export const SearchIcon = createLucideIcon('rail-search', [
+	['circle', {cx: '11', cy: '11', r: '7', 'stroke-width': '2.4', key: 'lens'}],
+	['path', {d: 'm16.2 16.2 4.3 4.3', 'stroke-width': '2.6', key: 'handle'}],
 ])
