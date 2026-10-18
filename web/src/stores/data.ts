@@ -1,12 +1,18 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef} from 'vue'
-import {api, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
+import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
 import type {AppNotification, CurrentUser, Label, Project, Task} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
 
 const MERGE = 'application/merge-patch+json'
+/** How many done-task queries a sync re-runs; older ones are dropped. */
+const MAX_DONE_QUERIES = 8
+
+function isNotFound(e: unknown) {
+	return e instanceof ApiError && e.status === 404
+}
 
 export type TaskPatch = Partial<Omit<Task, 'id' | 'labels'>>
 
@@ -19,9 +25,16 @@ export const useData = defineStore('data', () => {
 	const loading = ref(false)
 	const loaded = ref(false)
 	const notifications = ref<AppNotification[]>([])
-	/** Projects whose done tasks were fully fetched. */
-	const doneLoaded = new Set<number>()
-	const doneRanges = new Set<string>()
+	/**
+	 * Done tasks come from several scoped queries (per project, per calendar
+	 * range, ...). They are kept here, most recent last, so a sync can re-run
+	 * them and drop done tasks that were deleted elsewhere.
+	 */
+	const doneQueries = new Map<string, () => Promise<Task[]>>()
+	let inflight: Promise<void> | null = null
+	/** Local creates/deletes while a sync runs, which its response predates. */
+	const createdDuringSync = new Set<number>()
+	const deletedDuringSync = new Set<number>()
 
 	onUnauthorized(() => {
 		authed.value = false
@@ -34,8 +47,7 @@ export const useData = defineStore('data', () => {
 		labels.value = []
 		tasks.clear()
 		loaded.value = false
-		doneLoaded.clear()
-		doneRanges.clear()
+		doneQueries.clear()
 	}
 
 	// ---------- auth ----------
@@ -68,27 +80,40 @@ export const useData = defineStore('data', () => {
 
 	// ---------- loading ----------
 
-	async function loadAll() {
-		if (!authed.value) return
+	/** Full sync with the server. Concurrent calls share the running sync. */
+	function loadAll(): Promise<void> {
+		if (!authed.value) return Promise.resolve()
+		inflight ??= syncAll().finally(() => {
+			inflight = null
+			createdDuringSync.clear()
+			deletedDuringSync.clear()
+		})
+		return inflight
+	}
+
+	async function syncAll() {
 		loading.value = true
 		try {
 			const doneSince = addDays(new Date(), -14).toISOString()
-			const [u, ps, ls, open, done] = await Promise.all([
+			const [u, ps, ls, open, done, scoped] = await Promise.all([
 				api<CurrentUser>('GET', '/user'),
 				fetchAll<Project>('/projects', {is_archived: false}),
 				fetchAll<Label>('/labels'),
 				fetchAll<Task>('/tasks', {filter: 'done = false', sort_by: ['due_date', 'id'], order_by: ['asc', 'asc']}),
 				fetchAll<Task>('/tasks', {filter: `done = true && done_at > "${doneSince}"`, sort_by: ['done_at'], order_by: ['desc']}, 4),
+				Promise.all([...doneQueries.values()].map(q => q())),
 			])
 			user.value = u
 			projects.value = ps
 			labels.value = ls
-			// Replace open tasks; tasks that disappeared were done or deleted elsewhere.
-			const openIds = new Set(open.map(t => t.id))
-			for (const [id, t] of tasks) {
-				if (!t.done && !openIds.has(id)) tasks.delete(id)
+			// Replace the task set; anything not returned again was deleted
+			// (or moved out of every loaded scope) elsewhere.
+			const fresh = [...open, ...done, ...scoped.flat()].filter(t => !deletedDuringSync.has(t.id))
+			const ids = new Set(fresh.map(t => t.id))
+			for (const id of tasks.keys()) {
+				if (!ids.has(id) && !createdDuringSync.has(id)) tasks.delete(id)
 			}
-			for (const t of [...open, ...done]) tasks.set(t.id, t)
+			for (const t of fresh) tasks.set(t.id, t)
 			loaded.value = true
 			loadNotifications()
 		} finally {
@@ -104,31 +129,45 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
-	async function loadDoneForProject(projectId: number) {
-		if (doneLoaded.has(projectId)) return
-		doneLoaded.add(projectId)
-		const done = await fetchAll<Task>(`/projects/${projectId}/tasks`, {filter: 'done = true', sort_by: ['done_at'], order_by: ['desc']}, 4)
-		done.forEach(t => tasks.set(t.id, t))
+	/** Runs a done-task query once and remembers it for later syncs. */
+	async function loadDoneQuery(key: string, query: () => Promise<Task[]>) {
+		if (doneQueries.has(key)) {
+			// Mark as recently used.
+			const q = doneQueries.get(key)!
+			doneQueries.delete(key)
+			doneQueries.set(key, q)
+			return
+		}
+		doneQueries.set(key, query)
+		while (doneQueries.size > MAX_DONE_QUERIES) {
+			doneQueries.delete(doneQueries.keys().next().value!)
+		}
+		try {
+			const res = await query()
+			res.forEach(t => tasks.set(t.id, t))
+		} catch (e) {
+			doneQueries.delete(key)
+			throw e
+		}
 	}
 
-	async function loadDone(pages = 2) {
-		if (doneLoaded.has(0)) return
-		doneLoaded.add(0)
-		const done = await fetchAll<Task>('/tasks', {filter: 'done = true', sort_by: ['done_at'], order_by: ['desc']}, pages)
-		done.forEach(t => tasks.set(t.id, t))
+	function loadDoneForProject(projectId: number) {
+		return loadDoneQuery(`project:${projectId}`, () =>
+			fetchAll<Task>(`/projects/${projectId}/tasks`, {filter: 'done = true', sort_by: ['done_at'], order_by: ['desc']}, 4))
+	}
+
+	function loadDone(pages = 2) {
+		return loadDoneQuery('all', () =>
+			fetchAll<Task>('/tasks', {filter: 'done = true', sort_by: ['done_at'], order_by: ['desc']}, pages))
 	}
 
 	/** Loads done tasks scheduled within [from, to) for the calendar. */
-	async function loadDoneInRange(from: Date, to: Date) {
-		const key = from.toISOString() + to.toISOString()
-		if (doneRanges.has(key)) return
-		doneRanges.add(key)
+	function loadDoneInRange(from: Date, to: Date) {
 		const f = from.toISOString()
 		const e = to.toISOString()
-		const done = await fetchAll<Task>('/tasks', {
+		return loadDoneQuery(`range:${f}:${e}`, () => fetchAll<Task>('/tasks', {
 			filter: `done = true && ((due_date >= "${f}" && due_date < "${e}") || (start_date >= "${f}" && start_date < "${e}"))`,
-		}, 5)
-		done.forEach(t => tasks.set(t.id, t))
+		}, 5))
 	}
 
 	async function loadSavedFilterTasks(project: Project): Promise<Task[]> {
@@ -203,6 +242,7 @@ export const useData = defineStore('data', () => {
 		try {
 			const created = await api<Task>('POST', `/projects/${projectId}/tasks`, {body: {...input, project_id: projectId}, query: {format: 'markdown'}})
 			tasks.set(created.id, created)
+			if (inflight) createdDuringSync.add(created.id)
 			for (const title of labelTitles) {
 				await addLabelByTitle(created.id, title)
 			}
@@ -223,7 +263,12 @@ export const useData = defineStore('data', () => {
 			tasks.set(id, {...before, ...updated, labels: updated.labels ?? before.labels})
 			return tasks.get(id)!
 		} catch (e) {
-			tasks.set(id, before)
+			if (isNotFound(e)) {
+				// Deleted elsewhere since the last sync.
+				tasks.delete(id)
+			} else {
+				tasks.set(id, before)
+			}
 			toast(String((e as Error).message))
 			return null
 		}
@@ -242,9 +287,13 @@ export const useData = defineStore('data', () => {
 	async function deleteTask(id: number) {
 		const before = tasks.get(id)
 		tasks.delete(id)
+		if (inflight) deletedDuringSync.add(id)
 		try {
 			await api('DELETE', `/tasks/${id}`)
 		} catch (e) {
+			// Already deleted elsewhere: the goal is reached.
+			if (isNotFound(e)) return
+			deletedDuringSync.delete(id)
 			if (before) tasks.set(id, before)
 			toast(String((e as Error).message))
 		}
@@ -254,7 +303,10 @@ export const useData = defineStore('data', () => {
 		try {
 			const res = await api<{duplicated_task?: Task} & Task>('POST', `/tasks/${id}/duplicate`, {query: {format: 'markdown'}})
 			const dup = res.duplicated_task ?? res
-			if (dup?.id) tasks.set(dup.id, dup)
+			if (dup?.id) {
+				tasks.set(dup.id, dup)
+				if (inflight) createdDuringSync.add(dup.id)
+			}
 			return dup
 		} catch (e) {
 			toast(String((e as Error).message))

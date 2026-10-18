@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue'
+import {computed, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import {CircleArrowDown, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
@@ -46,6 +46,37 @@ async function logout() {
 	await data.logout()
 }
 
+// Sync icon: a click spins it at least MIN_SYNC_TURNS full turns, like
+// TickTick; it keeps turning while a sync runs and always stops upright.
+const MIN_SYNC_TURNS = 2
+const syncSpinning = ref(false)
+let syncTurns = 0
+let syncMinTurns = 0
+
+function startSpin(minTurns: number) {
+	syncMinTurns = Math.max(syncMinTurns, minTurns)
+	if (syncSpinning.value) return
+	syncTurns = 0
+	syncSpinning.value = true
+}
+
+function onSpinTurn() {
+	syncTurns++
+	if (syncTurns >= syncMinTurns && !data.loading) {
+		syncSpinning.value = false
+		syncMinTurns = 0
+	}
+}
+
+watch(() => data.loading, loading => {
+	if (loading) startSpin(1)
+})
+
+function sync() {
+	startSpin(MIN_SYNC_TURNS)
+	data.loadAll().catch(() => {})
+}
+
 const shortcuts = [
 	['N', 'addTask'],
 	['/', 'search'],
@@ -73,8 +104,8 @@ const shortcuts = [
 		>
 			<CircleArrowDown :size="22" :stroke-width="2.2" />
 		</button>
-		<button class="rail-btn" :title="t('sync')" @click="data.loadAll()">
-			<RefreshCw :size="22" :stroke-width="2.2" :class="{spinning: data.loading}" />
+		<button class="rail-btn" :title="t('sync')" @click="sync">
+			<RefreshCw :size="22" :stroke-width="2.2" :class="{spinning: syncSpinning}" @animationiteration="onSpinTurn" />
 		</button>
 		<button ref="bellEl" class="rail-btn" :title="t('notifications')" @click="openBell">
 			<BellIcon :size="22" />
@@ -192,7 +223,7 @@ const shortcuts = [
 }
 
 .spinning {
-	animation: spin 0.9s linear infinite;
+	animation: spin 0.6s linear infinite;
 }
 
 @keyframes spin {
