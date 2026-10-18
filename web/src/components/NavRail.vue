@@ -61,7 +61,7 @@ const shortcuts = [
 	<nav class="rail">
 		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'">{{ initial }}</button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
-			<component :is="i.icon" :size="22" :stroke-width="i.active ? 2.2 : 1.8" />
+			<component :is="i.icon" :size="20" :stroke-width="i.active ? 2.2 : 1.8" />
 		</RouterLink>
 		<div class="spacer" />
 		<button
@@ -71,17 +71,17 @@ const shortcuts = [
 			:disabled="installingUpdate"
 			@click="installUpdate"
 		>
-			<CircleArrowDown :size="20" />
+			<CircleArrowDown :size="18" />
 		</button>
 		<button class="rail-btn" :title="t('sync')" @click="data.loadAll()">
-			<RefreshCw :size="20" :class="{spinning: data.loading}" />
+			<RefreshCw :size="18" :class="{spinning: data.loading}" />
 		</button>
 		<button ref="bellEl" class="rail-btn" :title="t('notifications')" @click="openBell">
-			<Bell :size="20" />
+			<Bell :size="18" />
 			<span v-if="unread" class="dot" />
 		</button>
 		<button ref="helpEl" class="rail-btn" :title="t('shortcuts')" @click="menu = 'help'">
-			<CircleHelp :size="20" />
+			<CircleHelp :size="18" />
 		</button>
 
 		<Popover v-if="menu === 'avatar'" :anchor="avatarEl" placement="right-start" @close="menu = null">
@@ -126,21 +126,21 @@ const shortcuts = [
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 6px;
-	width: 60px;
+	gap: 10px;
+	width: 48px;
 	flex-shrink: 0;
 	padding: 12px 0 10px;
 }
 
 .avatar {
-	width: 34px;
-	height: 34px;
-	margin-bottom: 18px;
+	width: 30px;
+	height: 30px;
+	margin-bottom: 14px;
 	border-radius: 50%;
 	background: linear-gradient(135deg, #4772fa, #8b5cf6);
 	color: #fff;
 	font-weight: 600;
-	font-size: 15px;
+	font-size: 14px;
 }
 
 .rail-btn {
@@ -148,11 +148,10 @@ const shortcuts = [
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 40px;
+	width: 36px;
+	height: 36px;
 	border-radius: 8px;
 	color: var(--text-3);
-	margin-bottom: 12px;
 }
 
 .rail-btn:hover {
@@ -177,8 +176,8 @@ const shortcuts = [
 
 .dot {
 	position: absolute;
-	top: 8px;
-	right: 9px;
+	top: 7px;
+	right: 7px;
 	width: 7px;
 	height: 7px;
 	border-radius: 50%;
