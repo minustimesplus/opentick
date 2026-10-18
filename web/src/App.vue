@@ -5,13 +5,14 @@ import NavRail from './components/NavRail.vue'
 import LoginView from './views/LoginView.vue'
 import TaskDrawer from './components/TaskDrawer.vue'
 import Toasts from './components/Toasts.vue'
+import WindowControls from './components/WindowControls.vue'
 import TaskContextMenu from './components/TaskContextMenu.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
-import {desktop} from './lib/desktop'
+import {desktop, ownWindowControls} from './lib/desktop'
 
 const data = useData()
 const router = useRouter()
@@ -84,6 +85,7 @@ onBeforeUnmount(() => {
 		<SettingsDialog v-if="ui.settings" />
 	</div>
 	<LoginView v-else />
+	<WindowControls v-if="ownWindowControls" />
 	<Toasts />
 </template>
 
@@ -94,9 +96,14 @@ onBeforeUnmount(() => {
 	padding: 6px 6px 6px 0;
 }
 
-/* Room for the window controls the desktop app draws over the page. */
-:global(html.desktop) .shell {
-	padding-top: 28px;
+/* Desktop app: no title bar, so a 24px strip of frame above the panel holds
+   the window controls (TickTick's proportions). The nav rail runs up into it. */
+:global(html.desktop .shell) {
+	padding: 0 4px 4px 0;
+}
+
+:global(html.desktop .main) {
+	margin-top: 24px;
 }
 
 .main {
@@ -106,7 +113,7 @@ onBeforeUnmount(() => {
 	border-radius: 10px;
 	overflow: hidden;
 	position: relative;
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-strong);
 }
 
 .boot {

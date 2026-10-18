@@ -7,8 +7,14 @@ interface DesktopBridge {
 	setServerUrl(url: string): Promise<string>
 	onUpdateReady(callback: (version: string) => void): void
 	installUpdate(): Promise<void>
-	/** Recolors the window controls drawn over the page. Missing in builds before frameless windows. */
+	/** Recolors the window background. Missing in builds before frameless windows. */
 	setTheme?(theme: 'dark' | 'light'): void
+	// Window controls drawn by the page (WindowControls.vue). Missing in older builds.
+	getWindowInfo?(): Promise<{platform: string, maximized: boolean}>
+	onMaximizedChange?(callback: (maximized: boolean) => void): void
+	minimizeWindow?(): void
+	toggleMaximizeWindow?(): void
+	closeWindow?(): void
 }
 
 declare global {
@@ -21,6 +27,18 @@ export const desktop = window.ttDesktop
 
 // Lets styles reserve room for the window controls drawn over the page.
 if (desktop) document.documentElement.classList.add('desktop')
+
+/** Whether the page draws its own minimize/maximize/close buttons (not on macOS). */
+export const ownWindowControls = ref(false)
+export const windowMaximized = ref(false)
+
+desktop?.getWindowInfo?.().then(info => {
+	ownWindowControls.value = info.platform !== 'darwin'
+	windowMaximized.value = info.maximized
+})
+desktop?.onMaximizedChange?.(maximized => {
+	windowMaximized.value = maximized
+})
 
 /** Version of a downloaded update waiting to be installed, if any. */
 export const updateReady = ref<string | null>(null)
