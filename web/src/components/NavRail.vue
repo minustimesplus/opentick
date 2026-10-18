@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
+import {useRoute} from 'vue-router'
 import {Bell, CalendarDays, CircleArrowDown, CircleHelp, RefreshCw, Search, Settings, SquareCheckBig, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import {useData} from '@/stores/data'
@@ -8,10 +8,10 @@ import {t} from '@/lib/i18n'
 import {MatrixIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
+import {openSettings} from '@/lib/ui'
 
 const data = useData()
 const route = useRoute()
-const router = useRouter()
 
 const avatarEl = ref<HTMLElement | null>(null)
 const bellEl = ref<HTMLElement | null>(null)
@@ -87,7 +87,7 @@ const shortcuts = [
 		<Popover v-if="menu === 'avatar'" :anchor="avatarEl" placement="right-start" @close="menu = null">
 			<div class="menu">
 				<div class="menu-label">{{ data.user?.name || data.user?.username }}</div>
-				<button class="menu-item" @click="menu = null; router.push('/settings')"><Settings :size="16" /> {{ t('settings') }}</button>
+				<button class="menu-item" @click="menu = null; openSettings()"><Settings :size="16" /> {{ t('settings') }}</button>
 				<div class="menu-sep" />
 				<button class="menu-item danger" @click="logout"><LogOut :size="16" /> {{ t('logout') }}</button>
 			</div>

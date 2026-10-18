@@ -1,5 +1,5 @@
-import {intlLocale, t} from './i18n'
-import {prefs} from './prefs'
+import {intlLocale, locale, t} from './i18n'
+import {prefs, type DateFormat} from './prefs'
 import type {Task} from '@/api/types'
 
 export const MINUTE = 60_000
@@ -83,8 +83,8 @@ export function dateKey(d: Date): string {
 
 // ---- formatting ----
 
-export function fmtTime(d: Date): string {
-	return new Intl.DateTimeFormat(intlLocale.value, {hour: '2-digit', minute: '2-digit', hour12: prefs.hour12}).format(d)
+export function fmtTime(d: Date, hour12: boolean = prefs.hour12): string {
+	return new Intl.DateTimeFormat(intlLocale.value, {hour: '2-digit', minute: '2-digit', hour12}).format(d)
 }
 
 export function fmtHourLabel(hour: number): string {
@@ -116,12 +116,81 @@ export function fmtWeekdayLong(d: Date): string {
 	return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+function pad2(n: number): string {
+	return String(n).padStart(2, '0')
+}
+
+/** Numeric date in the user's date format: 12/31/2026, 31/12/2026 or 2026/12/31. */
+export function fmtNumericDate(d: Date, format: DateFormat = prefs.dateFormat): string {
+	const y = d.getFullYear()
+	const m = pad2(d.getMonth() + 1)
+	const day = pad2(d.getDate())
+	switch (format) {
+		case 'mdy': return `${m}/${day}/${y}`
+		case 'dmy': return `${day}/${m}/${y}`
+		default: return `${y}/${m}/${day}`
+	}
+}
+
+/** "Oct 26" / "26 Oct", or the numeric date when the year is needed. */
 export function fmtDayMonth(d: Date, withYear = d.getFullYear() !== new Date().getFullYear()): string {
-	return new Intl.DateTimeFormat(intlLocale.value, {day: 'numeric', month: 'short', ...(withYear ? {year: 'numeric'} : {})}).format(d)
+	if (withYear) return fmtNumericDate(d)
+	const month = fmtMonthShort(d)
+	return prefs.dateFormat === 'dmy' ? `${d.getDate()} ${month}` : `${month} ${d.getDate()}`
 }
 
 export function fmtLongDate(d: Date): string {
-	return new Intl.DateTimeFormat(intlLocale.value, {weekday: 'short', day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? {year: 'numeric'} : {})}).format(d)
+	return `${fmtWeekdayShort(d)}${locale.value === 'fr' ? '' : ','} ${fmtDayMonth(d)}`
+}
+
+/** Week of the year: ISO 8601 when weeks start on Monday, otherwise the week holding Jan 1 is week 1. */
+export function weekNumber(d: Date, weekStart: number = prefs.weekStart): number {
+	if (weekStart === 1) {
+		const thursday = addDays(startOfWeek(d, 1), 3)
+		const firstThursday = addDays(startOfWeek(new Date(thursday.getFullYear(), 0, 4), 1), 3)
+		return Math.round(dayDiff(thursday, firstThursday) / 7) + 1
+	}
+	const start = startOfWeek(d, weekStart)
+	const firstWeek = startOfWeek(new Date(addDays(start, 6).getFullYear(), 0, 1), weekStart)
+	return Math.round(dayDiff(start, firstWeek) / 7) + 1
+}
+
+// ---- additional calendar ----
+
+const CHINESE_DAYS = [
+	'初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+	'十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+	'廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十',
+]
+
+const altFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function altFormatter(tag: string, month: 'long' | 'short'): Intl.DateTimeFormat {
+	const key = `${tag}|${month}`
+	let f = altFormatters.get(key)
+	if (!f) {
+		f = new Intl.DateTimeFormat(tag, {day: 'numeric', month})
+		altFormatters.set(key, f)
+	}
+	return f
+}
+
+/** The day in the user's additional calendar ("初五", "12"), with the month on its first day. */
+export function altDayLabel(d: Date): string {
+	const cal = prefs.altCalendar
+	if (cal === 'none') return ''
+	try {
+		const chinese = cal === 'chinese'
+		const parts = altFormatter(chinese ? 'zh-CN-u-ca-chinese' : `${intlLocale.value}-u-ca-${cal}`, chinese ? 'long' : 'short').formatToParts(d)
+		const day = Number(parts.find(p => p.type === 'day')?.value)
+		const month = parts.find(p => p.type === 'month')?.value ?? ''
+		if (!day) return ''
+		if (chinese) return day === 1 ? month : CHINESE_DAYS[day - 1] ?? ''
+		return day === 1 ? `${day} ${month}` : String(day)
+	} catch {
+		// calendar unsupported by this runtime
+		return ''
+	}
 }
 
 /** Relative day name: Today / Tomorrow / Yesterday / weekday (within a week) / "26 Oct". */

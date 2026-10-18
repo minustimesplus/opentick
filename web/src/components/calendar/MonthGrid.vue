@@ -5,8 +5,8 @@ import Popover from '@/components/Popover.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {
-	addDays, dateKey, dayDiff, fmtDayMonth, fmtMonthShort, fmtTime, fmtWeekdayShort, getSchedule, isSameDay, minutesOfDay,
-	moveSchedule, schedulePatch, startOfDay, startOfMonth, startOfWeek, withMinutes,
+	addDays, altDayLabel, dateKey, dayDiff, fmtDayMonth, fmtMonthShort, fmtTime, fmtWeekdayShort, getSchedule, isSameDay, minutesOfDay,
+	moveSchedule, schedulePatch, startOfDay, startOfMonth, startOfWeek, weekNumber, withMinutes,
 } from '@/lib/dates'
 import {projectColor} from '@/lib/tasks'
 import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
@@ -25,6 +25,7 @@ const emit = defineEmits<{
 }>()
 const data = useData()
 const MAX = 4
+const WEEK_COL = 32
 
 // ---- continuous week scrolling ----
 // The grid is an endless list of week rows, 6 per viewport, snapping week by week.
@@ -60,7 +61,9 @@ const weeks = computed(() => Array.from({length: count.value}, (_, w) => {
 }))
 
 const colCount = computed(() => weeks.value[0]?.days.length ?? 7)
-const gridCols = computed(() => ({gridTemplateColumns: `repeat(${colCount.value}, minmax(0, 1fr))`}))
+const gridCols = computed(() => ({
+	gridTemplateColumns: `${prefs.showWeekNumbers ? `${WEEK_COL}px ` : ''}repeat(${colCount.value}, minmax(0, 1fr))`,
+}))
 
 watch([base, count], () => emit('range', {start: base.value, end: addDays(base.value, count.value * 7)}), {immediate: true})
 
@@ -335,6 +338,7 @@ const creatingLabel = computed(() => {
 <template>
 	<div class="mg">
 		<div class="mg-head" :style="gridCols">
+			<div v-if="prefs.showWeekNumbers" />
 			<div v-for="d in weeks[0].days" :key="d.getDay()" class="wd">{{ fmtWeekdayShort(d) }}</div>
 		</div>
 		<div ref="scroller" class="mg-body" @scroll.passive="onScroll">
@@ -344,6 +348,7 @@ const creatingLabel = computed(() => {
 				class="week"
 				:style="{...gridCols, height: rowH + 'px'}"
 			>
+				<div v-if="prefs.showWeekNumbers" class="wk">{{ t('weekShort') }}{{ weekNumber(week.days[0]) }}</div>
 				<div
 					v-for="d in week.days"
 					:key="dateKey(d)"
@@ -355,9 +360,12 @@ const creatingLabel = computed(() => {
 					@dragleave="dropKey === dateKey(d) && (dropKey = null)"
 					@drop.prevent="onDrop($event, d)"
 				>
-					<button class="num" :class="{today: isSameDay(d, today), first: d.getDate() === 1}" @click="emit('day', d)">
-						{{ d.getDate() === 1 ? `${fmtMonthShort(d)} 1` : d.getDate() }}
-					</button>
+					<div class="num-row">
+						<button class="num" :class="{today: isSameDay(d, today), first: d.getDate() === 1}" @click="emit('day', d)">
+							{{ d.getDate() === 1 ? `${fmtMonthShort(d)} 1` : d.getDate() }}
+						</button>
+						<span v-if="prefs.altCalendar !== 'none'" class="alt">{{ altDayLabel(d) }}</span>
+					</div>
 					<template v-for="entry in (byDay.get(dateKey(d)) ?? []).slice(0, MAX)" :key="entry.key">
 						<div
 							v-if="entry.event"
@@ -452,6 +460,36 @@ const creatingLabel = computed(() => {
 	min-height: 0;
 }
 
+.num-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	flex-shrink: 0;
+}
+
+.alt {
+	min-width: 0;
+	font-size: 11px;
+	color: var(--text-3);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cell.other .alt {
+	color: var(--text-4);
+}
+
+.wk {
+	padding-top: 8px;
+	text-align: center;
+	font-size: 11px;
+	color: var(--text-3);
+	border-right: 1px solid var(--grid-line);
+	border-bottom: 1px solid var(--grid-line);
+}
+
 .cell.other .num {
 	color: var(--text-4);
 }
@@ -462,7 +500,6 @@ const creatingLabel = computed(() => {
 }
 
 .num {
-	align-self: flex-start;
 	min-width: 24px;
 	height: 24px;
 	padding: 0 4px;

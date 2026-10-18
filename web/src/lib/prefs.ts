@@ -1,10 +1,18 @@
 import {reactive, watch} from 'vue'
 
+export type DateFormat = 'mdy' | 'dmy' | 'ymd'
+export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
+
 export interface Prefs {
 	language: 'auto' | 'en' | 'fr'
 	theme: 'dark' | 'light' | 'system'
 	weekStart: 0 | 1 | 6
 	hour12: boolean
+	/** Order of numeric dates: 12/31/2026, 31/12/2026 or 2026/12/31. */
+	dateFormat: DateFormat
+	/** Secondary calendar shown next to day numbers. */
+	altCalendar: AltCalendar
+	showWeekNumbers: boolean
 	defaultListId: number | null
 	calendarMode: 'day' | 'week' | 'month'
 	calendarHidden: number[]
@@ -29,6 +37,9 @@ const defaults: Prefs = {
 	theme: 'dark',
 	weekStart: 1,
 	hour12: false,
+	dateFormat: navigator.language === 'en-US' ? 'mdy' : 'dmy',
+	altCalendar: 'none',
+	showWeekNumbers: false,
 	defaultListId: null,
 	calendarMode: 'week',
 	calendarHidden: [],

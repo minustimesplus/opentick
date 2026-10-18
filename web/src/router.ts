@@ -1,4 +1,5 @@
 import {createRouter, createWebHistory} from 'vue-router'
+import {openSettings} from './lib/ui'
 
 export const router = createRouter({
 	history: createWebHistory(),
@@ -9,7 +10,10 @@ export const router = createRouter({
 		{path: '/matrix', name: 'matrix', component: () => import('./views/MatrixView.vue')},
 		{path: '/calendar', name: 'calendar', component: () => import('./views/CalendarView.vue')},
 		{path: '/search', name: 'search', component: () => import('./views/SearchView.vue')},
-		{path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue')},
+		{path: '/settings', redirect: () => {
+			openSettings()
+			return '/tasks/today'
+		}},
 		{path: '/:pathMatch(.*)*', redirect: '/tasks/today'},
 	],
 })
