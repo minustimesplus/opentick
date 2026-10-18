@@ -1,10 +1,10 @@
 {
-  "name": "vikunja-ticktick-desktop",
-  "productName": "Vikunja TickTick",
+  "name": "opentick",
+  "productName": "OpenTick",
   "version": "0.1.0",
-  "description": "Desktop app for the TickTick-style Vikunja frontend in web/.",
+  "description": "OpenTick: a TickTick-style desktop app for Vikunja.",
   "main": "main.js",
-  "desktopName": "vikunja-ticktick.desktop",
+  "desktopName": "opentick.desktop",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": {
@@ -18,10 +18,10 @@
     "dist": "electron-builder --linux deb AppImage --publish never"
   },
   "build": {
-    "appId": "io.github.minustimesplus.vikunja-ticktick",
-    "productName": "Vikunja TickTick",
-    "executableName": "vikunja-ticktick",
-    "artifactName": "vikunja-ticktick-${version}-${arch}.${ext}",
+    "appId": "io.github.minustimesplus.opentick",
+    "productName": "OpenTick",
+    "executableName": "opentick",
+    "artifactName": "opentick-${version}-${arch}.${ext}",
     "files": [
       "main.js",
       "preload.js",
@@ -49,6 +49,10 @@
         "libatspi2.0-0",
         "libuuid1",
         "libsecret-1-0"
+      ],
+      "fpm": [
+        "--conflicts=vikunja-ticktick-desktop",
+        "--replaces=vikunja-ticktick-desktop"
       ]
     },
     "publish": {

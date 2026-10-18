@@ -45,6 +45,25 @@ let mainWindow = null
 let origin = null
 let downloadedVersion = null
 
+// The app used to be called "Vikunja TickTick". Carry its user data (server
+// URL, login session, update token) over on the first launch after the rename.
+// Has to run before the single-instance lock creates the new directory.
+function migrateLegacyUserData() {
+	const current = app.getPath('userData')
+	const legacy = path.join(app.getPath('appData'), 'Vikunja TickTick')
+	if (fs.existsSync(current) || !fs.existsSync(legacy)) return
+	try {
+		fs.cpSync(legacy, current, {
+			recursive: true,
+			filter: src => !path.basename(src).startsWith('Singleton'),
+		})
+	} catch (err) {
+		console.warn('Failed to migrate user data:', err.message)
+	}
+}
+
+migrateLegacyUserData()
+
 if (!app.requestSingleInstanceLock()) {
 	app.quit()
 	process.exit(0)

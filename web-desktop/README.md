@@ -1,8 +1,8 @@
-# Vikunja TickTick desktop
+# OpenTick desktop
 
 Electron shell around the frontend in `../web`. The bundled frontend is served
 from a loopback server that proxies `/api/*` to the Vikunja server entered on
-the login screen (stored in `~/.config/Vikunja TickTick/config.json`).
+the login screen (stored in `~/.config/OpenTick/config.json`).
 
 ## Releases and updates
 
@@ -13,7 +13,7 @@ background, and shows an update button in the nav rail. AppImages replace
 themselves; `.deb` installs ask for your password via `pkexec`.
 
 While the repository is private, the updater needs a GitHub token with read
-access to its contents in `~/.config/Vikunja TickTick/update-token`.
+access to its contents in `~/.config/OpenTick/update-token`.
 
 ## Development
 

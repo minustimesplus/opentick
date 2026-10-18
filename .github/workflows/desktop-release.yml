@@ -64,6 +64,6 @@ jobs:
             web-desktop/dist/*.AppImage \
             web-desktop/dist/latest-linux.yml \
             --target "$GITHUB_SHA" \
-            --title "Vikunja TickTick $VERSION" \
+            --title "OpenTick $VERSION" \
             --notes-file notes.md \
             --latest
