@@ -1,0 +1,71 @@
+{
+  "name": "vikunja-ticktick-desktop",
+  "productName": "Vikunja TickTick",
+  "version": "0.1.0",
+  "description": "Desktop app for the TickTick-style Vikunja frontend in web/.",
+  "main": "main.js",
+  "desktopName": "vikunja-ticktick.desktop",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "Jannik Fachat",
+    "email": "yourveryowntrash@gmail.com"
+  },
+  "homepage": "https://github.com/minustimesplus/vikunja-ticktick",
+  "scripts": {
+    "build:web": "cd ../web && npm ci && WEB_OUT_DIR=../web-desktop/app npm run build",
+    "start": "electron .",
+    "dist": "electron-builder --linux deb AppImage --publish never"
+  },
+  "build": {
+    "appId": "io.github.minustimesplus.vikunja-ticktick",
+    "productName": "Vikunja TickTick",
+    "executableName": "vikunja-ticktick",
+    "artifactName": "vikunja-ticktick-${version}-${arch}.${ext}",
+    "files": [
+      "main.js",
+      "preload.js",
+      "icon.png",
+      "app/**/*"
+    ],
+    "linux": {
+      "icon": "icon.png",
+      "category": "Office",
+      "synopsis": "TickTick-style to-do app for Vikunja",
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "syncDesktopName": true
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "minustimesplus",
+      "repo": "vikunja-ticktick"
+    }
+  },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  },
+  "allowScripts": {
+    "electron@44.9.0": true,
+    "electron-winstaller": false
+  }
+}

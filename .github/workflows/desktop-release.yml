@@ -1,0 +1,69 @@
+name: Desktop release
+
+# Builds the web/ frontend into the Electron shell in web-desktop/ and publishes
+# a GitHub release (.deb + AppImage + latest-linux.yml for electron-updater)
+# on every push to main.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: 0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history and tags for the changelog below.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web-desktop/package-lock.json
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          npm ci
+          WEB_OUT_DIR=../web-desktop/app npm run build
+
+      - name: Build desktop packages
+        working-directory: web-desktop
+        run: |
+          npm ci
+          npx electron-builder --linux deb AppImage --publish never -c.extraMetadata.version="$VERSION"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          previous=$(git describe --tags --match 'desktop-v*' --abbrev=0 2>/dev/null || true)
+          {
+            echo "Built from ${GITHUB_SHA::8}."
+            echo
+            echo "### Changes"
+            git log --no-merges --format='- %s' ${previous:+$previous..}HEAD | head -50
+          } > notes.md
+          gh release create "desktop-v$VERSION" \
+            web-desktop/dist/*.deb \
+            web-desktop/dist/*.AppImage \
+            web-desktop/dist/latest-linux.yml \
+            --target "$GITHUB_SHA" \
+            --title "Vikunja TickTick $VERSION" \
+            --notes-file notes.md \
+            --latest

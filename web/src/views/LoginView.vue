@@ -3,6 +3,7 @@ import {ref} from 'vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
 import {ApiError} from '@/api/client'
+import {desktop} from '@/lib/desktop'
 
 const data = useData()
 const mode = ref<'login' | 'register'>('login')
@@ -13,11 +14,19 @@ const totp = ref('')
 const needTotp = ref(false)
 const error = ref('')
 const busy = ref(false)
+// The desktop app proxies /api to whichever server the user picks here.
+const serverUrl = ref('')
+desktop?.getServerUrl().then(url => {
+	serverUrl.value ||= url
+})
 
 async function submit() {
 	error.value = ''
 	busy.value = true
 	try {
+		if (desktop) {
+			serverUrl.value = await desktop.setServerUrl(serverUrl.value.trim())
+		}
 		if (mode.value === 'login') {
 			await data.login(username.value.trim(), password.value, totp.value || undefined)
 		} else {
@@ -42,6 +51,7 @@ async function submit() {
 				<svg viewBox="0 0 32 32" width="44" height="44"><rect width="32" height="32" rx="9" fill="#4772FA" /><path d="M9 16.5l4.5 4.5L23 11.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
 			</div>
 			<h1>{{ mode === 'login' ? t('login') : t('register') }}</h1>
+			<input v-if="desktop" v-model="serverUrl" class="input" inputmode="url" spellcheck="false" :placeholder="t('serverUrl')" autocomplete="url" required>
 			<input v-model="username" class="input" :placeholder="mode === 'login' ? t('username') : t('usernameOnly')" autocomplete="username" required>
 			<input v-if="mode === 'register'" v-model="email" class="input" type="email" :placeholder="t('email')" autocomplete="email" required>
 			<input v-model="password" class="input" type="password" :placeholder="t('password')" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" required>

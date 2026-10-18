@@ -150,6 +150,9 @@ const en = {
 	calendarError: 'Could not load this calendar',
 	openLink: 'Open link',
 	recurringEvent: 'Recurring event',
+	serverUrl: 'Server URL',
+	updateReady: 'Update to {version} available – click to install and restart',
+	installingUpdate: 'Installing update…',
 }
 
 type Dict = typeof en
@@ -303,6 +306,9 @@ const fr: Dict = {
 	calendarError: 'Impossible de charger ce calendrier',
 	openLink: 'Ouvrir le lien',
 	recurringEvent: 'Événement récurrent',
+	serverUrl: 'URL du serveur',
+	updateReady: 'Mise à jour {version} disponible – cliquer pour installer et redémarrer',
+	installingUpdate: 'Installation de la mise à jour…',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

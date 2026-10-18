@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Bell, CalendarDays, CircleHelp, RefreshCw, Search, Settings, SquareCheckBig, LogOut} from 'lucide-vue-next'
+import {Bell, CalendarDays, CircleArrowDown, CircleHelp, RefreshCw, Search, Settings, SquareCheckBig, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
 import {MatrixIcon} from '@/lib/icons'
+import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 
 const data = useData()
@@ -63,6 +64,15 @@ const shortcuts = [
 			<component :is="i.icon" :size="22" :stroke-width="i.active ? 2.2 : 1.8" />
 		</RouterLink>
 		<div class="spacer" />
+		<button
+			v-if="updateReady"
+			class="rail-btn update"
+			:title="installingUpdate ? t('installingUpdate') : t('updateReady', {version: updateReady})"
+			:disabled="installingUpdate"
+			@click="installUpdate"
+		>
+			<CircleArrowDown :size="20" />
+		</button>
 		<button class="rail-btn" :title="t('sync')" @click="data.loadAll()">
 			<RefreshCw :size="20" :class="{spinning: data.loading}" />
 		</button>
@@ -151,6 +161,14 @@ const shortcuts = [
 
 .rail-btn.active {
 	color: var(--text);
+}
+
+.rail-btn.update {
+	color: var(--accent);
+}
+
+.rail-btn.update:disabled {
+	opacity: 0.5;
 }
 
 .spacer {
