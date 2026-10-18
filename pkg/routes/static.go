@@ -30,8 +30,8 @@ import (
 	"sync"
 	"text/template"
 
-	"code.vikunja.io/api/frontend"
 	"code.vikunja.io/api/pkg/config"
+	"code.vikunja.io/api/web"
 
 	etaggenerator "github.com/hhsnopek/etag"
 	"github.com/labstack/echo/v5"
@@ -128,7 +128,7 @@ func injectAPIURL(index, publicURL string) string {
 
 // Copied from echo's middleware.StaticWithConfig simplified and adjusted for caching
 func static() echo.MiddlewareFunc {
-	assetFs := http.FS(frontend.Files)
+	assetFs := http.FS(web.Files)
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) (err error) {

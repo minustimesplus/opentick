@@ -13,6 +13,8 @@ docker-manifest-unstable.tmpl
 *.zip
 
 # Frontend
-/frontend/node_modules/
-/frontend/.direnv
-/frontend/dist
+/web/node_modules/
+/web/dist
+/web-desktop/node_modules/
+/web-desktop/app
+/web-desktop/dist

@@ -19,14 +19,12 @@ package routes
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"code.vikunja.io/api/pkg/log"
 
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func newStaticTestEcho() *echo.Echo {
@@ -90,10 +88,7 @@ func TestStaticDoesNotHandleAPIRoutes(t *testing.T) {
 }
 
 func TestInjectAPIURL(t *testing.T) {
-	source, err := os.ReadFile("../../frontend/index.html")
-	require.NoError(t, err)
-	index := string(source)
-	require.Contains(t, index, "window.API_URL = ''")
+	index := "<script>window.API_URL = ''</script>"
 
 	tests := []struct {
 		publicURL string

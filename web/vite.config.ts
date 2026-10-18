@@ -16,7 +16,7 @@ export default defineConfig({
 		},
 	},
 	build: {
-		// Built straight into the directory the Go binary embeds (frontend/embed.go).
+		// web/embed.go embeds dist/ into the Go binary; the desktop build overrides it via WEB_OUT_DIR.
 		outDir: process.env.WEB_OUT_DIR ?? 'dist',
 		emptyOutDir: true,
 	},

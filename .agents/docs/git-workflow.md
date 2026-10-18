@@ -5,8 +5,7 @@
 - Conventional Commits (`feat: add foo`, `fix: correct bar`). Changelogs are generated from them.
 - Lint before committing and fix what it reports:
   - backend changes: `mage lint:fix`
-  - frontend changes: `cd frontend && pnpm lint:fix`
-  - CSS/SCSS or Vue `<style>` changes: also `pnpm lint:styles:fix`
+  - frontend changes: `cd web && npm run typecheck`
 - Never commit edits to `pkg/swagger/`; CI regenerates it after commit.
 
 ## Plans

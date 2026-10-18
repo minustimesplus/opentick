@@ -13,7 +13,7 @@ mage dev:prepare-worktree <name> <plan-path>
 - `<name>` - Required. Becomes both the folder name and branch name. Use conventions like `fix-<description>` for bug fixes or `feat-<description>` for new features.
 - `<plan-path>` - Required. Path to a plan file (relative to repo root) that will be copied to the new worktree's `plans/` directory. Pass `""` to skip copying a plan.
 
-This will initialize a new worktree in the parent directory and copy some files over — `config.yml` with an updated rootpath, and the frontend gets initialized.
+This will initialize a new worktree in the parent directory and copy some files over — `config.yml` with an updated rootpath, and `npm ci` runs in `web/`.
 
 **Example:**
 ```bash

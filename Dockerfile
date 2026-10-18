@@ -3,7 +3,6 @@ FROM --platform=$BUILDPLATFORM node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65
 
 WORKDIR /build
 
-# This fork ships the TickTick-style frontend from web/ instead of the upstream frontend/.
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
@@ -16,7 +15,7 @@ RUN go install github.com/magefile/mage@latest && \
 
 WORKDIR /go/src/code.vikunja.io/api
 COPY . ./
-COPY --from=frontendbuilder /build/dist ./frontend/dist
+COPY --from=frontendbuilder /build/dist ./web/dist
 
 ARG TARGETOS TARGETARCH TARGETVARIANT RELEASE_VERSION
 ENV RELEASE_VERSION=$RELEASE_VERSION

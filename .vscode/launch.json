@@ -8,8 +8,8 @@
             "name": "Launch frontend dev",
             "type": "node-terminal",
             "request": "launch",
-            "command": "pnpm run dev",
-            "cwd": "${workspaceRoot}/frontend"
+            "command": "npm run dev",
+            "cwd": "${workspaceRoot}/web"
         },
         {
             "name": "Launch API",

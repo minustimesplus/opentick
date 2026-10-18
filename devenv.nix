@@ -23,16 +23,9 @@ in {
     (final: prev: { go-tools = prev.go-tools.overrideAttrs (_: { doCheck = false; }); })
   ];
 
-  scripts.patch-sass-embedded.exec = ''
-  find node_modules/.pnpm/sass-embedded-linux-*/node_modules/sass-embedded-linux-*/dart-sass/src -name dart -print0 | xargs -I {} -0 patchelf --set-interpreter "$(<$NIX_CC/nix-support/dynamic-linker)" {}
-  '';
-
 	packages = with pkgs-unstable; [
     # General tools
-    git-cliff 
     actionlint
-    crowdin-cli
-    nfpm
     # API tools
     golangci-lint-go127 mage
     # Desktop
@@ -50,10 +43,6 @@ in {
     javascript = {
       enable = true;
       package = pkgs-unstable.nodejs-slim;
-      pnpm = {
-        enable = true;
-        package = pkgs-unstable.pnpm;
-      };
     };
     
     go = {

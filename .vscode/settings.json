@@ -22,13 +22,5 @@
     ],
 
     // disable vetur in case it's installed
-    "vetur.validation.template": false,
-
-    // i18n ally
-    "i18n-ally.localesPaths": [
-        "frontend/src/i18n/lang"
-    ],
-    "i18n-ally.sortKeys": true,
-    "i18n-ally.keepFulfilled": true,
-    "i18n-ally.keystyle": "nested"
+    "vetur.validation.template": false
 }

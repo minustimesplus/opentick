@@ -58,10 +58,10 @@ Requirements:
 - [Mage](https://magefile.org/)
 
 ```sh
-# 1. Build the frontend into the directory the Go binary embeds
+# 1. Build the frontend into web/dist, which the Go binary embeds
 cd web
 npm ci
-WEB_OUT_DIR=../frontend/dist npm run build
+npm run build
 cd ..
 
 # 2. Build the server binary
@@ -130,9 +130,6 @@ OpenTick is licensed under [AGPL‑3.0‑or‑later](LICENSE), the same license 
 Vikunja, which it is built on. You can use, modify, and self-host it freely; if
 you distribute it or run a modified version as a network service, you must
 make your source code available under the same license.
-
-The contents of [`desktop/`](desktop/) are licensed under
-[GPL‑3.0‑or‑later](desktop/LICENSE).
 
 ### Unsplash Images
 

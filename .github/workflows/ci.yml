@@ -25,19 +25,3 @@ jobs:
     name: Test
     uses: ./.github/workflows/test.yml
     secrets: inherit
-
-  release:
-    name: Release
-    # Upstream's release pipeline needs go-vikunja secrets; forks publish via desktop-release.yml.
-    if: ${{ github.repository == 'go-vikunja/vikunja' && (github.ref_type == 'tag' || github.ref_name == 'main') }}
-    uses: ./.github/workflows/release.yml
-    # Called workflows can only narrow these, never widen them.
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    needs:
-      - test
-    secrets: inherit

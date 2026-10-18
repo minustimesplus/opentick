@@ -38,10 +38,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
-
-	apiv2 "code.vikunja.io/api/pkg/routes/api/v2"
 
 	"github.com/iancoleman/strcase"
 	"github.com/magefile/mage/mg"
@@ -63,25 +60,21 @@ var (
 
 	// Aliases are mage aliases of targets
 	Aliases = map[string]any{
-		"build":                    Build.Build,
-		"check:frontend-client":    Check.FrontendClient,
-		"check:got-swag":           Check.GotSwag,
-		"dev:make-migration":       Dev.MakeMigration,
-		"dev:make-event":           Dev.MakeEvent,
-		"dev:make-listener":        Dev.MakeListener,
-		"dev:make-notification":    Dev.MakeNotification,
-		"dev:prepare-worktree":     Dev.PrepareWorktree,
-		"dev:tag-release":          Dev.TagRelease,
-		"test:e2e":                 Test.E2E,
-		"test:e2e-api":             Test.E2EApi,
-		"plugins:build":            Plugins.Build,
-		"lint":                     Check.Golangci,
-		"lint:fix":                 Check.GolangciFix,
-		"generate:config-yaml":     Generate.ConfigYAML,
-		"generate:frontend-client": Generate.FrontendClient,
-		"generate:swagger-docs":    Generate.SwaggerDocs,
-		"generate:yaegi-symbols":   Generate.YaegiSymbols,
-		"check:yaegi-symbols":      Check.YaegiSymbols,
+		"build":                  Build.Build,
+		"check:got-swag":         Check.GotSwag,
+		"dev:make-migration":     Dev.MakeMigration,
+		"dev:make-event":         Dev.MakeEvent,
+		"dev:make-listener":      Dev.MakeListener,
+		"dev:make-notification":  Dev.MakeNotification,
+		"dev:prepare-worktree":   Dev.PrepareWorktree,
+		"test:e2e-api":           Test.E2EApi,
+		"plugins:build":          Plugins.Build,
+		"lint":                   Check.Golangci,
+		"lint:fix":               Check.GolangciFix,
+		"generate:config-yaml":   Generate.ConfigYAML,
+		"generate:swagger-docs":  Generate.SwaggerDocs,
+		"generate:yaegi-symbols": Generate.YaegiSymbols,
+		"check:yaegi-symbols":    Check.YaegiSymbols,
 	}
 )
 
@@ -286,14 +279,6 @@ func printSuccess(text string, args ...any) {
 	fmt.Printf(InfoColor+"\n", text)
 }
 
-// getE2EPort returns the port from the given env var, or a random available port.
-func getE2EPort(ctx context.Context, envVar string) (int, error) {
-	if v := os.Getenv(envVar); v != "" {
-		return strconv.Atoi(v)
-	}
-	return getRandomPort(ctx)
-}
-
 // getRandomPort finds a random available TCP port.
 func getRandomPort(ctx context.Context) (int, error) {
 	l, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
@@ -304,56 +289,15 @@ func getRandomPort(ctx context.Context) (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-// setProcessGroup configures a command to run in its own process group,
-// so that all child processes can be killed together.
-func setProcessGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-}
-
-// killProcessGroup sends a signal to the entire process group of the given command.
-func killProcessGroup(cmd *exec.Cmd) error {
-	if cmd.Process == nil {
-		return nil
-	}
-	if pgid, err := syscall.Getpgid(cmd.Process.Pid); err == nil { // use best-effort to kill full process group
-		err = syscall.Kill(-pgid, syscall.SIGTERM)
-		if err != nil {
-			return err
-		}
-	}
-	return cmd.Wait()
-}
-
-// waitForHTTP polls a URL until it returns a 200 status or the timeout expires.
-func waitForHTTP(ctx context.Context, url string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	client := &http.Client{Timeout: 2 * time.Second}
-	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return err
-		}
-		resp, err := client.Do(req)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return nil
-			}
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return fmt.Errorf("timed out waiting for %s after %s", url, timeout)
-}
-
 func ensureFrontendDistExists() error {
 	return ensureFrontendDistExistsIn(".")
 }
 
-// frontend/embed.go embeds dist/ with //go:embed all:dist, so every go build and
+// web/embed.go embeds dist/ with //go:embed all:dist, so every go build and
 // go test fails hard when that directory does not exist. A placeholder index.html
 // keeps them working in a worktree that never ran a frontend build.
 func ensureFrontendDistExistsIn(root string) error {
-	distPath := filepath.Join(root, "frontend", "dist")
+	distPath := filepath.Join(root, "web", "dist")
 	if _, err := os.Stat(distPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(distPath, 0o755); err != nil {
 			return fmt.Errorf("error creating %s: %w", distPath, err)
@@ -477,229 +421,7 @@ func (Test) E2EApi(ctx context.Context) error {
 	return runAndStreamOutput(ctx, "go", "test", goDetectVerboseFlag(), "-p", "1", "-timeout", "45m", "./pkg/e2etests")
 }
 
-// E2E builds the API, starts it with an in-memory database and the frontend dev server,
-// runs the Playwright e2e tests against them, then tears everything down.
-// This does not touch your local database.
-//
-// Any arguments are passed through to Playwright. Examples:
-//
-//	mage test:e2e ""                                     # run all tests
-//	mage test:e2e "tests/e2e/misc/menu.spec.ts"         # run a specific test file
-//	mage test:e2e "--grep menu"                          # filter by test name
-//	mage test:e2e "--headed"                             # run in headed browser mode
-//	mage test:e2e "--headed tests/e2e/misc/menu.spec.ts" # combine flags
-//
-// Environment variable overrides:
-//   - VIKUNJA_E2E_API_PORT: API port (default: random)
-//   - VIKUNJA_E2E_FRONTEND_PORT: Frontend port (default: random)
-//   - VIKUNJA_E2E_TESTING_TOKEN: Testing token for seed endpoints (default: random)
-//   - VIKUNJA_E2E_SKIP_BUILD: Set to "true" to skip rebuilding the API binary (default: false)
-func (Test) E2E(ctx context.Context, args string) error {
-	mg.Deps(initVars)
-
-	// Determine ports
-	apiPort, err := getE2EPort(ctx, "VIKUNJA_E2E_API_PORT")
-	if err != nil {
-		return fmt.Errorf("could not get API port: %w", err)
-	}
-	frontendPort, err := getE2EPort(ctx, "VIKUNJA_E2E_FRONTEND_PORT")
-	if err != nil {
-		return fmt.Errorf("could not get frontend port: %w", err)
-	}
-
-	// Generate a random testing token
-	testingToken := os.Getenv("VIKUNJA_E2E_TESTING_TOKEN")
-	if testingToken == "" {
-		testingToken = fmt.Sprintf("e2e-test-token-%d", time.Now().UnixNano())
-	}
-
-	fmt.Printf("E2E test configuration:\n")
-	fmt.Printf("  API port:      %d\n", apiPort)
-	fmt.Printf("  Frontend port: %d\n", frontendPort)
-	fmt.Printf("  Testing token: %s\n", testingToken)
-
-	// Build the API binary (unless skipped)
-	if os.Getenv("VIKUNJA_E2E_SKIP_BUILD") != "true" {
-		fmt.Println("\n--- Building API binary ---")
-		if err := (Build{}).Build(ctx); err != nil {
-			return fmt.Errorf("failed to build API: %w", err)
-		}
-	}
-
-	// Create temp directory for file uploads and rootpath
-	tmpDir, err := os.MkdirTemp("", "vikunja-e2e-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp dir: %w", err)
-	}
-	defer func() {
-		fmt.Println("\n--- Cleaning up temp directory ---")
-		os.RemoveAll(tmpDir)
-	}()
-
-	if err := os.MkdirAll(filepath.Join(tmpDir, "files"), 0o755); err != nil {
-		return fmt.Errorf("failed to create files dir: %w", err)
-	}
-
-	// Start the API server — all config via env vars, no config file
-	// Uses in-memory SQLite (no DB file on disk)
-	fmt.Println("\n--- Starting API server ---")
-	apiCmd := exec.CommandContext(ctx, "./vikunja", "web")
-	apiCmd.Env = append(os.Environ(),
-		fmt.Sprintf("VIKUNJA_SERVICE_INTERFACE=:%d", apiPort),
-		fmt.Sprintf("VIKUNJA_SERVICE_PUBLICURL=http://127.0.0.1:%d/", apiPort),
-		fmt.Sprintf("VIKUNJA_SERVICE_TESTINGTOKEN=%s", testingToken),
-		fmt.Sprintf("VIKUNJA_SERVICE_ROOTPATH=%s", tmpDir),
-		"VIKUNJA_SERVICE_JWTSECRET=e2e-test-jwt-secret-do-not-use-in-production",
-		"VIKUNJA_DATABASE_TYPE=sqlite",
-		"VIKUNJA_DATABASE_PATH=memory",
-		fmt.Sprintf("VIKUNJA_FILES_BASEPATH=%s", filepath.Join(tmpDir, "files")),
-		"VIKUNJA_LOG_LEVEL=WARNING",
-		"VIKUNJA_MAILER_ENABLED=false",
-		"VIKUNJA_REDIS_ENABLED=false",
-		"VIKUNJA_RATELIMIT_NOAUTHLIMIT=1000",
-	)
-	apiCmd.Stdout = os.Stdout
-	apiCmd.Stderr = os.Stderr
-	setProcessGroup(apiCmd)
-	if err := apiCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start API: %w", err)
-	}
-	defer func() {
-		fmt.Println("\n--- Stopping API server ---")
-		if err := killProcessGroup(apiCmd); err != nil {
-			fmt.Println("Failed to stop API server:", err)
-		}
-	}()
-
-	// Wait for API to be ready
-	apiBase := fmt.Sprintf("http://127.0.0.1:%d/api/v1", apiPort)
-	fmt.Printf("Waiting for API at %s ...\n", apiBase)
-	if err := waitForHTTP(ctx, apiBase+"/info", 30*time.Second); err != nil {
-		return fmt.Errorf("API failed to start: %w", err)
-	}
-	printSuccess("API is ready!")
-
-	// Build the frontend
-	fmt.Println("\n--- Building frontend ---")
-	buildFrontendCmd := exec.CommandContext(ctx, "pnpm", "build:dev")
-	buildFrontendCmd.Dir = "frontend"
-	buildFrontendCmd.Stdout = os.Stdout
-	buildFrontendCmd.Stderr = os.Stderr
-	if err := buildFrontendCmd.Run(); err != nil {
-		return fmt.Errorf("failed to build frontend: %w", err)
-	}
-	printSuccess("Frontend built!")
-
-	// Serve the built frontend with vite preview (static, no file watchers)
-	fmt.Println("\n--- Starting frontend preview server ---")
-	frontendCmd := exec.CommandContext(ctx, "pnpm", "preview:dev", "--port", strconv.Itoa(frontendPort)) //nolint:gosec // This mage task runs end to end tests with environment-based configuration, it must use the port environment variable to suit its current environment.
-	frontendCmd.Dir = "frontend"
-	frontendCmd.Stdout = os.Stdout
-	frontendCmd.Stderr = os.Stderr
-	setProcessGroup(frontendCmd)
-	if err := frontendCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start frontend: %w", err)
-	}
-	defer func() {
-		fmt.Println("\n--- Stopping frontend preview server ---")
-		if err := killProcessGroup(frontendCmd); err != nil {
-			fmt.Println("Failed to stop API server:", err)
-		}
-	}()
-
-	// Wait for frontend to be ready
-	frontendBase := fmt.Sprintf("http://127.0.0.1:%d", frontendPort)
-	fmt.Printf("Waiting for frontend at %s ...\n", frontendBase)
-	if err := waitForHTTP(ctx, frontendBase, 60*time.Second); err != nil {
-		return fmt.Errorf("frontend failed to start: %w", err)
-	}
-	printSuccess("Frontend is ready!")
-
-	// Run Playwright tests
-	fmt.Println("\n--- Running Playwright e2e tests ---")
-	playwrightArgs := []string{"test:e2e"}
-	if strings.TrimSpace(args) != "" {
-		playwrightArgs = append(playwrightArgs, strings.Fields(args)...)
-	}
-	playwrightCmd := exec.CommandContext(ctx, "pnpm", playwrightArgs...)
-	playwrightCmd.Dir = "frontend"
-	playwrightCmd.Env = append(os.Environ(),
-		fmt.Sprintf("API_URL=%s/", apiBase),
-		fmt.Sprintf("BASE_URL=%s", frontendBase),
-		fmt.Sprintf("VIKUNJA_SERVICE_TESTINGTOKEN=%s", testingToken),
-		fmt.Sprintf("TEST_SECRET=%s", testingToken),
-	)
-	playwrightCmd.Stdout = os.Stdout
-	playwrightCmd.Stderr = os.Stderr
-
-	testErr := playwrightCmd.Run()
-
-	if testErr != nil {
-		return fmt.Errorf("e2e tests failed: %w", testErr)
-	}
-
-	printSuccess("All e2e tests passed!")
-	return nil
-}
-
 type Check mg.Namespace
-
-func (Check) FrontendClient(ctx context.Context) error {
-	if err := (Generate{}).FrontendClient(ctx); err != nil {
-		return err
-	}
-	firstHash, err := frontendClientDirectoryHash()
-	if err != nil {
-		return err
-	}
-
-	if err := (Generate{}).FrontendClient(ctx); err != nil {
-		return err
-	}
-	secondHash, err := frontendClientDirectoryHash()
-	if err != nil {
-		return err
-	}
-	if firstHash != secondHash {
-		return errors.New("frontend API client generation is not idempotent")
-	}
-
-	status, err := runGitCommandWithOutput(ctx, "status", "--porcelain", "--", "frontend/src/client/generated")
-	if err != nil {
-		return err
-	}
-	if len(bytes.TrimSpace(status)) > 0 {
-		return errors.New("frontend API client is not up to date: run 'mage generate:frontend-client' and commit the result")
-	}
-	return nil
-}
-
-func frontendClientDirectoryHash() (string, error) {
-	const root = "frontend/src/client/generated"
-	hash := sha256.New()
-	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if info.IsDir() {
-			return nil
-		}
-		fileHash, err := calculateSha256FileHash(path)
-		if err != nil {
-			return err
-		}
-		relativePath, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(hash, "%s\x00%o\x00%s\n", relativePath, info.Mode().Perm(), fileHash)
-		return err
-	})
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
-}
 
 // GotSwag checks if the swagger docs need to be re-generated from the code annotations
 func (Check) GotSwag(ctx context.Context) error {
@@ -768,16 +490,12 @@ func (Check) YaegiSymbols(ctx context.Context) error {
 
 // Translations checks that all translation keys used in the code exist in
 // their respective English translation files, and conversely that no unused
-// keys exist in those files. Both the api (Go) and the frontend (Vue/TS) are
-// checked in one run so a single CI job can gate the whole repository.
+// keys exist in that file.
 func (Check) Translations() error {
 	mg.Deps(initVars)
 
 	var errs []error
 	if err := checkAPITranslations(); err != nil {
-		errs = append(errs, err)
-	}
-	if err := checkFrontendTranslations(); err != nil {
 		errs = append(errs, err)
 	}
 	if len(errs) > 0 {
@@ -816,44 +534,6 @@ func checkAPITranslations() error {
 	}
 
 	return reportTranslationResults("api", translations, keys, nil)
-}
-
-func checkFrontendTranslations() error {
-	fmt.Println("Checking frontend translation keys...")
-
-	translationFile := "./frontend/src/i18n/lang/en.json"
-	translations, err := loadTranslations(translationFile)
-	if err != nil {
-		return fmt.Errorf("error loading frontend translations: %w", err)
-	}
-
-	fmt.Printf("Loaded %d translation keys from %s\n", len(translations), translationFile)
-
-	keys, prefixes, literals, err := walkFrontendForTranslationKeys("./frontend/src")
-	if err != nil {
-		return fmt.Errorf("error walking frontend codebase: %w", err)
-	}
-
-	fmt.Printf("Found %d translation key references in the frontend codebase\n", len(keys))
-
-	// Some keys are referenced indirectly – e.g. stored as string literals in
-	// arrays and looked up by index, or assigned to a variable in the form
-	// `const path = ` + "`error.${code}`". Any literal that matches a known
-	// translation key (or is a prefix of one) is treated as a usage hint, so
-	// those keys aren't flagged as dead.
-	for lit := range literals {
-		if translations[lit] {
-			keys = append(keys, TranslationKey{Key: lit, FilePath: "<frontend literal hint>", Line: 0})
-			continue
-		}
-		// Literals that look like a key prefix (end in ".") are kept as
-		// dynamic prefixes. This catches `const path = `error.${code}``.
-		if strings.HasSuffix(lit, ".") {
-			prefixes = append(prefixes, lit)
-		}
-	}
-
-	return reportTranslationResults("frontend", translations, keys, prefixes)
 }
 
 // TranslationKey represents a translation key found in the code
@@ -1047,160 +727,6 @@ func extractAPITranslationKeysFromFile(filePath string) ([]TranslationKey, map[s
 	}
 
 	return keys, literals, nil
-}
-
-// frontendI18nCallReSingle matches translation calls using single-quoted keys:
-//   - $t('k'), $tc('k')
-//   - t('k'), tc('k') (composable)
-//   - i18n.t('k'), i18n.global.t('k')
-//
-// Go's RE2 doesn't support backreferences, so we have one regex per quote
-// style. Template-literal and bare-variable forms are handled separately.
-var frontendI18nCallReSingle = regexp.MustCompile(`(?:\$t|\$tc|\bt|\btc|\bi18n\.(?:global\.)?t)\(\s*'([^']+)'`)
-
-// frontendI18nCallReDouble is the double-quoted counterpart of
-// frontendI18nCallReSingle.
-var frontendI18nCallReDouble = regexp.MustCompile(`(?:\$t|\$tc|\bt|\btc|\bi18n\.(?:global\.)?t)\(\s*"([^"]+)"`)
-
-// frontendI18nTemplateLiteralRe matches template-literal calls of the form
-//
-//	$t(`prefix.${expr}`)  /  t(`prefix.${...}`)  / tc(`...`) etc.
-//
-// Capturing group 1 is the portion before the first ${ substitution, which we
-// treat as a "dynamic prefix": every translation key starting with it is
-// considered used.
-var frontendI18nTemplateLiteralRe = regexp.MustCompile("(?:\\$t|\\$tc|\\bt|\\btc|\\bi18n\\.(?:global\\.)?t)\\(\\s*`([^`$]*)\\$\\{")
-
-// Only unbound keypath attributes contain literal keys; :keypath contains JavaScript.
-var frontendI18nKeypathRe = regexp.MustCompile(`(?:^|\s)keypath\s*=\s*"([^"]+)"`)
-
-// walkFrontendForTranslationKeys scans .vue/.ts/.js files under rootDir and
-// extracts translation key references, dynamic-key prefixes, and a set of
-// candidate string-literal usage hints (for indirect references like keys
-// stored in arrays / template literals assigned to variables).
-func walkFrontendForTranslationKeys(rootDir string) ([]TranslationKey, []string, map[string]bool, error) {
-	var allKeys []TranslationKey
-	var allPrefixes []string
-	allLiterals := make(map[string]bool)
-
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			name := info.Name()
-			// Skip hidden dirs and build artifacts
-			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "dist" {
-				return filepath.SkipDir
-			}
-			// Don't walk into the language files themselves
-			if path == filepath.Join(rootDir, "i18n", "lang") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		ext := filepath.Ext(path)
-		if ext != ".vue" && ext != ".ts" && ext != ".js" {
-			return nil
-		}
-
-		keys, prefixes, literals, err := extractFrontendTranslationKeysFromFile(path)
-		if err != nil {
-			fmt.Printf("Warning: %v\n", err)
-			return nil
-		}
-		allKeys = append(allKeys, keys...)
-		allPrefixes = append(allPrefixes, prefixes...)
-		for l := range literals {
-			allLiterals[l] = true
-		}
-
-		return nil
-	})
-
-	return allKeys, allPrefixes, allLiterals, err
-}
-
-// frontendStringLiteralRe matches single- or double-quoted strings that look
-// like dotted translation keys (e.g. "home.welcomeNight").
-var frontendStringLiteralRe = regexp.MustCompile(`['"]([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)['"]`)
-
-// frontendTemplatePrefixRe matches any template-literal fragment with a ${…}
-// interpolation, whether or not it is inside a $t() call. This catches cases
-// like `const path = ` + "`error.${code}`" where the literal is assigned to
-// a variable before being passed to a translator.
-var frontendTemplatePrefixRe = regexp.MustCompile("`([a-zA-Z][a-zA-Z0-9_.]*\\.)\\$\\{")
-
-// extractFrontendTranslationKeysFromFile extracts static and dynamic
-// translation key references from a single frontend source file.
-func extractFrontendTranslationKeysFromFile(filePath string) ([]TranslationKey, []string, map[string]bool, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("error reading file %s: %w", filePath, err)
-	}
-
-	var keys []TranslationKey
-	var prefixes []string
-	literals := make(map[string]bool)
-
-	appendKey := func(keyStart int, key string) {
-		beforeMatch := content[:keyStart]
-		lineCount := bytes.Count(beforeMatch, []byte("\n")) + 1
-		keys = append(keys, TranslationKey{
-			Key:      key,
-			FilePath: filePath,
-			Line:     lineCount,
-		})
-	}
-
-	// Static string-literal calls (single- and double-quoted)
-	for _, match := range frontendI18nCallReSingle.FindAllSubmatchIndex(content, -1) {
-		if len(match) >= 4 {
-			appendKey(match[2], string(content[match[2]:match[3]]))
-		}
-	}
-	for _, match := range frontendI18nCallReDouble.FindAllSubmatchIndex(content, -1) {
-		if len(match) >= 4 {
-			appendKey(match[2], string(content[match[2]:match[3]]))
-		}
-	}
-
-	// <i18n-t keypath="..."> (Vue component usage in templates)
-	for _, match := range frontendI18nKeypathRe.FindAllSubmatchIndex(content, -1) {
-		if len(match) >= 4 {
-			appendKey(match[2], string(content[match[2]:match[3]]))
-		}
-	}
-
-	// Template-literal calls with interpolation inside a $t(). We extract the
-	// static prefix before ${ and mark every matching key as used.
-	for _, match := range frontendI18nTemplateLiteralRe.FindAllSubmatchIndex(content, -1) {
-		if len(match) >= 4 {
-			prefix := string(content[match[2]:match[3]])
-			if prefix != "" {
-				prefixes = append(prefixes, prefix)
-			}
-		}
-	}
-
-	// Collect dotted string literals and interpolated template-literal prefixes
-	// as "usage hints". These are only used to suppress dead-key false positives
-	// for indirect references (keys stored in arrays, prefix assigned to a
-	// variable then passed to a translator, etc).
-	for _, match := range frontendStringLiteralRe.FindAllSubmatchIndex(content, -1) {
-		if len(match) >= 4 {
-			literals[string(content[match[2]:match[3]])] = true
-		}
-	}
-	for _, match := range frontendTemplatePrefixRe.FindAllSubmatchIndex(content, -1) {
-		if len(match) >= 4 {
-			literals[string(content[match[2]:match[3]])] = true
-		}
-	}
-
-	return keys, prefixes, literals, nil
 }
 
 func checkGolangCiLintInstalled(ctx context.Context) error {
@@ -1518,39 +1044,6 @@ func (n *` + name + `) Name() string {
 type Generate mg.Namespace
 
 const DefaultConfigYAMLSamplePath = "config.yml.sample"
-
-func (Generate) FrontendClient(ctx context.Context) error {
-	api, err := apiv2.NewCanonicalAPI()
-	if err != nil {
-		return err
-	}
-
-	spec, err := os.CreateTemp("", "vikunja-openapi-*.json")
-	if err != nil {
-		return fmt.Errorf("create temporary OpenAPI document: %w", err)
-	}
-	specPath := spec.Name()
-	defer func() { _ = os.Remove(specPath) }()
-
-	if err := json.NewEncoder(spec).Encode(api.OpenAPI()); err != nil {
-		_ = spec.Close()
-		return fmt.Errorf("write temporary OpenAPI document: %w", err)
-	}
-	if err := spec.Close(); err != nil {
-		return fmt.Errorf("close temporary OpenAPI document: %w", err)
-	}
-
-	cmd := exec.CommandContext(ctx, "pnpm", "run", "generate:api-client")
-	cmd.Dir = "frontend"
-	cmd.Env = append(os.Environ(), "VIKUNJA_OPENAPI_INPUT="+specPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("generate frontend API client: %w", err)
-	}
-
-	return nil
-}
 
 // SwaggerDocs generates the swagger docs from the code annotations
 func (Generate) SwaggerDocs(ctx context.Context) error {
@@ -1904,424 +1397,28 @@ func (Dev) PrepareWorktree(ctx context.Context, name string, planPath string) er
 		}
 	}
 
-	// Initialize frontend
-	fmt.Println("Initializing frontend...")
-	frontendDir := filepath.Join(worktreePath, "frontend")
+	// Initialize the web frontend
+	fmt.Println("Initializing web frontend...")
 
 	if err := ensureFrontendDistExistsIn(worktreePath); err != nil {
 		return err
 	}
 
-	// Run pnpm install
-	pnpmCmd := exec.CommandContext(ctx, "pnpm", "i")
-	pnpmCmd.Dir = frontendDir
-	pnpmCmd.Stdout = os.Stdout
-	pnpmCmd.Stderr = os.Stderr
-	if err := pnpmCmd.Run(); err != nil {
-		return fmt.Errorf("failed to run pnpm install: %w", err)
+	npmCmd := exec.CommandContext(ctx, "npm", "ci")
+	npmCmd.Dir = filepath.Join(worktreePath, "web")
+	npmCmd.Stdout = os.Stdout
+	npmCmd.Stderr = os.Stderr
+	if err := npmCmd.Run(); err != nil {
+		return fmt.Errorf("failed to run npm ci: %w", err)
 	}
 
-	// Run patch-sass-embedded (shell alias from devenv)
-	patchCmd := exec.CommandContext(ctx, "bash", "-ic", "patch-sass-embedded")
-	patchCmd.Dir = frontendDir
-	patchCmd.Stdout = os.Stdout
-	patchCmd.Stderr = os.Stderr
-	if err := patchCmd.Run(); err != nil {
-		// patch-sass-embedded might not be critical, just warn
-		fmt.Printf("Warning: patch-sass-embedded failed: %v\n", err)
-	}
-
-	printSuccess("Frontend initialized!")
+	printSuccess("Web frontend initialized!")
 	printSuccess("\nWorktree ready at: %s", worktreePath)
 	printSuccess("Branch: %s", name)
 	fmt.Println("\nTo start working:")
 	fmt.Printf("  cd %s\n", worktreePath)
 
 	return nil
-}
-
-// printReleaseStats prints commit statistics for the range between two refs.
-func printReleaseStats(ctx context.Context, fromRef, toRef string) error {
-	output, err := runGitCommandWithOutput(ctx, "log", fromRef+".."+toRef, "--oneline")
-	if err != nil {
-		return fmt.Errorf("failed to get commit log: %w", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		fmt.Println("\nNo commits found in range.")
-		return nil
-	}
-
-	total := len(lines)
-	fixes := 0
-	features := 0
-	deps := 0
-	other := 0
-
-	depsRe := regexp.MustCompile(`(?i)(chore|build|ci)(\(deps\)|.*dependab|.*bump|.*update.*depend)`)
-
-	for _, line := range lines {
-		// Strip the short hash prefix to get the commit message
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) < 2 {
-			other++
-			continue
-		}
-		msg := parts[1]
-
-		switch {
-		case strings.HasPrefix(msg, "fix"):
-			fixes++
-		case strings.HasPrefix(msg, "feat"):
-			features++
-		case depsRe.MatchString(msg):
-			deps++
-		default:
-			other++
-		}
-	}
-
-	fmt.Printf("\nCommit statistics (%s..%s):\n", fromRef, toRef)
-	fmt.Printf("  Total:               %d\n", total)
-	fmt.Printf("  Fixes:               %d (%d%%)\n", fixes, fixes*100/total)
-	fmt.Printf("  Features:            %d (%d%%)\n", features, features*100/total)
-	fmt.Printf("  Dependency updates:  %d (%d%%)\n", deps, deps*100/total)
-	fmt.Printf("  Other:               %d (%d%%)\n", other, other*100/total)
-	fmt.Println()
-
-	return nil
-}
-
-// commitPathIfChanged stages and commits everything under path if it has
-// uncommitted changes. No-op when the path is clean.
-func commitPathIfChanged(ctx context.Context, path, message string) error {
-	status, err := runGitCommandWithOutput(ctx, "status", "--porcelain", "--", path)
-	if err != nil {
-		return fmt.Errorf("failed to check git status for %s: %w", path, err)
-	}
-
-	if strings.TrimSpace(string(status)) == "" {
-		fmt.Printf("%s is up to date, nothing to commit.\n", path)
-		return nil
-	}
-
-	if err := exec.CommandContext(ctx, "git", "add", path).Run(); err != nil {
-		return fmt.Errorf("failed to stage %s: %w", path, err)
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to commit %s: %w", path, err)
-	}
-
-	return nil
-}
-
-// TagRelease creates a new release tag with changelog.
-// It updates the version badge in README.md, generates changelog using git-cliff,
-// commits the changes, and creates an annotated tag.
-func (Dev) TagRelease(ctx context.Context, version string) error {
-	if version == "" {
-		return fmt.Errorf("version is required: mage dev:tag-release <version>")
-	}
-
-	// Ensure version starts with 'v'
-	if !strings.HasPrefix(version, "v") {
-		version = "v" + version
-	}
-
-	fmt.Printf("Creating release %s...\n", version)
-
-	// Get the last tag
-	lastTagBytes, err := runGitCommandWithOutput(ctx, "describe", "--tags", "--abbrev=0")
-	if err != nil {
-		return fmt.Errorf("failed to get last tag: %w", err)
-	}
-	lastTag := strings.TrimSpace(string(lastTagBytes))
-	fmt.Printf("Last tag: %s\n", lastTag)
-
-	// Print commit statistics
-	if err := printReleaseStats(ctx, lastTag, "HEAD"); err != nil {
-		fmt.Printf("Warning: could not print release stats: %v\n", err)
-	}
-
-	// Generate changelog using git cliff
-	fmt.Println("Generating changelog...")
-	changelogBytes, err := runGitCommandWithOutput(ctx, "cliff", lastTag+"..HEAD", "--tag", version)
-	if err != nil {
-		return fmt.Errorf("failed to generate changelog: %w", err)
-	}
-	changelog := string(changelogBytes)
-
-	// Clean up the changelog
-	changelog = cleanupChangelog(changelog)
-
-	// Generated files must be part of the tag, so regenerate them here instead of
-	// waiting for the workflow which only commits them after the release ran.
-	fmt.Println("Regenerating swagger docs...")
-	if err := (Generate{}).SwaggerDocs(ctx); err != nil {
-		return fmt.Errorf("failed to generate swagger docs: %w", err)
-	}
-	if err := commitPathIfChanged(ctx, "pkg/swagger", "[skip ci] Updated swagger docs"); err != nil {
-		return err
-	}
-
-	fmt.Println("Regenerating yaegi symbols...")
-	if err := (Generate{}).YaegiSymbols(ctx); err != nil {
-		return fmt.Errorf("failed to generate yaegi symbols: %w", err)
-	}
-	if err := commitPathIfChanged(ctx, "pkg/yaegi_symbols", "[skip ci] Updated yaegi symbols"); err != nil {
-		return err
-	}
-
-	// Update README.md version badge
-	fmt.Println("Updating README.md version badge...")
-	if err := updateReadmeBadge(version); err != nil {
-		return fmt.Errorf("failed to update README badge: %w", err)
-	}
-
-	// Prepend changelog to CHANGELOG.md
-	fmt.Println("Updating CHANGELOG.md...")
-	if err := prependChangelog(changelog); err != nil {
-		return fmt.Errorf("failed to update CHANGELOG.md: %w", err)
-	}
-
-	// Update frontend package.json version
-	fmt.Println("Updating frontend package.json version...")
-	if err := updateFrontendPackageJSON(version); err != nil {
-		return fmt.Errorf("failed to update frontend package.json: %w", err)
-	}
-
-	// Update publiccode.yml version and release date
-	fmt.Println("Updating publiccode.yml...")
-	if err := updatePublicCodeYml(version); err != nil {
-		return fmt.Errorf("failed to update publiccode.yml: %w", err)
-	}
-
-	// Commit the changes
-	fmt.Println("Committing changes...")
-	commitMsg := fmt.Sprintf("chore: %s release preparations", version)
-	cmd := exec.CommandContext(ctx, "git", "add", "README.md", "CHANGELOG.md", "frontend/package.json", "publiccode.yml")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to stage files: %w", err)
-	}
-
-	cmd = exec.CommandContext(ctx, "git", "commit", "-m", commitMsg)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to commit: %w", err)
-	}
-
-	// Prepare tag message (remove markdown header formatting)
-	tagMessage := prepareTagMessage(changelog)
-
-	// Create the annotated tag
-	fmt.Printf("Creating tag %s...\n", version)
-	cmd = exec.CommandContext(ctx, "git", "tag", "-a", version, "-m", tagMessage)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create tag: %w", err)
-	}
-
-	printSuccess("Release %s created successfully!", version)
-	fmt.Println("\nNext steps:")
-	fmt.Println("  git push origin main")
-	fmt.Printf("  git push origin %s\n", version)
-
-	return nil
-}
-
-// cleanupChangelog cleans up the generated changelog by:
-// - Removing duplicate lines
-// - Fixing entries that span multiple lines
-// - Ensuring each change is on a single line
-func cleanupChangelog(changelog string) string {
-	lines := strings.Split(changelog, "\n")
-	var cleanedLines []string
-	seenLines := make(map[string]bool)
-	var currentEntry strings.Builder
-
-	for i, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-
-		// Check if this is a new entry (starts with * or - or is a header)
-		isNewEntry := strings.HasPrefix(trimmedLine, "* ") ||
-			strings.HasPrefix(trimmedLine, "- ") ||
-			strings.HasPrefix(trimmedLine, "## ") ||
-			strings.HasPrefix(trimmedLine, "### ") ||
-			trimmedLine == ""
-
-		switch {
-		case isNewEntry:
-			// Flush the current entry if any
-			if currentEntry.Len() > 0 {
-				entryStr := strings.TrimSpace(currentEntry.String())
-				if !seenLines[entryStr] && entryStr != "" {
-					cleanedLines = append(cleanedLines, entryStr)
-					seenLines[entryStr] = true
-				}
-				currentEntry.Reset()
-			}
-
-			// Start a new entry or add empty line/header
-			switch {
-			case trimmedLine == "":
-				// Only add empty line if the previous line wasn't empty
-				if len(cleanedLines) > 0 && cleanedLines[len(cleanedLines)-1] != "" {
-					cleanedLines = append(cleanedLines, "")
-				}
-			case strings.HasPrefix(trimmedLine, "## ") || strings.HasPrefix(trimmedLine, "### "):
-				// Headers are never duplicates
-				cleanedLines = append(cleanedLines, trimmedLine)
-			default:
-				currentEntry.WriteString(trimmedLine)
-			}
-		case currentEntry.Len() > 0:
-			// This is a continuation of the current entry
-			currentEntry.WriteString(" ")
-			currentEntry.WriteString(trimmedLine)
-		case trimmedLine != "":
-			// Standalone line that's not part of an entry
-			if !seenLines[trimmedLine] {
-				cleanedLines = append(cleanedLines, trimmedLine)
-				seenLines[trimmedLine] = true
-			}
-		}
-
-		// Handle last line
-		if i == len(lines)-1 && currentEntry.Len() > 0 {
-			entryStr := strings.TrimSpace(currentEntry.String())
-			if !seenLines[entryStr] && entryStr != "" {
-				cleanedLines = append(cleanedLines, entryStr)
-			}
-		}
-	}
-
-	return strings.Join(cleanedLines, "\n")
-}
-
-// updateReadmeBadge updates the version badge in README.md
-func updateReadmeBadge(version string) error {
-	readmePath := "README.md"
-	content, err := os.ReadFile(readmePath)
-	if err != nil {
-		return fmt.Errorf("failed to read README.md: %w", err)
-	}
-
-	// Convert version for badge (e.g., v1.0.0-rc3 -> v1.0.0rc3 for the badge display)
-	badgeVersion := strings.ReplaceAll(version, "-", "")
-
-	// Update the badge - match the pattern: download-vX.X.X...-brightgreen
-	re := regexp.MustCompile(`(download-)(v[0-9a-zA-Z.]+)(-brightgreen)`)
-	newContent := re.ReplaceAllString(string(content), "${1}"+badgeVersion+"${3}")
-
-	if err := os.WriteFile(readmePath, []byte(newContent), 0o600); err != nil {
-		return fmt.Errorf("failed to write README.md: %w", err)
-	}
-
-	return nil
-}
-
-// updateFrontendPackageJSON updates the version field in frontend/package.json.
-func updateFrontendPackageJSON(version string) error {
-	// npm convention: no "v" prefix
-	npmVersion := strings.TrimPrefix(version, "v")
-
-	pkgPath := "frontend/package.json"
-	content, err := os.ReadFile(pkgPath)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", pkgPath, err)
-	}
-
-	re := regexp.MustCompile(`("version"\s*:\s*")([^"]+)(")`)
-	newContent := re.ReplaceAllString(string(content), "${1}"+npmVersion+"${3}")
-
-	if err := os.WriteFile(pkgPath, []byte(newContent), 0o600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", pkgPath, err)
-	}
-
-	return nil
-}
-
-// updatePublicCodeYml updates the softwareVersion and releaseDate in publiccode.yml.
-func updatePublicCodeYml(version string) error {
-	filePath := "publiccode.yml"
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", filePath, err)
-	}
-
-	reVersion := regexp.MustCompile(`(softwareVersion:\s*')([^']+)(')`)
-	newContent := reVersion.ReplaceAllString(string(content), "${1}"+version+"${3}")
-
-	reDate := regexp.MustCompile(`(releaseDate:\s*')([^']+)(')`)
-	newContent = reDate.ReplaceAllString(newContent, "${1}"+time.Now().Format("2006-01-02")+"${3}")
-
-	if err := os.WriteFile(filePath, []byte(newContent), 0o600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", filePath, err)
-	}
-
-	return nil
-}
-
-// prependChangelog prepends the new changelog entries to CHANGELOG.md
-func prependChangelog(newChangelog string) error {
-	changelogPath := "CHANGELOG.md"
-	existingContent, err := os.ReadFile(changelogPath)
-	if err != nil {
-		return fmt.Errorf("failed to read CHANGELOG.md: %w", err)
-	}
-
-	// Find where to insert the new changelog (after the header section)
-	content := string(existingContent)
-	headerEnd := strings.Index(content, "\n## ")
-	if headerEnd == -1 {
-		// No existing version sections, append at the end
-		headerEnd = len(content)
-	}
-
-	// Build new content: header + new changelog + existing versions
-	header := content[:headerEnd]
-	existingVersions := ""
-	if headerEnd < len(content) {
-		existingVersions = content[headerEnd:]
-	}
-
-	// Ensure there's proper spacing
-	newContent := strings.TrimRight(header, "\n") + "\n\n" +
-		strings.TrimSpace(newChangelog) + "\n" +
-		existingVersions
-
-	if err := os.WriteFile(changelogPath, []byte(newContent), 0o600); err != nil {
-		return fmt.Errorf("failed to write CHANGELOG.md: %w", err)
-	}
-
-	return nil
-}
-
-// prepareTagMessage removes markdown header formatting from the changelog for use as a tag message
-func prepareTagMessage(changelog string) string {
-	lines := strings.Split(changelog, "\n")
-	var result []string
-
-	for _, line := range lines {
-		// Remove ## and ### prefixes
-		switch {
-		case strings.HasPrefix(line, "### "):
-			result = append(result, strings.TrimPrefix(line, "### "))
-		case strings.HasPrefix(line, "## "):
-			result = append(result, strings.TrimPrefix(line, "## "))
-		default:
-			result = append(result, line)
-		}
-	}
-
-	return strings.Join(result, "\n")
 }
 
 type Plugins mg.Namespace
