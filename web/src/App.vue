@@ -10,6 +10,7 @@ import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
+import {desktop} from './lib/desktop'
 
 const data = useData()
 const router = useRouter()
@@ -18,6 +19,7 @@ const media = window.matchMedia('(prefers-color-scheme: dark)')
 watchEffect(() => {
 	const theme = prefs.theme === 'system' ? (media.matches ? 'dark' : 'light') : prefs.theme
 	document.documentElement.dataset.theme = theme
+	desktop?.setTheme?.(theme)
 	document.documentElement.lang = locale.value
 })
 
@@ -87,6 +89,11 @@ onBeforeUnmount(() => {
 	display: flex;
 	height: 100%;
 	padding: 6px 6px 6px 0;
+}
+
+/* Room for the window controls the desktop app draws over the page. */
+:global(html.desktop) .shell {
+	padding-top: 28px;
 }
 
 .main {

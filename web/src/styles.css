@@ -228,3 +228,15 @@ a {
 	color: var(--text-3);
 	font-size: 13px;
 }
+
+/* Desktop app: the window has no title bar, so the free strip above the main
+   panel (and the frame around it) drags the window. Overlays teleported to
+   body must opt out, or their top edge would drag instead of click. */
+html.desktop .shell {
+	-webkit-app-region: drag;
+}
+
+html.desktop .shell > *,
+html.desktop body > :not(#app) {
+	-webkit-app-region: no-drag;
+}
