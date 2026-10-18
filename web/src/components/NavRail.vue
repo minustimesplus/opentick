@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Bell, CalendarDays, CircleArrowDown, CircleHelp, RefreshCw, Search, Settings, SquareCheckBig, LogOut} from 'lucide-vue-next'
+import {Bell, CircleArrowDown, CircleHelp, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
-import {MatrixIcon} from '@/lib/icons'
+import {CalendarIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 
@@ -19,10 +19,10 @@ const helpEl = ref<HTMLElement | null>(null)
 const menu = ref<'avatar' | 'bell' | 'help' | null>(null)
 
 const items = computed(() => [
-	{key: 'tasks', icon: SquareCheckBig, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
+	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
-	{key: 'calendar', icon: CalendarDays, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
-	{key: 'search', icon: Search, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
+	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
+	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
 
 const initial = computed(() => (data.user?.name || data.user?.username || '?').charAt(0).toUpperCase())
@@ -61,7 +61,7 @@ const shortcuts = [
 	<nav class="rail">
 		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'">{{ initial }}</button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
-			<component :is="i.icon" :size="22" :stroke-width="i.active ? 2.2 : 1.8" />
+			<component :is="i.icon" :size="22" />
 		</RouterLink>
 		<div class="spacer" />
 		<button
