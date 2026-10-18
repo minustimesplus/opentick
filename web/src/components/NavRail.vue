@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute} from 'vue-router'
-import {Bell, CircleArrowDown, CircleHelp, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
+import {CircleArrowDown, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
-import {CalendarIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {BellIcon, CalendarIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
@@ -61,7 +61,7 @@ const shortcuts = [
 	<nav class="rail">
 		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'">{{ initial }}</button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
-			<component :is="i.icon" :size="20" />
+			<component :is="i.icon" :size="24" />
 		</RouterLink>
 		<div class="spacer" />
 		<button
@@ -71,17 +71,17 @@ const shortcuts = [
 			:disabled="installingUpdate"
 			@click="installUpdate"
 		>
-			<CircleArrowDown :size="18" />
+			<CircleArrowDown :size="22" :stroke-width="2.2" />
 		</button>
 		<button class="rail-btn" :title="t('sync')" @click="data.loadAll()">
-			<RefreshCw :size="18" :class="{spinning: data.loading}" />
+			<RefreshCw :size="22" :stroke-width="2.2" :class="{spinning: data.loading}" />
 		</button>
 		<button ref="bellEl" class="rail-btn" :title="t('notifications')" @click="openBell">
-			<Bell :size="18" />
+			<BellIcon :size="22" />
 			<span v-if="unread" class="dot" />
 		</button>
 		<button ref="helpEl" class="rail-btn" :title="t('shortcuts')" @click="menu = 'help'">
-			<CircleHelp :size="18" />
+			<HelpIcon :size="22" />
 		</button>
 
 		<Popover v-if="menu === 'avatar'" :anchor="avatarEl" placement="right-start" @close="menu = null">
@@ -132,10 +132,17 @@ const shortcuts = [
 	padding: 12px 0 10px;
 }
 
+/* Desktop: the rail runs up into the title strip, so the avatar sits level
+   with the window controls like TickTick's. */
+:global(html.desktop .rail) {
+	width: 46px;
+	padding-top: 21px;
+}
+
 .avatar {
 	width: 30px;
 	height: 30px;
-	margin-bottom: 14px;
+	margin-bottom: 5px;
 	border-radius: 50%;
 	background: linear-gradient(135deg, #4772fa, #8b5cf6);
 	color: #fff;
@@ -151,7 +158,7 @@ const shortcuts = [
 	width: 36px;
 	height: 36px;
 	border-radius: 8px;
-	color: var(--text-3);
+	color: var(--rail-icon);
 }
 
 .rail-btn:hover {

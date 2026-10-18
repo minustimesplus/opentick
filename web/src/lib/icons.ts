@@ -1,3 +1,4 @@
+import {h} from 'vue'
 import {createLucideIcon} from 'lucide-vue-next'
 
 // Nav-rail icons drawn after TickTick's: solid shapes with the details cut
@@ -37,3 +38,32 @@ export const SearchIcon = createLucideIcon('rail-search', [
 	['circle', {cx: '11', cy: '11', r: '7', 'stroke-width': '2.4', key: 'lens'}],
 	['path', {d: 'm16.2 16.2 4.3 4.3', 'stroke-width': '2.6', key: 'handle'}],
 ])
+
+export const BellIcon = createLucideIcon('rail-bell', [
+	['path', {
+		...solid,
+		key: 'body',
+		d: 'M12 2.2a1.3 1.3 0 0 1 1.3 1.3v.6a6.2 6.2 0 0 1 4.9 6.1v4.2l1.7 2.3a.9.9 0 0 1-.7 1.4H4.8a.9.9 0 0 1-.7-1.4l1.7-2.3v-4.2a6.2 6.2 0 0 1 4.9-6.1v-.6A1.3 1.3 0 0 1 12 2.2z',
+	}],
+	['path', {...solid, key: 'clapper', d: 'M9.4 19.4h5.2a2.6 2.6 0 0 1-5.2 0z'}],
+])
+
+// A solid disc with the question mark cut out. Lucide icons are flat lists of
+// shapes, so the cut-out mask needs a hand-built SVG.
+export function HelpIcon(props: {size?: number}) {
+	const size = props.size ?? 24
+	return h('svg', {width: size, height: size, viewBox: '0 0 24 24', fill: 'none'}, [
+		h('mask', {id: 'rail-help-cut'}, [
+			h('rect', {width: 24, height: 24, fill: '#fff'}),
+			h('path', {
+				d: 'M9.5 9.3a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.6v.5',
+				stroke: '#000',
+				'stroke-width': 2.2,
+				'stroke-linecap': 'round',
+			}),
+			h('circle', {cx: 12, cy: 17.1, r: 1.3, fill: '#000'}),
+		]),
+		h('circle', {cx: 12, cy: 12, r: 10, fill: 'currentColor', mask: 'url(#rail-help-cut)'}),
+	])
+}
+HelpIcon.props = ['size']

@@ -31,12 +31,14 @@ const MIME_TYPES = {
 	'.webmanifest': 'application/manifest+json',
 }
 
-// Native window controls drawn over the page instead of a title bar; the
-// page leaves a strip of this height free at the top (web/src/App.vue).
-const TITLE_BAR_HEIGHT = 28
-const TITLE_BAR_THEMES = {
-	dark: {color: '#161616', symbolColor: '#b8b8b8'},
-	light: {color: '#f3f3f3', symbolColor: '#4a4a4a'},
+// The window has no title bar: the page draws a 24px strip in the frame
+// color with its own minimize/maximize/close buttons (web/src/App.vue,
+// WindowControls.vue). macOS keeps its native traffic lights instead.
+const IS_MAC = process.platform === 'darwin'
+// Matches --frame in web/src/styles.css, so resizing never flashes another color.
+const FRAME_COLORS = {
+	dark: '#242424',
+	light: '#f3f3f3',
 }
 
 let mainWindow = null
@@ -148,9 +150,8 @@ function createMainWindow() {
 		height: 900,
 		icon: path.join(__dirname, 'icon.png'),
 		autoHideMenuBar: true,
-		backgroundColor: TITLE_BAR_THEMES.dark.color,
-		titleBarStyle: 'hidden',
-		titleBarOverlay: {...TITLE_BAR_THEMES.dark, height: TITLE_BAR_HEIGHT},
+		backgroundColor: FRAME_COLORS.dark,
+		...(IS_MAC ? {titleBarStyle: 'hidden'} : {frame: false}),
 		webPreferences: {
 			preload: path.join(__dirname, 'preload.js'),
 			contextIsolation: true,
@@ -172,6 +173,9 @@ function createMainWindow() {
 	mainWindow.webContents.on('did-finish-load', () => {
 		if (downloadedVersion) mainWindow.webContents.send('update:ready', downloadedVersion)
 	})
+	const sendMaximized = () => mainWindow.webContents.send('window:maximized', mainWindow.isMaximized())
+	mainWindow.on('maximize', sendMaximized)
+	mainWindow.on('unmaximize', sendMaximized)
 	mainWindow.on('closed', () => {
 		mainWindow = null
 	})
@@ -232,11 +236,23 @@ ipcMain.handle('server:set', (_event, input) => {
 })
 
 ipcMain.on('theme:set', (_event, theme) => {
-	const colors = TITLE_BAR_THEMES[theme]
-	if (!colors || !mainWindow) return
-	mainWindow.setBackgroundColor(colors.color)
-	mainWindow.setTitleBarOverlay({...colors, height: TITLE_BAR_HEIGHT})
+	const color = FRAME_COLORS[theme]
+	if (!color || !mainWindow) return
+	mainWindow.setBackgroundColor(color)
 })
+
+ipcMain.handle('window:info', () => ({
+	platform: process.platform,
+	maximized: mainWindow?.isMaximized() ?? false,
+}))
+
+ipcMain.on('window:minimize', () => mainWindow?.minimize())
+ipcMain.on('window:toggle-maximize', () => {
+	if (!mainWindow) return
+	if (mainWindow.isMaximized()) mainWindow.unmaximize()
+	else mainWindow.maximize()
+})
+ipcMain.on('window:close', () => mainWindow?.close())
 
 ipcMain.handle('update:install', () => {
 	if (!downloadedVersion) return

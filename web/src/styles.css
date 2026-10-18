@@ -1,7 +1,7 @@
 :root,
 :root[data-theme="dark"] {
-	--frame: #161616;
-	--bg: #1e1e1e;
+	--frame: #242424;
+	--bg: #1c1c1c;
 	--bg-elev: #252525;
 	--bg-panel: #232323;
 	--bg-hover: #2a2a2a;
@@ -13,6 +13,7 @@
 	--text-2: #b8b8b8;
 	--text-3: #868686;
 	--text-4: #5c5c5c;
+	--rail-icon: #7c7c7c;
 	--accent: #4772fa;
 	--accent-soft: rgba(71, 114, 250, 0.18);
 	--danger: #e5484d;
@@ -46,6 +47,7 @@
 	--text-2: #4a4a4a;
 	--text-3: #8c8c8c;
 	--text-4: #b5b5b5;
+	--rail-icon: #8c8c8c;
 	--accent: #4772fa;
 	--accent-soft: rgba(71, 114, 250, 0.12);
 	--prio-none: #b0b0b0;
