@@ -438,6 +438,7 @@ var v2CredentialPaths = unauthenticatedPathSet(
 	"/api/v2/user/confirm",
 	"/api/v2/login",
 	"/api/v2/auth/openid/:provider/callback",
+	"/api/v2/auth/clerk",
 	"/api/v2/shares/:share/auth",
 )
 

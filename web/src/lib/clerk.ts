@@ -24,8 +24,12 @@ export function getAuthInfo(force = false): Promise<AuthInfo | null> {
 }
 
 let instance: Promise<Clerk> | null = null
+// The desktop app can switch servers, and with them Clerk instances.
+let instanceKey = ''
 
 export function loadClerk(publishableKey: string): Promise<Clerk> {
+	if (instance && instanceKey !== publishableKey) instance = null
+	instanceKey = publishableKey
 	instance ??= (async () => {
 		const {Clerk} = await import('@clerk/clerk-js')
 		const clerk = new Clerk(publishableKey)
