@@ -5,6 +5,7 @@ import type {AppNotification, CurrentUser, Label, Project, Task} from '@/api/typ
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
+import {signOutOfClerk} from '@/lib/clerk'
 
 const MERGE = 'application/merge-patch+json'
 /** How many done-task queries a sync re-runs; older ones are dropped. */
@@ -67,6 +68,17 @@ export const useData = defineStore('data', () => {
 		await loadAll()
 	}
 
+	/** Exchanges a Clerk session token for an app session. */
+	async function loginWithClerk(clerkToken: string, totp?: string) {
+		const res = await api<{token: string}>('POST', '/auth/clerk', {
+			auth: false,
+			body: {token: clerkToken, ...(totp ? {totp_passcode: totp} : {})},
+		})
+		setToken(res.token)
+		authed.value = true
+		await loadAll()
+	}
+
 	async function register(username: string, email: string, password: string) {
 		await api('POST', '/register', {auth: false, body: {username, email, password}})
 		await login(username, password)
@@ -81,6 +93,7 @@ export const useData = defineStore('data', () => {
 		setToken(null)
 		authed.value = false
 		reset()
+		await signOutOfClerk()
 	}
 
 	// ---------- loading ----------
@@ -445,7 +458,7 @@ export const useData = defineStore('data', () => {
 
 	return {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
-		login, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
+		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,

@@ -2429,6 +2429,46 @@ func (err *ErrOpenIDBadRequestWithDetails) Error() string {
 	return err.Message
 }
 
+// ErrClerkInvalidToken represents a Clerk session token that failed verification.
+type ErrClerkInvalidToken struct {
+	Reason string
+}
+
+func (err *ErrClerkInvalidToken) Error() string {
+	return "Invalid Clerk session token: " + err.Reason
+}
+
+// ErrCodeClerkInvalidToken holds the unique world-error code of this error
+const ErrCodeClerkInvalidToken = 15002
+
+// HTTPError holds the http error description
+func (err *ErrClerkInvalidToken) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusUnauthorized,
+		Code:     ErrCodeClerkInvalidToken,
+		Message:  "The Clerk session is invalid or expired. Please sign in again.",
+	}
+}
+
+// ErrClerkEmailNotVerified represents a Clerk user without a verified primary email.
+type ErrClerkEmailNotVerified struct{}
+
+func (err *ErrClerkEmailNotVerified) Error() string {
+	return "Clerk user has no verified primary email address"
+}
+
+// ErrCodeClerkEmailNotVerified holds the unique world-error code of this error
+const ErrCodeClerkEmailNotVerified = 15003
+
+// HTTPError holds the http error description
+func (err *ErrClerkEmailNotVerified) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeClerkEmailNotVerified,
+		Message:  "Please verify your email address before signing in.",
+	}
+}
+
 // ==============
 // Session Errors
 // ==============

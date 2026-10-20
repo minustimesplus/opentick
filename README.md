@@ -42,6 +42,11 @@ default; PostgreSQL and MySQL are supported too. Configure the server with
 `VIKUNJA_*` environment variables or a `config.yml` (see
 [`config.yml.sample`](config.yml.sample) for every option).
 
+### Hosted
+
+The hosted instance runs on Heroku with Neon, S3 and Clerk sign in. See
+[docs/hosted.md](docs/hosted.md).
+
 ### Desktop app (Linux)
 
 Every push to `main` publishes a GitHub release with a `.deb` and an AppImage.

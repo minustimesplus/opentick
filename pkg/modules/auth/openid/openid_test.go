@@ -34,6 +34,7 @@ import (
 
 	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/models"
+	"code.vikunja.io/api/pkg/modules/auth"
 	"code.vikunja.io/api/pkg/modules/keyvalue"
 	"code.vikunja.io/api/pkg/utils"
 
@@ -651,7 +652,7 @@ func TestEnforceTOTPIfRequired(t *testing.T) {
 
 		// user 1 has a totp row but with enabled=false.
 		u := &user.User{ID: 1}
-		err := enforceTOTPIfRequired(s, u, "")
+		err := auth.EnforceTOTPIfRequired(s, u, "")
 		require.NoError(t, err)
 	})
 
@@ -661,7 +662,7 @@ func TestEnforceTOTPIfRequired(t *testing.T) {
 		defer s.Close()
 
 		u := &user.User{ID: 10}
-		err := enforceTOTPIfRequired(s, u, "")
+		err := auth.EnforceTOTPIfRequired(s, u, "")
 		require.Error(t, err)
 		assert.True(t, user.IsErrInvalidTOTPPasscode(err))
 	})
@@ -672,7 +673,7 @@ func TestEnforceTOTPIfRequired(t *testing.T) {
 		defer s.Close()
 
 		u := &user.User{ID: 10}
-		err := enforceTOTPIfRequired(s, u, "000000")
+		err := auth.EnforceTOTPIfRequired(s, u, "000000")
 		require.Error(t, err)
 		assert.True(t, user.IsErrInvalidTOTPPasscode(err))
 	})
@@ -686,7 +687,7 @@ func TestEnforceTOTPIfRequired(t *testing.T) {
 		require.NoError(t, err)
 
 		u := &user.User{ID: 10}
-		err = enforceTOTPIfRequired(s, u, passcode)
+		err = auth.EnforceTOTPIfRequired(s, u, passcode)
 		require.NoError(t, err)
 	})
 }

@@ -278,7 +278,9 @@ html.desktop .login {
 }
 
 html.desktop .shell > *,
-html.desktop .login > *,
+html.desktop .login .card,
+html.desktop .login button,
+html.desktop .login a,
 html.desktop body > :not(#app) {
 	-webkit-app-region: no-drag;
 }

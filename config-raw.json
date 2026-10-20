@@ -836,6 +836,39 @@
                     ]
                 },
                 {
+                    "key": "clerk",
+                    "comment": "Clerk lets users sign in through [Clerk](https://clerk.com) with email and password or social logins, right from the built-in login screen.\nUsers are created on their first sign in. Meant for hosted instances, usually with local auth disabled.",
+                    "children": [
+                        {
+                            "key": "enabled",
+                            "default_value": "false",
+                            "comment": "Enable or disable Clerk authentication"
+                        },
+                        {
+                            "key": "publishablekey",
+                            "default_value": "",
+                            "comment": "The publishable key of your Clerk instance (`pk_live_...` or `pk_test_...`). It is public and sent to the frontend."
+                        },
+                        {
+                            "key": "secretkey",
+                            "default_value": "",
+                            "comment": "The secret key of your Clerk instance (`sk_live_...` or `sk_test_...`). Used to look up a user's email and name. Keep it secret."
+                        },
+                        {
+                            "key": "socialproviders",
+                            "comment": "The social connections shown on the login screen, in order. Each must be enabled in the Clerk dashboard. Examples: google, apple, github, microsoft, facebook, discord.",
+                            "children": [
+                                {
+                                    "default_value": "google"
+                                },
+                                {
+                                    "default_value": "apple"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
                     "key": "ldap",
                     "comment": "Authentication via an external LDAP server.",
                     "children": [

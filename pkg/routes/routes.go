@@ -346,6 +346,7 @@ var unauthenticatedAPIPaths = map[string]bool{
 	"/api/v2/login":                          true,
 	auth.RefreshTokenPathV2:                  true,
 	"/api/v2/auth/openid/:provider/callback": true,
+	"/api/v2/auth/clerk":                     true,
 
 	// Testing endpoints authenticate with the testing token via a custom
 	// Authorization header, not a JWT; mounted only when that token is set.

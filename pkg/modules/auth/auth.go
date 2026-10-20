@@ -31,6 +31,7 @@ import (
 	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/models"
 	"code.vikunja.io/api/pkg/modules/humabridge"
+	"code.vikunja.io/api/pkg/modules/keyvalue"
 	"code.vikunja.io/api/pkg/user"
 	"code.vikunja.io/api/pkg/web"
 
@@ -538,4 +539,36 @@ func GetAuthFromContext(ctx context.Context) (web.Auth, error) {
 		return nil, fmt.Errorf("no echo.Context on request context; are you calling GetAuthFromContext from a Huma handler mounted via humabridge?")
 	}
 	return GetAuthFromClaims(ec)
+}
+
+// EnforceTOTPIfRequired mirrors the TOTP gate from pkg/routes/api/v1/login.go
+// for logins through an external identity provider (OIDC, Clerk). Returns nil when the user does not have TOTP enabled.
+// See GHSA-8jvc-mcx6-r4cg.
+func EnforceTOTPIfRequired(s *xorm.Session, u *user.User, totpPasscode string) error {
+	totpEnabled, err := user.TOTPEnabledForUser(s, u)
+	if err != nil {
+		return err
+	}
+	if !totpEnabled {
+		return nil
+	}
+
+	if totpPasscode == "" {
+		return user.ErrInvalidTOTPPasscode{}
+	}
+
+	_, err = user.ValidateTOTPPasscode(s, &user.TOTPPasscode{
+		User:     u,
+		Passcode: totpPasscode,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Reset the counter so old failed attempts don't trip a later lockout.
+	if err := keyvalue.Del(u.GetFailedTOTPAttemptsKey()); err != nil {
+		return err
+	}
+
+	return nil
 }

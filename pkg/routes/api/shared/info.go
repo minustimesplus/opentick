@@ -64,6 +64,7 @@ type AuthInfo struct {
 	Local         LocalAuthInfo  `json:"local"`
 	Ldap          LdapAuthInfo   `json:"ldap"`
 	OpenIDConnect OpenIDAuthInfo `json:"openid_connect"`
+	Clerk         ClerkAuthInfo  `json:"clerk"`
 }
 
 // LocalAuthInfo describes the local (username/password) authentication method.
@@ -81,6 +82,13 @@ type LdapAuthInfo struct {
 type OpenIDAuthInfo struct {
 	Enabled   bool               `json:"enabled"`
 	Providers []*openid.Provider `json:"providers"`
+}
+
+// ClerkAuthInfo describes sign in through Clerk.
+type ClerkAuthInfo struct {
+	Enabled         bool     `json:"enabled"`
+	PublishableKey  string   `json:"publishable_key,omitempty" doc:"The Clerk publishable key the frontend initializes Clerk with."`
+	SocialProviders []string `json:"social_providers" doc:"The social connections to offer on the login screen, in order (e.g. google, apple)."`
 }
 
 // LegalInfo holds links to the instance's legal documents.
@@ -139,7 +147,16 @@ func BuildInfo() VikunjaInfos {
 			OpenIDConnect: OpenIDAuthInfo{
 				Enabled: config.AuthOpenIDEnabled.GetBool(),
 			},
+			Clerk: ClerkAuthInfo{
+				Enabled:         config.AuthClerkEnabled.GetBool(),
+				SocialProviders: []string{},
+			},
 		},
+	}
+
+	if info.AuthInfo.Clerk.Enabled {
+		info.AuthInfo.Clerk.PublishableKey = config.AuthClerkPublishableKey.GetString()
+		info.AuthInfo.Clerk.SocialProviders = config.AuthClerkSocialProviders.GetStringSlice()
 	}
 
 	providers, err := openid.GetAllProviders()
