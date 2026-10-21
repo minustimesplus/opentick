@@ -22,6 +22,7 @@ import {
 } from '@/lib/dates'
 import {compareTitles, level, splitEmoji} from '@/lib/tasks'
 import {openTaskDrawer, type DropZone} from '@/lib/ui'
+import {isMobile} from '@/lib/viewport'
 
 const data = useData()
 const route = useRoute()
@@ -51,6 +52,21 @@ function startResize(e: PointerEvent, key: 'sidebarWidth' | 'detailWidth', range
 
 const listKey = computed(() => String(route.params.list ?? 'today'))
 const selectedId = computed(() => route.params.taskId ? Number(route.params.taskId) : null)
+
+// Phones show the sidebar as a sheet over the list. It starts closed and
+// closes once a list is picked; the desktop preference stays untouched.
+const sheetOpen = ref(false)
+const sidebarOpen = computed({
+	get: () => isMobile.value ? sheetOpen.value : prefs.tasksSidebar,
+	set: v => {
+		if (isMobile.value) sheetOpen.value = v
+		else prefs.tasksSidebar = v
+	},
+})
+
+function onSheetClick(e: MouseEvent) {
+	if ((e.target as HTMLElement).closest('.item')) sheetOpen.value = false
+}
 
 type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed' | 'archived'
 
@@ -262,14 +278,23 @@ const quickLabels = computed(() => label.value ? [label.value.title] : [])
 const placeholder = computed(() => view.value.kind === 'completed' ? '' : t('addTaskTo', {list: header.value.name}))
 
 // ---- selection ----
+// The inline detail pane is hidden on narrow windows; use the drawer there.
+const narrow = () => window.innerWidth <= 1100
+
 function select(id: number) {
-	// The inline detail pane is hidden on narrow windows; use the drawer there.
-	if (window.innerWidth <= 1100) {
+	if (narrow()) {
 		openTaskDrawer(id)
 		return
 	}
 	router.push(`/tasks/${listKey.value}/${id}`)
 }
+
+// A link to a task (/tasks/today/42) opened on a narrow window.
+watch(selectedId, id => {
+	if (!id || !narrow()) return
+	openTaskDrawer(id)
+	router.replace(`/tasks/${listKey.value}`)
+}, {immediate: true})
 
 function onCreated(id: number) {
 	if (selectedId.value) select(id)
@@ -416,14 +441,20 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 
 <template>
 	<div class="tasks-view">
-		<template v-if="prefs.tasksSidebar">
+		<template v-if="isMobile">
+			<template v-if="sheetOpen">
+				<div class="sheet-backdrop" @click="sheetOpen = false" />
+				<ListSidebar class="sheet" @click="onSheetClick" />
+			</template>
+		</template>
+		<template v-else-if="prefs.tasksSidebar">
 			<ListSidebar :style="{width: clamp(prefs.sidebarWidth, SIDEBAR_RANGE) + 'px'}" />
 			<div class="resizer" @pointerdown="startResize($event, 'sidebarWidth', SIDEBAR_RANGE, 1)" />
 		</template>
 
 		<section class="list-pane">
 			<header class="head">
-				<button class="icon-btn" @click="prefs.tasksSidebar = !prefs.tasksSidebar"><PanelLeft :size="19" /></button>
+				<button class="icon-btn" @click="sidebarOpen = !sidebarOpen"><PanelLeft :size="19" /></button>
 				<h1>
 					<Tag v-if="view.kind === 'label'" :size="19" class="h-ic" />
 					<Filter v-else-if="view.kind === 'filter'" :size="19" class="h-ic" />
@@ -788,6 +819,67 @@ h1 {
 
 	.detail-pane {
 		display: none;
+	}
+}
+
+.sheet-backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	background: rgba(0, 0, 0, 0.4);
+	animation: fade 0.18s ease-out;
+}
+
+.tasks-view .sheet {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 21;
+	width: min(300px, 85vw);
+	background: var(--bg-elev);
+	box-shadow: var(--shadow);
+	animation: slide-in 0.18s ease-out;
+}
+
+@keyframes fade {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes slide-in {
+	from {
+		transform: translateX(-100%);
+	}
+}
+
+@media (max-width: 767px) {
+	.tasks-view {
+		position: relative;
+	}
+
+	.list-pane {
+		min-width: 0;
+		border-right: 0;
+	}
+
+	.head {
+		height: 56px;
+		padding: 0 8px 0 6px;
+		gap: 4px;
+	}
+
+	h1 {
+		font-size: 20px;
+	}
+
+	.content {
+		padding: 0 10px 24px;
+	}
+
+	.empty-state {
+		height: 50vh;
 	}
 }
 </style>

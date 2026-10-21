@@ -54,4 +54,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 		opacity: 0;
 	}
 }
+
+/* Phones: a full-screen sheet that rises from the bottom. */
+@media (max-width: 767px) {
+	.drawer {
+		inset: 0;
+		width: auto;
+		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		border-radius: 0;
+		animation-name: rise;
+	}
+}
+
+@keyframes rise {
+	from {
+		transform: translateY(32px);
+		opacity: 0;
+	}
+}
 </style>

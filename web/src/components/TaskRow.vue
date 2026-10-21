@@ -8,6 +8,7 @@ import {useData} from '@/stores/data'
 import {isOverdue, taskDateLabel} from '@/lib/dates'
 import {labelColor, splitEmoji} from '@/lib/tasks'
 import {openTaskMenu, ui, type DropZone} from '@/lib/ui'
+import {isMobile} from '@/lib/viewport'
 import {t} from '@/lib/i18n'
 
 const props = withDefaults(defineProps<{
@@ -74,7 +75,7 @@ function onDragStart(e: DragEvent) {
 		class="row"
 		:class="{selected, done: task.done, compact}"
 		:style="depth ? {paddingLeft: `${16 + depth * 28}px`} : undefined"
-		draggable="true"
+		:draggable="!isMobile"
 		@click="emit('select', task.id)"
 		@contextmenu="openTaskMenu(task.id, $event)"
 		:data-drop="zone"
@@ -178,8 +179,10 @@ function onDragStart(e: DragEvent) {
 	min-height: 40px;
 }
 
-.row:hover {
-	background: var(--bg-hover);
+@media (hover: hover) {
+	.row:hover {
+		background: var(--bg-hover);
+	}
 }
 
 .row.selected {
@@ -245,5 +248,34 @@ function onDragStart(e: DragEvent) {
 
 .done .date {
 	color: var(--text-3);
+}
+
+/* Phones: tags move out of the row so the title keeps its room. */
+@media (max-width: 767px) {
+	.row {
+		min-height: 48px;
+		padding: 0 8px 0 10px;
+		-webkit-touch-callout: none;
+		user-select: none;
+	}
+
+	.row::after {
+		left: 38px;
+		right: 8px;
+	}
+
+	.meta {
+		flex-shrink: 1;
+		min-width: 0;
+		gap: 6px;
+	}
+
+	.tag {
+		display: none;
+	}
+
+	.list {
+		max-width: 88px;
+	}
 }
 </style>

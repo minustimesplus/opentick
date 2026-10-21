@@ -407,6 +407,19 @@ input::placeholder {
 	font-size: 12px;
 }
 
+@media (max-width: 767px) {
+	.bar {
+		height: 46px;
+	}
+
+	/* The backdrop must match the input exactly for the highlights to line up. */
+	.backdrop,
+	input {
+		font-size: 16px;
+		line-height: 46px;
+	}
+}
+
 .chips {
 	display: flex;
 	flex-wrap: wrap;
