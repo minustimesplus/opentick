@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, ref} from 'vue'
 import {AlarmClock, AlignLeft, ChevronDown, ChevronRight, Repeat} from 'lucide-vue-next'
 import TaskCheckbox from './TaskCheckbox.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {isOverdue, taskDateLabel} from '@/lib/dates'
 import {labelColor, splitEmoji} from '@/lib/tasks'
-import {openTaskMenu} from '@/lib/ui'
+import {openTaskMenu, ui, type DropZone} from '@/lib/ui'
 import {t} from '@/lib/i18n'
 
 const props = withDefaults(defineProps<{
@@ -19,8 +19,12 @@ const props = withDefaults(defineProps<{
 	/** Number of subtasks nested below this row; shows a collapse toggle. */
 	childCount?: number
 	expanded?: boolean
+	/** Accept other task rows dropped before/after (reorder) or onto (nest) this one. */
+	droppable?: boolean
+	/** Whether dropping before/after reorders; nesting works regardless. */
+	reorderable?: boolean
 }>(), {showList: false, depth: 0, childCount: 0, expanded: true})
-const emit = defineEmits<{select: [number], toggle: [number]}>()
+const emit = defineEmits<{select: [number], toggle: [number], drop: [dragged: number, target: number, zone: DropZone]}>()
 const data = useData()
 
 const project = computed(() => data.project(props.task.project_id))
@@ -33,7 +37,31 @@ const dateLabel = computed(() => taskDateLabel(props.task))
 const overdue = computed(() => isOverdue(props.task))
 const hasDescription = computed(() => !!props.task.description && props.task.description.replace(/<[^>]*>/g, '').trim() !== '')
 
+const zone = ref<DropZone | null>(null)
+
+function onDragOver(e: DragEvent) {
+	const dragged = ui.dragTaskId
+	if (!props.droppable || dragged === null || dragged === props.task.id) return
+	const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+	const y = (e.clientY - rect.top) / rect.height
+	const z: DropZone = !props.reorderable || (y > 0.3 && y < 0.7) ? 'inside' : y <= 0.3 ? 'before' : 'after'
+	e.preventDefault()
+	if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+	zone.value = z
+}
+
+function onDrop(e: DragEvent) {
+	const z = zone.value
+	zone.value = null
+	const dragged = ui.dragTaskId
+	if (!z || dragged === null) return
+	e.preventDefault()
+	e.stopPropagation()
+	emit('drop', dragged, props.task.id, z)
+}
+
 function onDragStart(e: DragEvent) {
+	ui.dragTaskId = props.task.id
 	e.dataTransfer?.setData('application/x-task-id', String(props.task.id))
 	e.dataTransfer?.setData('text/plain', props.task.title)
 	if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
@@ -48,7 +76,12 @@ function onDragStart(e: DragEvent) {
 		draggable="true"
 		@click="emit('select', task.id)"
 		@contextmenu="openTaskMenu(task.id, $event)"
+		:data-drop="zone"
 		@dragstart="onDragStart"
+		@dragend="ui.dragTaskId = null"
+		@dragover="onDragOver"
+		@dragleave="zone = null"
+		@drop="onDrop"
 	>
 		<button v-if="childCount" class="fold" :style="{left: `${depth * 28}px`}" @click.stop="emit('toggle', task.id)">
 			<component :is="expanded ? ChevronDown : ChevronRight" :size="14" />
@@ -113,6 +146,28 @@ function onDragStart(e: DragEvent) {
 .sub-count {
 	font-size: 12px;
 	color: var(--text-3);
+}
+
+.row[data-drop="inside"] {
+	box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.row[data-drop="before"]::before,
+.row[data-drop="after"]::before {
+	content: "";
+	position: absolute;
+	left: 40px;
+	right: 12px;
+	height: 2px;
+	background: var(--accent);
+}
+
+.row[data-drop="before"]::before {
+	top: -1px;
+}
+
+.row[data-drop="after"]::before {
+	bottom: -1px;
 }
 
 .row.compact {

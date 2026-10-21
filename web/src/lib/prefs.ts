@@ -32,7 +32,7 @@ export interface Prefs {
 	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
 	sidebarWidth: number
 	detailWidth: number
-	listSort: Record<string, 'date' | 'priority' | 'title' | 'created'>
+	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
 	collapsed: Record<string, boolean>
 	matrixLists: number[]

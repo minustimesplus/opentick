@@ -294,6 +294,7 @@ const en = {
 	subtasks: 'Subtasks',
 	addSubtask: 'Add Subtask',
 	detachSubtask: 'Remove from Parent Task',
+	sortCustom: 'Custom',
 }
 
 type Dict = typeof en
@@ -591,6 +592,7 @@ const fr: Dict = {
 	subtasks: 'Sous-tâches',
 	addSubtask: 'Ajouter une sous-tâche',
 	detachSubtask: 'Retirer de la tâche parente',
+	sortCustom: 'Personnalisé',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

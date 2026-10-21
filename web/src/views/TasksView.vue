@@ -17,7 +17,7 @@ import {
 	schedulePatch, startOfDay,
 } from '@/lib/dates'
 import {compareTitles, level, splitEmoji} from '@/lib/tasks'
-import {openTaskDrawer} from '@/lib/ui'
+import {openTaskDrawer, type DropZone} from '@/lib/ui'
 
 const data = useData()
 const route = useRoute()
@@ -87,7 +87,7 @@ watch(savedFilter, async f => {
 }, {immediate: true})
 
 // ---- sorting ----
-type SortKey = 'date' | 'priority' | 'title' | 'created'
+type SortKey = 'date' | 'priority' | 'title' | 'created' | 'custom'
 const sortKey = computed<SortKey>({
 	get: () => prefs.listSort[listKey.value] ?? 'date',
 	set: v => { prefs.listSort[listKey.value] = v },
@@ -98,8 +98,20 @@ function dateValue(task: Task) {
 	return s ? s.date.getTime() : Number.MAX_SAFE_INTEGER
 }
 
+/** Project whose manual order applies to this view, if any. */
+const orderProject = computed(() => project.value?.id)
+
+watch(orderProject, id => {
+	if (id) data.loadPositions(id)
+}, {immediate: true})
+
+function manualPos(task: Task): number {
+	return data.positions.get(orderProject.value ?? 0)?.get(task.id) ?? Number.MAX_SAFE_INTEGER
+}
+
 function sortTasks(list: Task[]): Task[] {
 	const by: Record<SortKey, (a: Task, b: Task) => number> = {
+		custom: (a, b) => manualPos(a) - manualPos(b) || a.id - b.id,
 		date: (a, b) => dateValue(a) - dateValue(b) || level(b.priority) - level(a.priority) || a.id - b.id,
 		priority: (a, b) => level(b.priority) - level(a.priority) || dateValue(a) - dateValue(b),
 		title: compareTitles,
@@ -277,6 +289,66 @@ function toggleChildren(id: number) {
 	prefs.collapsed[`t${id}`] = !prefs.collapsed[`t${id}`]
 }
 
+// ---- drag and drop between rows ----
+const STEP = 65536
+
+function isAncestor(ancestor: number, id: number): boolean {
+	for (let cur = data.tasks.get(id), hops = 0; cur && hops < 50; hops++) {
+		const p = parentId(cur)
+		if (p === undefined) return false
+		if (p === ancestor) return true
+		cur = data.tasks.get(p)
+	}
+	return false
+}
+
+/** Gives `list` evenly spaced positions in its current order. */
+async function renumber(list: Task[]) {
+	const pid = orderProject.value
+	if (!pid) return
+	// One at a time: SQLite rejects concurrent writes.
+	for (const [i, task] of list.entries()) {
+		if (manualPos(task) !== (i + 1) * STEP) await data.setPosition(pid, task.id, (i + 1) * STEP)
+	}
+}
+
+async function onRowDrop(dragged: number, target: number, zone: DropZone) {
+	const d = data.tasks.get(dragged)
+	const tg = data.tasks.get(target)
+	if (!d || !tg || dragged === target || isAncestor(dragged, target)) return
+	if (zone === 'inside') {
+		if (d.project_id !== tg.project_id) await data.updateTask(dragged, {project_id: tg.project_id})
+		await data.setParent(dragged, target)
+		prefs.collapsed[`t${target}`] = false
+		return
+	}
+	const pid = orderProject.value
+	if (!pid) return
+	const newParent = parentId(tg) ?? null
+	if ((parentId(d) ?? null) !== newParent) await data.setParent(dragged, newParent)
+	if (sortKey.value !== 'custom') {
+		// Dragging turns the order on screen into the manual order.
+		await renumber(nest(openTasks.value).map(r => r.task))
+		sortKey.value = 'custom'
+	}
+	let siblings = openTasks.value.filter(task => task.id !== dragged && (parentId(task) ?? null) === newParent)
+	const positions = siblings.map(manualPos)
+	if (positions.some((p, i) => p === Number.MAX_SAFE_INTEGER || (i > 0 && p <= positions[i - 1]))) {
+		await renumber(siblings)
+		siblings = openTasks.value.filter(task => task.id !== dragged && (parentId(task) ?? null) === newParent)
+	}
+	const idx = siblings.findIndex(task => task.id === target)
+	if (idx < 0) return
+	const at = manualPos(siblings[idx])
+	let pos: number
+	if (zone === 'before') {
+		pos = idx > 0 ? (manualPos(siblings[idx - 1]) + at) / 2 : at / 2
+	} else {
+		pos = idx < siblings.length - 1 ? (at + manualPos(siblings[idx + 1])) / 2 : at + STEP
+	}
+	await data.setPosition(pid, dragged, pos)
+}
+
 // ---- header menus ----
 const sortEl = ref<HTMLElement | null>(null)
 const moreEl = ref<HTMLElement | null>(null)
@@ -295,6 +367,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 	{key: 'priority', label: 'sortPriority'},
 	{key: 'title', label: 'sortTitle'},
 	{key: 'created', label: 'sortCreated'},
+	{key: 'custom', label: 'sortCustom'},
 ]
 </script>
 
@@ -347,8 +420,11 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 								:expanded="!prefs.collapsed[`t${r.task.id}`]"
 								:selected="r.task.id === selectedId"
 								:show-list="view.kind !== 'project' && view.kind !== 'inbox'"
+								droppable
+								:reorderable="!!orderProject"
 								@select="select"
 								@toggle="toggleChildren"
+								@drop="onRowDrop"
 							/>
 						</template>
 					</template>

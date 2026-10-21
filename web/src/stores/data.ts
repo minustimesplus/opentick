@@ -43,6 +43,8 @@ export const useData = defineStore('data', () => {
 	const loading = ref(false)
 	const loaded = ref(false)
 	const notifications = ref<AppNotification[]>([])
+	/** Manual task order per project, from the project's list view: project id → task id → position. */
+	const positions = reactive(new Map<number, Map<number, number>>())
 	/** Object URL of the user's uploaded avatar, null when they have none. */
 	const avatarUrl = ref<string | null>(null)
 	let avatarLoadedFor: string | null = null
@@ -69,6 +71,7 @@ export const useData = defineStore('data', () => {
 		tasks.clear()
 		loaded.value = false
 		doneQueries.clear()
+		positions.clear()
 		setAvatarUrl(null)
 		avatarLoadedFor = null
 	}
@@ -212,6 +215,39 @@ export const useData = defineStore('data', () => {
 		const res = await fetchAll<Task>(`/projects/${project.id}/views/${view.id}/tasks`, {}, 5)
 		res.forEach(t => tasks.set(t.id, t))
 		return res
+	}
+
+	function listViewId(projectId: number): number | undefined {
+		const views = project(projectId)?.views
+		return (views?.find(v => v.view_kind === 'list') ?? views?.[0])?.id
+	}
+
+	/** Loads the manual order of a project's open tasks. */
+	async function loadPositions(projectId: number) {
+		const view = listViewId(projectId)
+		if (!view) return
+		try {
+			const res = await fetchAll<Task>(`/projects/${projectId}/views/${view}/tasks`, {filter: 'done = false'}, 10)
+			positions.set(projectId, new Map(res.map(t => [t.id, t.position ?? 0])))
+		} catch {
+			// Keep the previous order.
+		}
+	}
+
+	async function setPosition(projectId: number, taskId: number, position: number) {
+		const view = listViewId(projectId)
+		if (!view) return
+		if (!positions.has(projectId)) positions.set(projectId, new Map())
+		const map = positions.get(projectId)!
+		const before = map.get(taskId)
+		map.set(taskId, position)
+		try {
+			await api('PUT', `/tasks/${taskId}/position`, {body: {position, project_view_id: view}})
+		} catch (e) {
+			if (before === undefined) map.delete(taskId)
+			else map.set(taskId, before)
+			toast(String((e as Error).message))
+		}
 	}
 
 	async function searchRemote(q: string): Promise<Task[]> {
@@ -569,6 +605,7 @@ export const useData = defineStore('data', () => {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
 		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
+		positions, loadPositions, setPosition,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,
