@@ -302,6 +302,14 @@ const en = {
 	uploadAttachment: 'Upload Attachment',
 	deleteAttachmentConfirm: 'Delete "{name}"?',
 	download: 'Download',
+	view: 'View',
+	viewList: 'List',
+	viewKanban: 'Kanban',
+	addSection: 'Add Section',
+	sectionName: 'Section name',
+	deleteSectionConfirm: 'Delete the section "{name}"? Its tasks move to the default section.',
+	noKanbanView: 'This list has no kanban view.',
+	rename: 'Rename',
 }
 
 type Dict = typeof en
@@ -607,6 +615,14 @@ const fr: Dict = {
 	uploadAttachment: 'Joindre un fichier',
 	deleteAttachmentConfirm: 'Supprimer « {name} » ?',
 	download: 'Télécharger',
+	view: 'Affichage',
+	viewList: 'Liste',
+	viewKanban: 'Kanban',
+	addSection: 'Ajouter une section',
+	sectionName: 'Nom de la section',
+	deleteSectionConfirm: 'Supprimer la section « {name} » ? Ses tâches iront dans la section par défaut.',
+	noKanbanView: "Cette liste n'a pas de vue kanban.",
+	rename: 'Renommer',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

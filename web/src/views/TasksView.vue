@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ArrowUpDown, ChevronDown, ChevronRight, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
+import KanbanBoard from '@/components/KanbanBoard.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
@@ -85,6 +86,12 @@ watch(savedFilter, async f => {
 	filterTaskIds.value = []
 	if (f) filterTaskIds.value = (await data.loadSavedFilterTasks(f)).map(t => t.id)
 }, {immediate: true})
+
+// ---- layout ----
+const layout = computed<'list' | 'kanban'>({
+	get: () => project.value ? prefs.listView[listKey.value] ?? 'list' : 'list',
+	set: v => { prefs.listView[listKey.value] = v },
+})
 
 // ---- sorting ----
 type SortKey = 'date' | 'priority' | 'title' | 'created' | 'custom'
@@ -388,11 +395,19 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					{{ header.name }}
 				</h1>
 				<div class="spacer" />
-				<button ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
+				<button v-if="layout === 'list'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
 				<button ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
 			</header>
 
-			<div class="content">
+			<KanbanBoard
+				v-if="layout === 'kanban' && project"
+				class="kanban"
+				:project="project"
+				:selected-id="selectedId"
+				:show-completed="showCompleted"
+				@select="select"
+			/>
+			<div v-else class="content">
 				<QuickAdd
 					v-if="view.kind !== 'completed' && view.kind !== 'filter'"
 					:key="listKey"
@@ -462,6 +477,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			</div>
 		</section>
 
+		<template v-if="layout === 'list' || selectedId">
 		<div class="resizer detail-resizer" @pointerdown="startResize($event, 'detailWidth', DETAIL_RANGE, -1)" />
 		<section class="detail-pane" :style="{width: clamp(prefs.detailWidth, DETAIL_RANGE) + 'px'}">
 			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" @open="select" />
@@ -476,6 +492,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 				<div class="sub">{{ t('noTaskSelected') }}</div>
 			</div>
 		</section>
+		</template>
 
 		<Popover v-if="pop === 'sort'" :anchor="sortEl" placement="bottom-end" @close="pop = null">
 			<div class="menu">
@@ -487,6 +504,14 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 		</Popover>
 		<Popover v-if="pop === 'more'" :anchor="moreEl" placement="bottom-end" @close="pop = null">
 			<div class="menu">
+				<template v-if="project">
+					<div class="menu-label">{{ t('view') }}</div>
+					<div class="view-switch">
+						<button :class="{on: layout === 'list'}" :title="t('viewList')" @click="layout = 'list'; pop = null"><List :size="18" /></button>
+						<button :class="{on: layout === 'kanban'}" :title="t('viewKanban')" @click="layout = 'kanban'; pop = null"><Columns3 :size="18" /></button>
+					</div>
+					<div class="menu-sep" />
+				</template>
 				<button class="menu-item" @click="showCompleted = !showCompleted; pop = null">
 					<component :is="showCompleted ? EyeOff : Eye" :size="15" /> {{ showCompleted ? t('hideCompleted') : t('showCompleted') }}
 				</button>
@@ -556,6 +581,36 @@ h1 {
 
 .qa {
 	margin-bottom: 12px;
+}
+
+.kanban {
+	flex: 1;
+	min-height: 0;
+}
+
+.view-switch {
+	display: flex;
+	gap: 4px;
+	padding: 2px 6px 6px;
+}
+
+.view-switch button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 30px;
+	border-radius: 6px;
+	color: var(--text-3);
+}
+
+.view-switch button:hover {
+	background: var(--bg-hover);
+}
+
+.view-switch button.on {
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .sections {
