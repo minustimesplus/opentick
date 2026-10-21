@@ -284,3 +284,8 @@ html.desktop .login a,
 html.desktop body > :not(#app) {
 	-webkit-app-region: no-drag;
 }
+
+body.col-resizing {
+	cursor: col-resize;
+	user-select: none;
+}

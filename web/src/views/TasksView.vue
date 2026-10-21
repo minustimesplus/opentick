@@ -24,6 +24,28 @@ const data = useData()
 const route = useRoute()
 const router = useRouter()
 
+const SIDEBAR_RANGE = [200, 480] as const
+const DETAIL_RANGE = [340, 760] as const
+const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v))
+
+// Drag a pane border; `dir` is +1 when moving right grows the pane, -1 when it shrinks it.
+function startResize(e: PointerEvent, key: 'sidebarWidth' | 'detailWidth', range: readonly [number, number], dir: 1 | -1) {
+	const startX = e.clientX
+	const startW = prefs[key]
+	const move = (ev: PointerEvent) => {
+		prefs[key] = clamp(startW + dir * (ev.clientX - startX), range)
+	}
+	const up = () => {
+		window.removeEventListener('pointermove', move)
+		window.removeEventListener('pointerup', up)
+		document.body.classList.remove('col-resizing')
+	}
+	document.body.classList.add('col-resizing')
+	window.addEventListener('pointermove', move)
+	window.addEventListener('pointerup', up)
+	e.preventDefault()
+}
+
 const listKey = computed(() => String(route.params.list ?? 'today'))
 const selectedId = computed(() => route.params.taskId ? Number(route.params.taskId) : null)
 
@@ -241,7 +263,10 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 
 <template>
 	<div class="tasks-view">
-		<ListSidebar v-if="prefs.tasksSidebar" />
+		<template v-if="prefs.tasksSidebar">
+			<ListSidebar :style="{width: clamp(prefs.sidebarWidth, SIDEBAR_RANGE) + 'px'}" />
+			<div class="resizer" @pointerdown="startResize($event, 'sidebarWidth', SIDEBAR_RANGE, 1)" />
+		</template>
 
 		<section class="list-pane">
 			<header class="head">
@@ -322,7 +347,8 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			</div>
 		</section>
 
-		<section class="detail-pane">
+		<div class="resizer detail-resizer" @pointerdown="startResize($event, 'detailWidth', DETAIL_RANGE, -1)" />
+		<section class="detail-pane" :style="{width: clamp(prefs.detailWidth, DETAIL_RANGE) + 'px'}">
 			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" />
 			<div v-else class="empty-state detail-empty">
 				<svg width="200" height="150" viewBox="0 0 200 150" fill="none" stroke="var(--text-4)" stroke-width="2">
@@ -367,7 +393,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 }
 
 .list-pane {
-	flex: 1.7;
+	flex: 1;
 	min-width: 360px;
 	display: flex;
 	flex-direction: column;
@@ -449,9 +475,7 @@ h1 {
 }
 
 .detail-pane {
-	flex: 1;
-	min-width: 340px;
-	max-width: 640px;
+	flex: none;
 	position: relative;
 }
 
@@ -460,7 +484,32 @@ h1 {
 	padding: 40px;
 }
 
+/* Wide invisible hit area straddling the pane border. */
+.resizer {
+	flex: none;
+	position: relative;
+	width: 0;
+	z-index: 5;
+	cursor: col-resize;
+}
+
+.resizer::before {
+	content: '';
+	position: absolute;
+	inset: 0 -4px;
+}
+
+.resizer:hover::before {
+	background: var(--accent);
+	opacity: 0.35;
+	inset: 0 -1px;
+}
+
 @media (max-width: 1100px) {
+	.detail-resizer {
+		display: none;
+	}
+
 	.detail-pane {
 		display: none;
 	}
