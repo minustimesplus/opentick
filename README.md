@@ -2,9 +2,10 @@
 
 > A clean, open source implementation of TickTick, built on [Vikunja](https://vikunja.io).
 
-OpenTick pairs a TickTick-style web frontend (lists, calendar, Eisenhower matrix,
-subscribed ICS calendars) with the Vikunja Go API as its backend. You host it
-yourself, and your data stays with you.
+OpenTick pairs a TickTick-style web frontend (lists with subtasks and kanban
+boards, calendar, Eisenhower matrix, saved filters, shared lists with comments,
+attachments and assignees, subscribed ICS calendars) with the Vikunja Go API as
+its backend. You host it yourself, and your data stays with you.
 
 > [!NOTE]
 > OpenTick is developed with LLM-assisted coding tools in various parts of the codebase.

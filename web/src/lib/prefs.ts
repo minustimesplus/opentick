@@ -33,8 +33,10 @@ export interface Prefs {
 	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
 	sidebarWidth: number
 	detailWidth: number
-	listSort: Record<string, 'date' | 'priority' | 'title' | 'created'>
+	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
+	/** Layout per list key: plain list or kanban columns. */
+	listView: Record<string, 'list' | 'kanban'>
 	collapsed: Record<string, boolean>
 	matrixLists: number[]
 	matrixShowDone: boolean
@@ -68,6 +70,7 @@ const defaults: Prefs = {
 	detailWidth: 420,
 	listSort: {},
 	listShowCompleted: {},
+	listView: {},
 	collapsed: {},
 	matrixLists: [],
 	matrixShowDone: false,

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
+import {Archive, ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
 import DayIcon from './DayIcon.vue'
 import Popover from './Popover.vue'
 import ListEditDialog from './ListEditDialog.vue'
+import FilterEditDialog from './FilterEditDialog.vue'
+import {filterIdOf} from '@/lib/filters'
 import type {Project} from '@/api/types'
 import {useData} from '@/stores/data'
 import {hasColor, labelColor, projectColor, splitEmoji} from '@/lib/tasks'
@@ -51,6 +53,24 @@ async function removeList(p: Project) {
 	if (!confirm(t('deleteListConfirm', {name: p.title}))) return
 	await data.deleteProject(p.id)
 	if (current.value === `p${p.id}`) go('today')
+}
+
+async function archiveList(p: Project) {
+	ctx.value = null
+	await data.setArchived(p.id, true)
+	if (current.value === `p${p.id}`) go('today')
+}
+
+// ---- saved filters ----
+const filterCtx = ref<{filter: Project, x: number, y: number} | null>(null)
+/** Filter being edited; null for a new one, undefined while the dialog is closed. */
+const editingFilter = ref<Project | null | undefined>(undefined)
+
+async function removeFilter(f: Project) {
+	filterCtx.value = null
+	if (!confirm(t('deleteFilterConfirm', {name: f.title}))) return
+	await data.deleteFilter(filterIdOf(f.id))
+	if (current.value === `f${-f.id}`) go('today')
 }
 
 // ---- drop targets ----
@@ -157,17 +177,24 @@ function dropProps(key: string) {
 				</template>
 			</template>
 
-			<template v-if="data.savedFilters.length">
-				<div class="section-head" @click="toggle('filters')">
-					<span>{{ t('filters') }}</span>
-					<component :is="prefs.collapsed.filters ? ChevronRight : ChevronDown" :size="14" class="chev" />
-				</div>
-				<template v-if="!prefs.collapsed.filters">
-					<button v-for="f in data.savedFilters" :key="f.id" class="item" :class="{active: current === `f${-f.id}`}" @click="go(`f${-f.id}`)">
-						<Filter :size="17" class="ic" />
-						<span class="name">{{ f.title }}</span>
-					</button>
-				</template>
+			<div class="section-head" @click="toggle('filters')">
+				<span>{{ t('filters') }}</span>
+				<button class="add" :title="t('addFilter')" @click.stop="editingFilter = null"><Plus :size="15" /></button>
+				<component :is="prefs.collapsed.filters ? ChevronRight : ChevronDown" :size="14" class="chev" />
+			</div>
+			<template v-if="!prefs.collapsed.filters">
+				<button
+					v-for="f in data.savedFilters"
+					:key="f.id"
+					class="item"
+					:class="{active: current === `f${-f.id}`}"
+					@click="go(`f${-f.id}`)"
+					@contextmenu.prevent="filterCtx = {filter: f, x: $event.clientX, y: $event.clientY}"
+				>
+					<Filter :size="17" class="ic" />
+					<span class="name">{{ f.title }}</span>
+				</button>
+				<div v-if="!data.savedFilters.length" class="hint">{{ t('filtersHint') }}</div>
 			</template>
 
 			<div class="section-head" @click="toggle('tags')">
@@ -195,14 +222,26 @@ function dropProps(key: string) {
 				<SquareCheckBig :size="17" class="ic" />
 				<span class="name">{{ t('completed') }}</span>
 			</button>
+			<button v-if="data.archivedProjects.length" class="item" :class="{active: current === 'archived'}" @click="go('archived')">
+				<Archive :size="17" class="ic" />
+				<span class="name">{{ t('archivedLists') }}</span>
+			</button>
 		</div>
 
 		<Popover v-if="ctx" :anchor="{x: ctx.x, y: ctx.y}" @close="ctx = null">
 			<div class="menu">
 				<button class="menu-item" @click="editing = ctx!.project; ctx = null"><Pencil :size="15" /> {{ t('edit') }}</button>
+				<button class="menu-item" @click="archiveList(ctx!.project)"><Archive :size="15" /> {{ t('archive') }}</button>
 				<button class="menu-item danger" @click="removeList(ctx!.project)"><Trash2 :size="15" /> {{ t('delete') }}</button>
 			</div>
 		</Popover>
+		<Popover v-if="filterCtx" :anchor="{x: filterCtx.x, y: filterCtx.y}" @close="filterCtx = null">
+			<div class="menu">
+				<button class="menu-item" @click="editingFilter = filterCtx!.filter; filterCtx = null"><Pencil :size="15" /> {{ t('edit') }}</button>
+				<button class="menu-item danger" @click="removeFilter(filterCtx!.filter)"><Trash2 :size="15" /> {{ t('delete') }}</button>
+			</div>
+		</Popover>
+		<FilterEditDialog v-if="editingFilter !== undefined" :filter="editingFilter" @close="editingFilter = undefined" @saved="id => go(`f${id + 1}`)" />
 		<ListEditDialog v-if="editing !== undefined" :project="editing" @close="editing = undefined" @saved="id => go(`p${id}`)" />
 	</aside>
 </template>
@@ -247,6 +286,12 @@ function dropProps(key: string) {
 .item.drop {
 	outline: 2px solid var(--accent);
 	outline-offset: -2px;
+}
+
+.hint {
+	padding: 4px 12px 8px;
+	font-size: 12px;
+	color: var(--text-3);
 }
 
 .item.child {

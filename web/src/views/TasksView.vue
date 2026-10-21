@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ArrowUpDown, ChevronDown, ChevronRight, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
+import KanbanBoard from '@/components/KanbanBoard.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
+import FilterEditDialog from '@/components/FilterEditDialog.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
+import {filterIdOf} from '@/lib/filters'
 import type {Task} from '@/api/types'
-import {useData, type TaskPatch} from '@/stores/data'
+import {parentId, useData, type TaskPatch} from '@/stores/data'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
 import {
@@ -17,7 +21,7 @@ import {
 	schedulePatch, startOfDay,
 } from '@/lib/dates'
 import {compareTitles, level, splitEmoji} from '@/lib/tasks'
-import {openTaskDrawer} from '@/lib/ui'
+import {openTaskDrawer, type DropZone} from '@/lib/ui'
 import {isMobile} from '@/lib/viewport'
 
 const data = useData()
@@ -64,11 +68,11 @@ function onSheetClick(e: MouseEvent) {
 	if ((e.target as HTMLElement).closest('.item')) sheetOpen.value = false
 }
 
-type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed'
+type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed' | 'archived'
 
 const view = computed(() => {
 	const k = listKey.value
-	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed') return {kind: k as Kind, id: 0}
+	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed' || k === 'archived') return {kind: k as Kind, id: 0}
 	if (k.startsWith('p')) return {kind: 'project' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('l')) return {kind: 'label' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('f')) return {kind: 'filter' as Kind, id: -Number(k.slice(1))}
@@ -89,6 +93,7 @@ const header = computed(() => {
 		case 'week': return {emoji: null, name: t('next7')}
 		case 'inbox': return {emoji: null, name: t('inbox')}
 		case 'completed': return {emoji: null, name: t('completed')}
+		case 'archived': return {emoji: null, name: t('archivedLists')}
 		case 'label': return {emoji: null, name: label.value?.title ?? ''}
 		case 'filter': return {emoji: null, name: savedFilter.value?.title ?? ''}
 		default: return project.value ? splitEmoji(project.value.title) : {emoji: null, name: ''}
@@ -102,8 +107,14 @@ watch(savedFilter, async f => {
 	if (f) filterTaskIds.value = (await data.loadSavedFilterTasks(f)).map(t => t.id)
 }, {immediate: true})
 
+// ---- layout ----
+const layout = computed<'list' | 'kanban'>({
+	get: () => project.value ? prefs.listView[listKey.value] ?? 'list' : 'list',
+	set: v => { prefs.listView[listKey.value] = v },
+})
+
 // ---- sorting ----
-type SortKey = 'date' | 'priority' | 'title' | 'created'
+type SortKey = 'date' | 'priority' | 'title' | 'created' | 'custom'
 const sortKey = computed<SortKey>({
 	get: () => prefs.listSort[listKey.value] ?? 'date',
 	set: v => { prefs.listSort[listKey.value] = v },
@@ -114,8 +125,20 @@ function dateValue(task: Task) {
 	return s ? s.date.getTime() : Number.MAX_SAFE_INTEGER
 }
 
+/** Project whose manual order applies to this view, if any. */
+const orderProject = computed(() => project.value?.id)
+
+watch(orderProject, id => {
+	if (id) data.loadPositions(id)
+}, {immediate: true})
+
+function manualPos(task: Task): number {
+	return data.positions.get(orderProject.value ?? 0)?.get(task.id) ?? Number.MAX_SAFE_INTEGER
+}
+
 function sortTasks(list: Task[]): Task[] {
 	const by: Record<SortKey, (a: Task, b: Task) => number> = {
+		custom: (a, b) => manualPos(a) - manualPos(b) || a.id - b.id,
 		date: (a, b) => dateValue(a) - dateValue(b) || level(b.priority) - level(a.priority) || a.id - b.id,
 		priority: (a, b) => level(b.priority) - level(a.priority) || dateValue(a) - dateValue(b),
 		title: compareTitles,
@@ -149,7 +172,22 @@ function matches(task: Task): boolean {
 	}
 }
 
-const openTasks = computed(() => sortTasks(data.openTasks.filter(matches)))
+const archived = computed(() => !!project.value?.is_archived)
+
+// Archived lists are not part of the synced open tasks.
+const openTasks = computed(() => sortTasks((archived.value ? data.allTasks.filter(task => !task.done) : data.openTasks).filter(matches)))
+
+async function setArchived(value: boolean) {
+	pop.value = null
+	if (!project.value) return
+	await data.setArchived(project.value.id, value)
+	if (value) router.push('/tasks/archived')
+}
+
+async function deleteArchived(id: number, title: string) {
+	if (!confirm(t('deleteListConfirm', {name: title}))) return
+	await data.deleteProject(id)
+}
 
 const doneTasks = computed(() => {
 	const v = view.value
@@ -264,11 +302,126 @@ function onCreated(id: number) {
 
 const collapsed = ref<Record<string, boolean>>({})
 
+// ---- subtasks nest under their parent when both are listed ----
+interface Row {
+	task: Task
+	depth: number
+	childCount: number
+}
+
+function nest(list: Task[]): Row[] {
+	const ids = new Set(list.map(task => task.id))
+	const kids = new Map<number, Task[]>()
+	const roots: Task[] = []
+	for (const task of list) {
+		const p = parentId(task)
+		if (p !== undefined && ids.has(p) && p !== task.id) {
+			if (!kids.has(p)) kids.set(p, [])
+			kids.get(p)!.push(task)
+		} else {
+			roots.push(task)
+		}
+	}
+	const out: Row[] = []
+	const seen = new Set<number>()
+	const walk = (task: Task, depth: number) => {
+		if (seen.has(task.id)) return
+		seen.add(task.id)
+		const children = kids.get(task.id) ?? []
+		out.push({task, depth, childCount: children.length})
+		if (prefs.collapsed[`t${task.id}`]) return
+		children.forEach(c => walk(c, depth + 1))
+	}
+	roots.forEach(task => walk(task, 0))
+	return out
+}
+
+function toggleChildren(id: number) {
+	prefs.collapsed[`t${id}`] = !prefs.collapsed[`t${id}`]
+}
+
+// ---- drag and drop between rows ----
+const STEP = 65536
+
+function isAncestor(ancestor: number, id: number): boolean {
+	for (let cur = data.tasks.get(id), hops = 0; cur && hops < 50; hops++) {
+		const p = parentId(cur)
+		if (p === undefined) return false
+		if (p === ancestor) return true
+		cur = data.tasks.get(p)
+	}
+	return false
+}
+
+/** Gives `list` evenly spaced positions in its current order. */
+async function renumber(list: Task[]) {
+	const pid = orderProject.value
+	if (!pid) return
+	// One at a time: SQLite rejects concurrent writes.
+	for (const [i, task] of list.entries()) {
+		if (manualPos(task) !== (i + 1) * STEP) await data.setPosition(pid, task.id, (i + 1) * STEP)
+	}
+}
+
+async function onRowDrop(dragged: number, target: number, zone: DropZone) {
+	const d = data.tasks.get(dragged)
+	const tg = data.tasks.get(target)
+	if (!d || !tg || dragged === target || isAncestor(dragged, target)) return
+	if (zone === 'inside') {
+		if (d.project_id !== tg.project_id) await data.updateTask(dragged, {project_id: tg.project_id})
+		await data.setParent(dragged, target)
+		prefs.collapsed[`t${target}`] = false
+		return
+	}
+	const pid = orderProject.value
+	if (!pid) return
+	const newParent = parentId(tg) ?? null
+	if ((parentId(d) ?? null) !== newParent) await data.setParent(dragged, newParent)
+	if (sortKey.value !== 'custom') {
+		// Dragging turns the order on screen into the manual order.
+		await renumber(nest(openTasks.value).map(r => r.task))
+		sortKey.value = 'custom'
+	}
+	let siblings = openTasks.value.filter(task => task.id !== dragged && (parentId(task) ?? null) === newParent)
+	const positions = siblings.map(manualPos)
+	if (positions.some((p, i) => p === Number.MAX_SAFE_INTEGER || (i > 0 && p <= positions[i - 1]))) {
+		await renumber(siblings)
+		siblings = openTasks.value.filter(task => task.id !== dragged && (parentId(task) ?? null) === newParent)
+	}
+	const idx = siblings.findIndex(task => task.id === target)
+	if (idx < 0) return
+	const at = manualPos(siblings[idx])
+	let pos: number
+	if (zone === 'before') {
+		pos = idx > 0 ? (manualPos(siblings[idx - 1]) + at) / 2 : at / 2
+	} else {
+		pos = idx < siblings.length - 1 ? (at + manualPos(siblings[idx + 1])) / 2 : at + STEP
+	}
+	await data.setPosition(pid, dragged, pos)
+}
+
 // ---- header menus ----
 const sortEl = ref<HTMLElement | null>(null)
 const moreEl = ref<HTMLElement | null>(null)
 const pop = ref<'sort' | 'more' | null>(null)
 const editing = ref(false)
+
+const editingFilter = ref(false)
+const sharing = ref(false)
+
+// Lists other people can see get a filled share icon.
+watch(() => view.value.kind === 'project' ? view.value.id : null, id => {
+	if (id) data.loadMembers(id)
+}, {immediate: true})
+const shared = computed(() => view.value.kind === 'project' && data.isShared(view.value.id))
+
+async function deleteFilter() {
+	pop.value = null
+	const f = savedFilter.value
+	if (!f || !confirm(t('deleteFilterConfirm', {name: f.title}))) return
+	await data.deleteFilter(filterIdOf(f.id))
+	router.push('/tasks/today')
+}
 
 async function deleteList() {
 	pop.value = null
@@ -282,6 +435,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 	{key: 'priority', label: 'sortPriority'},
 	{key: 'title', label: 'sortTitle'},
 	{key: 'created', label: 'sortCreated'},
+	{key: 'custom', label: 'sortCustom'},
 ]
 </script>
 
@@ -307,14 +461,25 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<span v-else-if="header.emoji" class="h-emoji">{{ header.emoji }}</span>
 					{{ header.name }}
 				</h1>
+				<button v-if="view.kind === 'project' && project && !archived" class="icon-btn share-btn" :class="{shared}" :title="t('shareList')" @click="sharing = true">
+					<component :is="shared ? Users : UserPlus" :size="18" />
+				</button>
 				<div class="spacer" />
-				<button ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
-				<button ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
+				<button v-if="layout === 'list' && view.kind !== 'archived'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
+				<button v-if="view.kind !== 'archived'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
 			</header>
 
-			<div class="content">
+			<KanbanBoard
+				v-if="layout === 'kanban' && project"
+				class="kanban"
+				:project="project"
+				:selected-id="selectedId"
+				:show-completed="showCompleted"
+				@select="select"
+			/>
+			<div v-else class="content">
 				<QuickAdd
-					v-if="view.kind !== 'completed' && view.kind !== 'filter'"
+					v-if="view.kind !== 'completed' && view.kind !== 'filter' && view.kind !== 'archived' && !archived"
 					:key="listKey"
 					class="qa"
 					:placeholder="placeholder"
@@ -323,7 +488,21 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					@created="onCreated"
 				/>
 
-				<div class="sections">
+				<div v-if="archived" class="archived-banner">
+					<Archive :size="15" /> {{ t('listArchived') }}
+					<button class="btn" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
+				</div>
+				<div v-if="view.kind === 'archived'" class="archived-lists">
+					<div v-for="p in data.archivedProjects" :key="p.id" class="archived-row" @click="router.push(`/tasks/p${p.id}`)">
+						<span v-if="splitEmoji(p.title).emoji">{{ splitEmoji(p.title).emoji }}</span>
+						<Menu v-else :size="17" class="muted" />
+						<span class="a-name">{{ splitEmoji(p.title).name }}</span>
+						<button class="icon-btn" :title="t('unarchive')" @click.stop="data.setArchived(p.id, false)"><ArchiveRestore :size="16" /></button>
+						<button class="icon-btn" :title="t('delete')" @click.stop="deleteArchived(p.id, p.title)"><Trash2 :size="16" /></button>
+					</div>
+					<div v-if="!data.archivedProjects.length" class="empty-state">{{ t('noArchivedLists') }}</div>
+				</div>
+				<div v-else class="sections">
 					<template v-for="s in sections" :key="s.key">
 						<div v-if="s.title" class="sec-head" @click="collapsed[s.key] = !collapsed[s.key]">
 							<component :is="collapsed[s.key] ? ChevronRight : ChevronDown" :size="14" />
@@ -332,17 +511,24 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 						</div>
 						<template v-if="!collapsed[s.key]">
 							<TaskRow
-								v-for="task in s.tasks"
-								:key="task.id"
-								:task="task"
-								:selected="task.id === selectedId"
+								v-for="r in nest(s.tasks)"
+								:key="r.task.id"
+								:task="r.task"
+								:depth="r.depth"
+								:child-count="r.childCount"
+								:expanded="!prefs.collapsed[`t${r.task.id}`]"
+								:selected="r.task.id === selectedId"
 								:show-list="view.kind !== 'project' && view.kind !== 'inbox'"
+								droppable
+								:reorderable="!!orderProject"
 								@select="select"
+								@toggle="toggleChildren"
+								@drop="onRowDrop"
 							/>
 						</template>
 					</template>
 
-					<div v-if="isEmpty && view.kind !== 'completed' && !(completedSection?.length)" class="empty-state">
+					<div v-if="isEmpty && view.kind !== 'completed' && !archived && !(completedSection?.length)" class="empty-state">
 						<svg width="150" height="120" viewBox="0 0 150 120" fill="none">
 							<path d="M30 70c-6-26 18-48 44-46 30 2 50 18 48 42-2 26-30 40-58 36-18-3-30-14-34-32z" fill="var(--bg-hover)" />
 							<path d="M58 66l12 12 26-28" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
@@ -375,9 +561,10 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			</div>
 		</section>
 
+		<template v-if="layout === 'list' || selectedId">
 		<div class="resizer detail-resizer" @pointerdown="startResize($event, 'detailWidth', DETAIL_RANGE, -1)" />
 		<section class="detail-pane" :style="{width: clamp(prefs.detailWidth, DETAIL_RANGE) + 'px'}">
-			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" />
+			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" @open="select" />
 			<div v-else class="empty-state detail-empty">
 				<svg width="200" height="150" viewBox="0 0 200 150" fill="none" stroke="var(--text-4)" stroke-width="2">
 					<rect x="40" y="40" width="90" height="70" rx="6" transform="rotate(-12 85 75)" />
@@ -389,6 +576,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 				<div class="sub">{{ t('noTaskSelected') }}</div>
 			</div>
 		</section>
+		</template>
 
 		<Popover v-if="pop === 'sort'" :anchor="sortEl" placement="bottom-end" @close="pop = null">
 			<div class="menu">
@@ -400,16 +588,33 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 		</Popover>
 		<Popover v-if="pop === 'more'" :anchor="moreEl" placement="bottom-end" @close="pop = null">
 			<div class="menu">
+				<template v-if="project">
+					<div class="menu-label">{{ t('view') }}</div>
+					<div class="view-switch">
+						<button :class="{on: layout === 'list'}" :title="t('viewList')" @click="layout = 'list'; pop = null"><List :size="18" /></button>
+						<button :class="{on: layout === 'kanban'}" :title="t('viewKanban')" @click="layout = 'kanban'; pop = null"><Columns3 :size="18" /></button>
+					</div>
+					<div class="menu-sep" />
+				</template>
 				<button class="menu-item" @click="showCompleted = !showCompleted; pop = null">
 					<component :is="showCompleted ? EyeOff : Eye" :size="15" /> {{ showCompleted ? t('hideCompleted') : t('showCompleted') }}
 				</button>
 				<template v-if="view.kind === 'project' && project">
 					<div class="menu-sep" />
 					<button class="menu-item" @click="editing = true; pop = null"><Pencil :size="15" /> {{ t('editList') }}</button>
+					<button v-if="archived" class="menu-item" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
+					<button v-else class="menu-item" @click="setArchived(true)"><Archive :size="15" /> {{ t('archive') }}</button>
 					<button class="menu-item danger" @click="deleteList"><Trash2 :size="15" /> {{ t('delete') }}</button>
+				</template>
+				<template v-if="view.kind === 'filter' && savedFilter">
+					<div class="menu-sep" />
+					<button class="menu-item" @click="editingFilter = true; pop = null"><Pencil :size="15" /> {{ t('editFilter') }}</button>
+					<button class="menu-item danger" @click="deleteFilter"><Trash2 :size="15" /> {{ t('delete') }}</button>
 				</template>
 			</div>
 		</Popover>
+		<ShareDialog v-if="sharing && project" :project="project" @close="sharing = false" />
+		<FilterEditDialog v-if="editingFilter && savedFilter" :filter="savedFilter" @close="editingFilter = false" />
 		<ListEditDialog v-if="editing && project" :project="project" @close="editing = false" />
 	</div>
 </template>
@@ -449,6 +654,14 @@ h1 {
 	text-overflow: ellipsis;
 }
 
+.share-btn {
+	flex-shrink: 0;
+}
+
+.share-btn.shared {
+	color: var(--accent);
+}
+
 .h-ic {
 	color: var(--text-2);
 }
@@ -469,6 +682,72 @@ h1 {
 
 .qa {
 	margin-bottom: 12px;
+}
+
+.archived-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-size: 13px;
+	color: var(--text-2);
+	background: var(--bg-hover);
+}
+
+.archived-banner .btn {
+	margin-left: auto;
+	height: 28px;
+}
+
+.archived-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	height: 44px;
+	padding: 0 8px 0 16px;
+	border-radius: 6px;
+	border-bottom: 1px solid var(--border);
+}
+
+.archived-row:hover {
+	background: var(--bg-hover);
+}
+
+.a-name {
+	flex: 1;
+	font-size: 15px;
+}
+
+.kanban {
+	flex: 1;
+	min-height: 0;
+}
+
+.view-switch {
+	display: flex;
+	gap: 4px;
+	padding: 2px 6px 6px;
+}
+
+.view-switch button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 30px;
+	border-radius: 6px;
+	color: var(--text-3);
+}
+
+.view-switch button:hover {
+	background: var(--bg-hover);
+}
+
+.view-switch button.on {
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .sections {

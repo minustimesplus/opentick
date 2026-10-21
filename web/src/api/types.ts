@@ -39,6 +39,44 @@ export interface Task {
 	updated?: string
 	identifier?: string
 	index?: number
+	/** Snapshots of related tasks, keyed by relation kind. */
+	related_tasks?: RelatedTasks | null
+	assignees?: User[] | null
+	attachments?: Attachment[] | null
+	/** Only set when the list was requested with `expand=comment_count`. */
+	comment_count?: number
+	/** Position in the view the task was fetched through; 0 elsewhere. */
+	position?: number
+	bucket_id?: number
+	created_by?: User | null
+}
+
+export type RelationKind = 'subtask' | 'parenttask' | 'related' | 'duplicateof' | 'duplicates' | 'blocking' | 'blocked' | 'precedes' | 'follows' | 'copiedfrom' | 'copiedto'
+
+export type RelatedTasks = Partial<Record<RelationKind, Task[] | null>>
+
+export interface FileInfo {
+	id: number
+	name: string
+	mime: string
+	size: number
+	created?: string
+}
+
+export interface Attachment {
+	id: number
+	task_id: number
+	created_by?: User | null
+	file: FileInfo
+	created?: string
+}
+
+export interface TaskComment {
+	id: number
+	comment: string
+	author: User
+	created: string
+	updated: string
 }
 
 export interface ProjectView {
@@ -59,6 +97,12 @@ export interface Project {
 	is_archived?: boolean
 	is_favorite?: boolean
 	views?: ProjectView[] | null
+	owner?: User | null
+}
+
+/** A user a list is shared with directly. 0 = read only, 1 = read & write, 2 = admin. */
+export interface ProjectMember extends User {
+	permission: 0 | 1 | 2
 }
 
 export interface UserSettings {

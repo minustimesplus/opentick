@@ -61,7 +61,16 @@ function toMinutes(h: string, m: string | undefined, ap: string | undefined, had
 	return hour * 60 + min
 }
 
-export function parseQuickAdd(input: string, now = new Date()): Parsed {
+function escapeRe(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * `listNames` are the user's list names (without emoji). They let `~Home
+ * Renovation` match a whole multi-word name; otherwise a list token ends at
+ * the first space.
+ */
+export function parseQuickAdd(input: string, now = new Date(), listNames: string[] = []): Parsed {
 	let text = ' ' + input + ' '
 	const matches: string[] = []
 	const take = (re: RegExp): RegExpMatchArray | null => {
@@ -91,7 +100,14 @@ export function parseQuickAdd(input: string, now = new Date()): Parsed {
 
 	// list
 	let list: string | null = null
-	const listM = take(/\s[~^]([\p{L}\p{N}_\-]+)(?=\s)/u)
+	for (const name of [...listNames].sort((a, b) => b.length - a.length)) {
+		const m = take(new RegExp(String.raw`\s[~^](${escapeRe(name)})(?=\s)`, 'iu'))
+		if (m) {
+			list = m[1]
+			break
+		}
+	}
+	const listM = list === null ? take(/\s[~^]([\p{L}\p{N}_\-]+)(?=\s)/u) : null
 	if (listM) list = listM[1]
 
 	// date

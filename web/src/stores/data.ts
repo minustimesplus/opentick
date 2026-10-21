@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef} from 'vue'
 import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
-import type {AppNotification, CurrentUser, Label, Project, Task} from '@/api/types'
+import type {AppNotification, Attachment, CurrentUser, Label, Project, RelationKind, Task, User} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
@@ -15,17 +15,40 @@ function isNotFound(e: unknown) {
 	return e instanceof ApiError && e.status === 404
 }
 
-export type TaskPatch = Partial<Omit<Task, 'id' | 'labels'>>
+export type TaskPatch = Partial<Omit<Task, 'id' | 'labels' | 'related_tasks' | 'assignees' | 'attachments'>>
+
+/** Embedded collections a task PATCH response may leave out. */
+function keepEmbedded(before: Task, updated: Task): Task {
+	return {
+		...before,
+		...updated,
+		labels: updated.labels ?? before.labels,
+		related_tasks: updated.related_tasks ?? before.related_tasks,
+		assignees: updated.assignees ?? before.assignees,
+		attachments: updated.attachments ?? before.attachments,
+		comment_count: updated.comment_count ?? before.comment_count,
+	}
+}
+
+export function parentId(t: Task): number | undefined {
+	return t.related_tasks?.parenttask?.[0]?.id
+}
 
 export const useData = defineStore('data', () => {
 	const authed = ref(!!getToken())
 	const user = shallowRef<CurrentUser | null>(null)
 	const projects = ref<Project[]>([])
+	/** Archived lists; loaded on demand, since syncs only fetch active ones. */
+	const archivedProjects = ref<Project[]>([])
 	const labels = ref<Label[]>([])
 	const tasks = reactive(new Map<number, Task>())
 	const loading = ref(false)
 	const loaded = ref(false)
 	const notifications = ref<AppNotification[]>([])
+	/** Manual task order per project, from the project's list view: project id → task id → position. */
+	const positions = reactive(new Map<number, Map<number, number>>())
+	/** Everyone with access to a list (owner, shares, teams), by project id; loaded on demand. */
+	const members = reactive(new Map<number, User[]>())
 	/** Object URL of the user's uploaded avatar, null when they have none. */
 	const avatarUrl = ref<string | null>(null)
 	let avatarLoadedFor: string | null = null
@@ -48,10 +71,13 @@ export const useData = defineStore('data', () => {
 	function reset() {
 		user.value = null
 		projects.value = []
+		archivedProjects.value = []
 		labels.value = []
 		tasks.clear()
 		loaded.value = false
 		doneQueries.clear()
+		positions.clear()
+		members.clear()
 		setAvatarUrl(null)
 		avatarLoadedFor = null
 	}
@@ -117,7 +143,7 @@ export const useData = defineStore('data', () => {
 				api<CurrentUser>('GET', '/user'),
 				fetchAll<Project>('/projects', {is_archived: false}),
 				fetchAll<Label>('/labels'),
-				fetchAll<Task>('/tasks', {filter: 'done = false', sort_by: ['due_date', 'id'], order_by: ['asc', 'asc']}),
+				fetchAll<Task>('/tasks', {filter: 'done = false', sort_by: ['due_date', 'id'], order_by: ['asc', 'asc'], expand: 'comment_count'}),
 				fetchAll<Task>('/tasks', {filter: `done = true && done_at > "${doneSince}"`, sort_by: ['done_at'], order_by: ['desc']}, 4),
 				Promise.all([...doneQueries.values()].map(q => q())),
 			])
@@ -134,6 +160,7 @@ export const useData = defineStore('data', () => {
 			for (const t of fresh) tasks.set(t.id, t)
 			loaded.value = true
 			loadNotifications()
+			loadArchived()
 			if (avatarLoadedFor !== u.username) loadAvatar()
 		} finally {
 			loading.value = false
@@ -197,6 +224,39 @@ export const useData = defineStore('data', () => {
 		return res
 	}
 
+	function listViewId(projectId: number): number | undefined {
+		const views = project(projectId)?.views
+		return (views?.find(v => v.view_kind === 'list') ?? views?.[0])?.id
+	}
+
+	/** Loads the manual order of a project's open tasks. */
+	async function loadPositions(projectId: number) {
+		const view = listViewId(projectId)
+		if (!view) return
+		try {
+			const res = await fetchAll<Task>(`/projects/${projectId}/views/${view}/tasks`, {filter: 'done = false'}, 10)
+			positions.set(projectId, new Map(res.map(t => [t.id, t.position ?? 0])))
+		} catch {
+			// Keep the previous order.
+		}
+	}
+
+	async function setPosition(projectId: number, taskId: number, position: number) {
+		const view = listViewId(projectId)
+		if (!view) return
+		if (!positions.has(projectId)) positions.set(projectId, new Map())
+		const map = positions.get(projectId)!
+		const before = map.get(taskId)
+		map.set(taskId, position)
+		try {
+			await api('PUT', `/tasks/${taskId}/position`, {body: {position, project_view_id: view}})
+		} catch (e) {
+			if (before === undefined) map.delete(taskId)
+			else map.set(taskId, before)
+			toast(String((e as Error).message))
+		}
+	}
+
 	async function searchRemote(q: string): Promise<Task[]> {
 		const res = await fetchAll<Task>('/tasks', {q}, 1)
 		res.forEach(t => {
@@ -251,7 +311,35 @@ export const useData = defineStore('data', () => {
 	})
 
 	function project(id: number) {
-		return projectMap.value.get(id)
+		return projectMap.value.get(id) ?? archivedProjects.value.find(p => p.id === id)
+	}
+
+	/** Loaded tasks by their parent task's id. */
+	const childIndex = computed(() => {
+		const out = new Map<number, Task[]>()
+		for (const t of tasks.values()) {
+			const p = parentId(t)
+			if (p === undefined) continue
+			if (!out.has(p)) out.set(p, [])
+			out.get(p)!.push(t)
+		}
+		return out
+	})
+
+	/**
+	 * A task's subtasks: loaded ones plus the parent's own snapshots of
+	 * subtasks that are not loaded (old done ones, say).
+	 */
+	function subtasksOf(id: number): Task[] {
+		const live = childIndex.value.get(id) ?? []
+		const ids = new Set(live.map(t => t.id))
+		const snaps = (tasks.get(id)?.related_tasks?.subtask ?? []).filter(t => !ids.has(t.id))
+		return [...live, ...snaps].sort((a, b) => Number(a.done) - Number(b.done) || a.id - b.id)
+	}
+
+	/** Adds tasks that are not loaded yet, such as subtask snapshots, so they can be edited. */
+	function adoptTasks(list: Task[]) {
+		for (const t of list) if (!tasks.has(t.id)) tasks.set(t.id, t)
 	}
 
 	// ---------- task mutations ----------
@@ -279,7 +367,7 @@ export const useData = defineStore('data', () => {
 		try {
 			const updated = await api<Task>('PATCH', `/tasks/${id}`, {body: patch, contentType: MERGE, query: {format: 'markdown'}})
 			// Keep embedded fields the PATCH response omits.
-			tasks.set(id, {...before, ...updated, labels: updated.labels ?? before.labels})
+			tasks.set(id, keepEmbedded(before, updated))
 			return tasks.get(id)!
 		} catch (e) {
 			if (isNotFound(e)) {
@@ -305,6 +393,8 @@ export const useData = defineStore('data', () => {
 
 	async function deleteTask(id: number) {
 		const before = tasks.get(id)
+		const parent = before ? parentId(before) : undefined
+		if (parent !== undefined) setRelated(parent, 'subtask', l => l.filter(x => x.id !== id))
 		tasks.delete(id)
 		if (inflight) deletedDuringSync.add(id)
 		try {
@@ -330,6 +420,147 @@ export const useData = defineStore('data', () => {
 		} catch (e) {
 			toast(String((e as Error).message))
 			return null
+		}
+	}
+
+	// ---------- relations ----------
+
+	function strip(t: Task): Task {
+		// Snapshots inside related_tasks must not nest further.
+		const {related_tasks: _r, ...rest} = t
+		return rest as Task
+	}
+
+	function setRelated(id: number, kind: RelationKind, update: (list: Task[]) => Task[]) {
+		const t = tasks.get(id)
+		if (!t) return
+		const rel = {...(t.related_tasks ?? {})}
+		rel[kind] = update(rel[kind] ?? [])
+		tasks.set(id, {...t, related_tasks: rel})
+	}
+
+	/** Records child as a subtask of parent locally, on both sides. */
+	function linkLocal(parent: number, child: number) {
+		const p = tasks.get(parent)
+		const c = tasks.get(child)
+		if (!p || !c) return
+		setRelated(parent, 'subtask', l => [...l.filter(x => x.id !== child), strip(c)])
+		setRelated(child, 'parenttask', () => [strip(p)])
+	}
+
+	function unlinkLocal(parent: number, child: number) {
+		setRelated(parent, 'subtask', l => l.filter(x => x.id !== child))
+		setRelated(child, 'parenttask', l => l.filter(x => x.id !== parent))
+	}
+
+	/** Creates a task as a subtask of `parent`, in the parent's list. */
+	async function createSubtask(parent: number, input: TaskPatch & {title: string}): Promise<Task | null> {
+		const p = tasks.get(parent)
+		if (!p) return null
+		const created = await createTask({...input, project_id: p.project_id})
+		if (!created) return null
+		await setParent(created.id, parent)
+		return tasks.get(created.id) ?? created
+	}
+
+	/** Moves a task under another one, or to the top level with `null`. */
+	async function setParent(child: number, parent: number | null) {
+		const c = tasks.get(child)
+		if (!c) return
+		const old = parentId(c)
+		if (old === (parent ?? undefined) || child === parent) return
+		try {
+			if (old !== undefined) {
+				unlinkLocal(old, child)
+				await api('DELETE', `/tasks/${child}/relations/parenttask/${old}`)
+			}
+			if (parent !== null) {
+				linkLocal(parent, child)
+				await api('POST', `/tasks/${parent}/relations`, {body: {other_task_id: child, relation_kind: 'subtask'}})
+			}
+		} catch (e) {
+			if (parent !== null) unlinkLocal(parent, child)
+			if (old !== undefined) linkLocal(old, child)
+			toast(String((e as Error).message))
+		}
+	}
+
+	// ---------- members and assignees ----------
+
+	async function loadMembers(projectId: number, force = false): Promise<User[]> {
+		if (!force && members.has(projectId)) return members.get(projectId)!
+		try {
+			const list = await fetchAll<User>(`/projects/${projectId}/users/search`, {}, 5)
+			members.set(projectId, list)
+			return list
+		} catch {
+			return []
+		}
+	}
+
+	/** A list counts as shared once someone besides the current user can see it. */
+	function isShared(projectId: number): boolean {
+		return (members.get(projectId) ?? []).some(u => u.id !== user.value?.id)
+	}
+
+	async function assign(taskId: number, u: User) {
+		const t = tasks.get(taskId)
+		if (!t || t.assignees?.some(a => a.id === u.id)) return
+		patchLocal(taskId, {assignees: [...(t.assignees ?? []), u]})
+		try {
+			await api('POST', `/tasks/${taskId}/assignees`, {body: {user_id: u.id}})
+		} catch (e) {
+			patchLocal(taskId, {assignees: t.assignees})
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function unassign(taskId: number, userId: number) {
+		const t = tasks.get(taskId)
+		if (!t) return
+		patchLocal(taskId, {assignees: (t.assignees ?? []).filter(a => a.id !== userId)})
+		try {
+			await api('DELETE', `/tasks/${taskId}/assignees/${userId}`)
+		} catch (e) {
+			if (!isNotFound(e)) {
+				patchLocal(taskId, {assignees: t.assignees})
+				toast(String((e as Error).message))
+			}
+		}
+	}
+
+	// ---------- attachments ----------
+
+	/** Merges fields into a loaded task without saving them, e.g. after a side request. */
+	function patchLocal(id: number, patch: Partial<Task>) {
+		const t = tasks.get(id)
+		if (t) tasks.set(id, {...t, ...patch})
+	}
+
+	async function uploadAttachments(taskId: number, files: File[]) {
+		if (!files.length) return
+		const body = new FormData()
+		files.forEach(f => body.append('files', f))
+		try {
+			const res = await api<{success?: Attachment[] | null, errors?: {message?: string}[] | null}>('POST', `/tasks/${taskId}/attachments`, {body})
+			const added = res.success ?? []
+			patchLocal(taskId, {attachments: [...(tasks.get(taskId)?.attachments ?? []), ...added]})
+			res.errors?.forEach(e => toast(e.message ?? 'Upload failed'))
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function deleteAttachment(taskId: number, attachmentId: number) {
+		const before = tasks.get(taskId)?.attachments ?? []
+		patchLocal(taskId, {attachments: before.filter(a => a.id !== attachmentId)})
+		try {
+			await api('DELETE', `/tasks/${taskId}/attachments/${attachmentId}`)
+		} catch (e) {
+			if (!isNotFound(e)) {
+				patchLocal(taskId, {attachments: before})
+				toast(String((e as Error).message))
+			}
 		}
 	}
 
@@ -400,10 +631,61 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
+	async function loadArchived() {
+		try {
+			archivedProjects.value = (await fetchAll<Project>('/projects', {is_archived: true})).filter(p => p.is_archived)
+		} catch {
+			archivedProjects.value = []
+		}
+	}
+
+	/** Archives or restores a list (and, on the server, its child lists). */
+	async function setArchived(id: number, archived: boolean) {
+		try {
+			const updated = await api<Project>('PATCH', `/projects/${id}`, {body: {is_archived: archived}, contentType: MERGE})
+			if (archived) {
+				projects.value = projects.value.filter(p => p.id !== id && p.parent_project_id !== id)
+				archivedProjects.value = [...archivedProjects.value.filter(p => p.id !== id), updated]
+			} else {
+				archivedProjects.value = archivedProjects.value.filter(p => p.id !== id)
+				projects.value = await fetchAll<Project>('/projects', {is_archived: false})
+			}
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
+	// ---------- saved filters ----------
+
+	/** Creates (no id) or replaces a saved filter, then reloads the sidebar's filters. */
+	async function saveFilter(id: number | null, title: string, filter: string): Promise<number | null> {
+		const body = {title, filters: {filter, filter_include_nulls: false}}
+		try {
+			const saved = id === null
+				? await api<{id: number}>('POST', '/filters', {body})
+				: await api<{id: number}>('PUT', `/filters/${id}`, {body})
+			projects.value = await fetchAll<Project>('/projects', {is_archived: false})
+			return saved.id
+		} catch (e) {
+			toast(String((e as Error).message))
+			return null
+		}
+	}
+
+	async function deleteFilter(id: number) {
+		try {
+			await api('DELETE', `/filters/${id}`)
+			projects.value = projects.value.filter(p => p.id !== -id - 1)
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
 	async function deleteProject(id: number) {
 		try {
 			await api('DELETE', `/projects/${id}`)
 			projects.value = projects.value.filter(p => p.id !== id && p.parent_project_id !== id)
+			archivedProjects.value = archivedProjects.value.filter(p => p.id !== id)
 			for (const [tid, t] of tasks) if (t.project_id === id) tasks.delete(tid)
 		} catch (e) {
 			toast(String((e as Error).message))
@@ -460,8 +742,12 @@ export const useData = defineStore('data', () => {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
 		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
+		members, loadMembers, isShared, assign, unassign,
+		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
+		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
-		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,
+		archivedProjects, loadArchived, setArchived,
+		createProject, updateProject, deleteProject, saveFilter, deleteFilter, markNotificationsRead, loadNotifications,
 		uploadAvatar, removeAvatar,
 	}
 })
