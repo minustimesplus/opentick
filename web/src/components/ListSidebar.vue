@@ -322,6 +322,19 @@ function dropProps(key: string) {
 	display: flex;
 }
 
+/* Touch screens can't hover, so the add button always shows. */
+@media (hover: none) {
+	.section-head .add {
+		display: flex;
+	}
+}
+
+@media (max-width: 767px) {
+	.item {
+		height: 44px;
+	}
+}
+
 .chev {
 	color: var(--text-4);
 }

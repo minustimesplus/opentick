@@ -11,6 +11,7 @@ import {
 import {projectColor} from '@/lib/tasks'
 import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
 import {prefs} from '@/lib/prefs'
+import {isMobile} from '@/lib/viewport'
 import {t} from '@/lib/i18n'
 import type {CalEvent} from '@/stores/calendars'
 
@@ -255,15 +256,18 @@ const selection = ref<{from: Date, to: Date} | null>(null)
 const creating = ref<{from: Date, to: Date, x: number, y: number} | null>(null)
 const title = ref('')
 
+// A touch that turns into a scroll ends with pointercancel, not pointerup.
 function attach() {
 	window.addEventListener('pointermove', onMove)
 	window.addEventListener('pointerup', onUp)
+	window.addEventListener('pointercancel', cancel)
 	window.addEventListener('keydown', onEsc)
 }
 
 function detach() {
 	window.removeEventListener('pointermove', onMove)
 	window.removeEventListener('pointerup', onUp)
+	window.removeEventListener('pointercancel', cancel)
 	window.removeEventListener('keydown', onEsc)
 }
 
@@ -304,11 +308,14 @@ function onUp(e: PointerEvent) {
 	creating.value = {...selection.value, x: e.clientX, y: e.clientY}
 }
 
-function onEsc(e: KeyboardEvent) {
-	if (e.key !== 'Escape') return
+function cancel() {
 	sel = null
 	selection.value = null
 	detach()
+}
+
+function onEsc(e: KeyboardEvent) {
+	if (e.key === 'Escape') cancel()
 }
 
 function selected(d: Date) {
@@ -384,7 +391,7 @@ const creatingLabel = computed(() => {
 							class="chip"
 							:class="{timed: !!chipTime(entry), done: entry.task.done}"
 							:style="{'--c': color(entry.task)}"
-							draggable="true"
+							:draggable="!isMobile"
 							@dragstart="onDragStart($event, entry.task!)"
 							@click="openTaskDrawer(entry.task!.id)"
 							@contextmenu="openTaskMenu(entry.task!.id, $event)"
@@ -589,5 +596,23 @@ const creatingLabel = computed(() => {
 	margin-top: 8px;
 	font-size: 12px;
 	color: var(--accent);
+}
+
+/* Phones: cells are about 50px wide, so chips drop their times. */
+@media (max-width: 767px) {
+	.cell {
+		padding: 2px;
+	}
+
+	.chip {
+		gap: 3px;
+		padding: 0 3px;
+		font-size: 11px;
+	}
+
+	.chip .time,
+	.alt {
+		display: none;
+	}
 }
 </style>

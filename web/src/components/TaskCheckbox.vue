@@ -37,8 +37,23 @@ const fill = computed(() => !props.onColor && level(props.priority) > 0 ? `color
 	transition: background 0.12s;
 }
 
-.cb:hover {
-	background: color-mix(in srgb, var(--c) 28%, transparent);
+@media (hover: hover) {
+	.cb:hover {
+		background: color-mix(in srgb, var(--c) 28%, transparent);
+	}
+}
+
+/* Fingertip-sized hit area around the small box. */
+@media (pointer: coarse) {
+	.cb {
+		position: relative;
+	}
+
+	.cb::before {
+		content: '';
+		position: absolute;
+		inset: -12px;
+	}
 }
 
 .cb.done {

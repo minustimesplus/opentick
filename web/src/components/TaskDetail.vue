@@ -391,4 +391,37 @@ textarea::placeholder {
 	height: 8px;
 	border-radius: 50%;
 }
+
+@media (max-width: 767px) {
+	.head {
+		padding: 0 8px 0 16px;
+	}
+
+	.body {
+		padding: 14px 16px;
+	}
+
+	.desc {
+		font-size: 16px;
+	}
+
+	.tag {
+		padding: 4px 8px 4px 12px;
+		font-size: 13px;
+	}
+
+	.add-tag {
+		padding: 4px 10px;
+		font-size: 13px;
+	}
+
+	.foot {
+		height: 52px;
+		padding: 0 8px 0 10px;
+	}
+
+	.tag-menu {
+		width: min(260px, calc(100vw - 16px));
+	}
+}
 </style>

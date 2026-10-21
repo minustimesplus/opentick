@@ -167,6 +167,21 @@ onBeforeUnmount(() => {
 	filter: blur(18px);
 }
 
+/* Phones: the nav rail becomes a tab bar below the panel (column-reverse, as
+   it is the first child), and the panel fills the screen edge to edge. */
+@media (max-width: 767px) {
+	.shell {
+		flex-direction: column-reverse;
+		padding: env(safe-area-inset-top) 0 0;
+	}
+
+	.main {
+		border: 0;
+		border-bottom: 1px solid var(--border);
+		border-radius: 0;
+	}
+}
+
 .boot {
 	display: flex;
 	align-items: center;
