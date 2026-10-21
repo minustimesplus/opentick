@@ -1,8 +1,11 @@
 name: Desktop release
 
-# Builds the web/ frontend into the Electron shell in web-desktop/ and publishes
-# a GitHub release (.deb + AppImage + latest-linux.yml for electron-updater)
-# on every push to main.
+# Builds the web/ frontend into the Electron shell in web-desktop/ for Linux
+# (x64 + arm64), Windows and macOS, then publishes one GitHub release with all
+# packages and the latest*.yml feeds for electron-updater on every push to main.
+#
+# Standard GitHub-hosted runners (including macOS, Windows and Linux arm64)
+# are free for public repositories.
 
 on:
   push:
@@ -17,16 +20,33 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  VERSION: 0.1.${{ github.run_number }}
+
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-latest
+            targets: --linux deb AppImage --x64
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            targets: --linux deb AppImage --arm64
+          - name: windows
+            os: windows-latest
+            targets: --win nsis --x64
+          - name: mac
+            os: macos-latest
+            targets: --mac dmg zip --x64 --arm64
+    runs-on: ${{ matrix.os }}
     env:
-      VERSION: 0.1.${{ github.run_number }}
+      # No signing certificates: builds are unsigned (macOS gets an ad-hoc signature).
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Full history and tags for the changelog below.
-          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -38,15 +58,45 @@ jobs:
 
       - name: Build frontend
         working-directory: web
+        shell: bash
         run: |
           npm ci
           WEB_OUT_DIR=../web-desktop/app npm run build
 
       - name: Build desktop packages
         working-directory: web-desktop
+        shell: bash
         run: |
           npm ci
-          npx electron-builder --linux deb AppImage --publish never -c.extraMetadata.version="$VERSION"
+          npx electron-builder ${{ matrix.targets }} --publish never -c.extraMetadata.version="$VERSION"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            web-desktop/dist/*.deb
+            web-desktop/dist/*.AppImage
+            web-desktop/dist/*.exe
+            web-desktop/dist/*.dmg
+            web-desktop/dist/*.zip
+            web-desktop/dist/*.blockmap
+            web-desktop/dist/latest*.yml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history and tags for the changelog below.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          pattern: desktop-*
+          merge-multiple: true
 
       - name: Publish release
         env:
@@ -56,13 +106,15 @@ jobs:
           {
             echo "Built from ${GITHUB_SHA::8}."
             echo
+            echo "### Downloads"
+            echo "- **Linux:** \`.deb\` or \`.AppImage\` (x64 / arm64)"
+            echo "- **Windows:** \`.exe\` installer (x64, also runs on Windows on ARM). Unsigned: click \"More info\" → \"Run anyway\" if SmartScreen warns."
+            echo "- **macOS:** \`.dmg\` (x64 for Intel, arm64 for Apple Silicon). The app is unsigned: right-click → Open on first launch, or run \`xattr -cr /Applications/OpenTick.app\`."
+            echo
             echo "### Changes"
             git log --no-merges --format='- %s' ${previous:+$previous..}HEAD | head -50
           } > notes.md
-          gh release create "desktop-v$VERSION" \
-            web-desktop/dist/*.deb \
-            web-desktop/dist/*.AppImage \
-            web-desktop/dist/latest-linux.yml \
+          gh release create "desktop-v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
             --title "OpenTick $VERSION" \
             --notes-file notes.md \
