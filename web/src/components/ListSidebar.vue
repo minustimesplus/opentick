@@ -10,7 +10,7 @@ import {useData} from '@/stores/data'
 import {hasColor, labelColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
-import {addDays, getSchedule, minutesOfDay, moveSchedule, schedulePatch, startOfDay, withMinutes} from '@/lib/dates'
+import {addDays, fmtWeekdayShort, getSchedule, minutesOfDay, moveSchedule, schedulePatch, startOfDay, withMinutes} from '@/lib/dates'
 
 const data = useData()
 const route = useRoute()
@@ -18,6 +18,8 @@ const router = useRouter()
 
 const current = computed(() => String(route.params.list ?? 'today'))
 const todayNum = new Date().getDate()
+// Two-letter weekday ("We"), like TickTick's Next 7 Days icon.
+const weekdayAbbr = computed(() => fmtWeekdayShort(new Date()).slice(0, 2))
 
 interface Node {
 	project: Project
@@ -93,17 +95,17 @@ function dropProps(key: string) {
 	<aside class="sidebar">
 		<div class="scroll">
 			<button class="item" :class="{active: current === 'today', drop: dropKey === 'today'}" v-bind="dropProps('today')" @click="go('today')">
-				<DayIcon :label="todayNum" class="ic" />
+				<DayIcon :label="todayNum" :size="17" class="ic smart" />
 				<span class="name">{{ t('today') }}</span>
 				<span class="count">{{ data.counts.today || '' }}</span>
 			</button>
 			<button class="item" :class="{active: current === 'week', drop: dropKey === 'week'}" v-bind="dropProps('week')" @click="go('week')">
-				<DayIcon label="7" class="ic" />
+				<DayIcon :label="weekdayAbbr" :size="17" class="ic smart" />
 				<span class="name">{{ t('next7') }}</span>
 				<span class="count">{{ data.counts.week || '' }}</span>
 			</button>
 			<button class="item" :class="{active: current === 'inbox', drop: dropKey === 'inbox'}" v-bind="dropProps('inbox')" @click="go('inbox')">
-				<Inbox :size="18" class="ic" />
+				<Inbox :size="17" :stroke-width="1.8" class="ic smart" />
 				<span class="name">{{ t('inbox') }}</span>
 				<span class="count">{{ data.counts.byProject.get(data.inboxId) || '' }}</span>
 			</button>
@@ -257,6 +259,10 @@ function dropProps(key: string) {
 	width: 18px;
 	display: inline-flex;
 	justify-content: center;
+}
+
+.ic.smart {
+	color: var(--text);
 }
 
 .emoji {
