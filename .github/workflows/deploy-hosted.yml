@@ -29,7 +29,8 @@ jobs:
       - name: Log in to the Heroku registry
         run: echo "$HEROKU_API_KEY" | docker login registry.heroku.com --username=_ --password-stdin
 
-      # Heroku only accepts single-platform images without attestations.
+      # Heroku only accepts single-platform images without attestations, in the
+      # Docker manifest format rather than OCI.
       - name: Build and push
         run: |
           docker buildx create --use
@@ -37,9 +38,8 @@ jobs:
             --platform linux/amd64 \
             --provenance=false --sbom=false \
             --build-arg RELEASE_VERSION="$(git rev-parse --short HEAD)" \
-            --tag "registry.heroku.com/$APP/web" \
-            --metadata-file meta.json \
-            --push
+            --output "type=image,name=registry.heroku.com/$APP/web,push=true,oci-mediatypes=false" \
+            --metadata-file meta.json
 
       - name: Release
         run: |
