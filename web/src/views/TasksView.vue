@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {Archive, ArchiveRestore, ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
@@ -51,11 +51,11 @@ function startResize(e: PointerEvent, key: 'sidebarWidth' | 'detailWidth', range
 const listKey = computed(() => String(route.params.list ?? 'today'))
 const selectedId = computed(() => route.params.taskId ? Number(route.params.taskId) : null)
 
-type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed'
+type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed' | 'archived'
 
 const view = computed(() => {
 	const k = listKey.value
-	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed') return {kind: k as Kind, id: 0}
+	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed' || k === 'archived') return {kind: k as Kind, id: 0}
 	if (k.startsWith('p')) return {kind: 'project' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('l')) return {kind: 'label' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('f')) return {kind: 'filter' as Kind, id: -Number(k.slice(1))}
@@ -76,6 +76,7 @@ const header = computed(() => {
 		case 'week': return {emoji: null, name: t('next7')}
 		case 'inbox': return {emoji: null, name: t('inbox')}
 		case 'completed': return {emoji: null, name: t('completed')}
+		case 'archived': return {emoji: null, name: t('archivedLists')}
 		case 'label': return {emoji: null, name: label.value?.title ?? ''}
 		case 'filter': return {emoji: null, name: savedFilter.value?.title ?? ''}
 		default: return project.value ? splitEmoji(project.value.title) : {emoji: null, name: ''}
@@ -154,7 +155,22 @@ function matches(task: Task): boolean {
 	}
 }
 
-const openTasks = computed(() => sortTasks(data.openTasks.filter(matches)))
+const archived = computed(() => !!project.value?.is_archived)
+
+// Archived lists are not part of the synced open tasks.
+const openTasks = computed(() => sortTasks((archived.value ? data.allTasks.filter(task => !task.done) : data.openTasks).filter(matches)))
+
+async function setArchived(value: boolean) {
+	pop.value = null
+	if (!project.value) return
+	await data.setArchived(project.value.id, value)
+	if (value) router.push('/tasks/archived')
+}
+
+async function deleteArchived(id: number, title: string) {
+	if (!confirm(t('deleteListConfirm', {name: title}))) return
+	await data.deleteProject(id)
+}
 
 const doneTasks = computed(() => {
 	const v = view.value
@@ -407,8 +423,8 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					{{ header.name }}
 				</h1>
 				<div class="spacer" />
-				<button v-if="layout === 'list'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
-				<button ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
+				<button v-if="layout === 'list' && view.kind !== 'archived'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
+				<button v-if="view.kind !== 'archived'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
 			</header>
 
 			<KanbanBoard
@@ -421,7 +437,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			/>
 			<div v-else class="content">
 				<QuickAdd
-					v-if="view.kind !== 'completed' && view.kind !== 'filter'"
+					v-if="view.kind !== 'completed' && view.kind !== 'filter' && view.kind !== 'archived' && !archived"
 					:key="listKey"
 					class="qa"
 					:placeholder="placeholder"
@@ -430,7 +446,21 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					@created="onCreated"
 				/>
 
-				<div class="sections">
+				<div v-if="archived" class="archived-banner">
+					<Archive :size="15" /> {{ t('listArchived') }}
+					<button class="btn" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
+				</div>
+				<div v-if="view.kind === 'archived'" class="archived-lists">
+					<div v-for="p in data.archivedProjects" :key="p.id" class="archived-row" @click="router.push(`/tasks/p${p.id}`)">
+						<span v-if="splitEmoji(p.title).emoji">{{ splitEmoji(p.title).emoji }}</span>
+						<Menu v-else :size="17" class="muted" />
+						<span class="a-name">{{ splitEmoji(p.title).name }}</span>
+						<button class="icon-btn" :title="t('unarchive')" @click.stop="data.setArchived(p.id, false)"><ArchiveRestore :size="16" /></button>
+						<button class="icon-btn" :title="t('delete')" @click.stop="deleteArchived(p.id, p.title)"><Trash2 :size="16" /></button>
+					</div>
+					<div v-if="!data.archivedProjects.length" class="empty-state">{{ t('noArchivedLists') }}</div>
+				</div>
+				<div v-else class="sections">
 					<template v-for="s in sections" :key="s.key">
 						<div v-if="s.title" class="sec-head" @click="collapsed[s.key] = !collapsed[s.key]">
 							<component :is="collapsed[s.key] ? ChevronRight : ChevronDown" :size="14" />
@@ -456,7 +486,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 						</template>
 					</template>
 
-					<div v-if="isEmpty && view.kind !== 'completed' && !(completedSection?.length)" class="empty-state">
+					<div v-if="isEmpty && view.kind !== 'completed' && !archived && !(completedSection?.length)" class="empty-state">
 						<svg width="150" height="120" viewBox="0 0 150 120" fill="none">
 							<path d="M30 70c-6-26 18-48 44-46 30 2 50 18 48 42-2 26-30 40-58 36-18-3-30-14-34-32z" fill="var(--bg-hover)" />
 							<path d="M58 66l12 12 26-28" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
@@ -530,6 +560,8 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 				<template v-if="view.kind === 'project' && project">
 					<div class="menu-sep" />
 					<button class="menu-item" @click="editing = true; pop = null"><Pencil :size="15" /> {{ t('editList') }}</button>
+					<button v-if="archived" class="menu-item" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
+					<button v-else class="menu-item" @click="setArchived(true)"><Archive :size="15" /> {{ t('archive') }}</button>
 					<button class="menu-item danger" @click="deleteList"><Trash2 :size="15" /> {{ t('delete') }}</button>
 				</template>
 				<template v-if="view.kind === 'filter' && savedFilter">
@@ -599,6 +631,42 @@ h1 {
 
 .qa {
 	margin-bottom: 12px;
+}
+
+.archived-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-size: 13px;
+	color: var(--text-2);
+	background: var(--bg-hover);
+}
+
+.archived-banner .btn {
+	margin-left: auto;
+	height: 28px;
+}
+
+.archived-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	height: 44px;
+	padding: 0 8px 0 16px;
+	border-radius: 6px;
+	border-bottom: 1px solid var(--border);
+}
+
+.archived-row:hover {
+	background: var(--bg-hover);
+}
+
+.a-name {
+	flex: 1;
+	font-size: 15px;
 }
 
 .kanban {

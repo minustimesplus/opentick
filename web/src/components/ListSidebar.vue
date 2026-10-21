@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
+import {Archive, ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
 import DayIcon from './DayIcon.vue'
 import Popover from './Popover.vue'
 import ListEditDialog from './ListEditDialog.vue'
@@ -52,6 +52,12 @@ async function removeList(p: Project) {
 	ctx.value = null
 	if (!confirm(t('deleteListConfirm', {name: p.title}))) return
 	await data.deleteProject(p.id)
+	if (current.value === `p${p.id}`) go('today')
+}
+
+async function archiveList(p: Project) {
+	ctx.value = null
+	await data.setArchived(p.id, true)
 	if (current.value === `p${p.id}`) go('today')
 }
 
@@ -216,11 +222,16 @@ function dropProps(key: string) {
 				<SquareCheckBig :size="17" class="ic" />
 				<span class="name">{{ t('completed') }}</span>
 			</button>
+			<button v-if="data.archivedProjects.length" class="item" :class="{active: current === 'archived'}" @click="go('archived')">
+				<Archive :size="17" class="ic" />
+				<span class="name">{{ t('archivedLists') }}</span>
+			</button>
 		</div>
 
 		<Popover v-if="ctx" :anchor="{x: ctx.x, y: ctx.y}" @close="ctx = null">
 			<div class="menu">
 				<button class="menu-item" @click="editing = ctx!.project; ctx = null"><Pencil :size="15" /> {{ t('edit') }}</button>
+				<button class="menu-item" @click="archiveList(ctx!.project)"><Archive :size="15" /> {{ t('archive') }}</button>
 				<button class="menu-item danger" @click="removeList(ctx!.project)"><Trash2 :size="15" /> {{ t('delete') }}</button>
 			</div>
 		</Popover>

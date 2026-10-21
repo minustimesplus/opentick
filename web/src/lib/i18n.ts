@@ -322,6 +322,11 @@ const en = {
 	preview: 'Preview',
 	previewCount: '{n} matching tasks',
 	next30: 'Next 30 Days',
+	archive: 'Archive',
+	unarchive: 'Unarchive',
+	archivedLists: 'Archived Lists',
+	listArchived: 'This list is archived.',
+	noArchivedLists: 'No archived lists',
 }
 
 type Dict = typeof en
@@ -647,6 +652,11 @@ const fr: Dict = {
 	preview: 'Aperçu',
 	previewCount: '{n} tâches correspondantes',
 	next30: '30 prochains jours',
+	archive: 'Archiver',
+	unarchive: 'Désarchiver',
+	archivedLists: 'Listes archivées',
+	listArchived: 'Cette liste est archivée.',
+	noArchivedLists: 'Aucune liste archivée',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

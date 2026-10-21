@@ -38,6 +38,8 @@ export const useData = defineStore('data', () => {
 	const authed = ref(!!getToken())
 	const user = shallowRef<CurrentUser | null>(null)
 	const projects = ref<Project[]>([])
+	/** Archived lists; loaded on demand, since syncs only fetch active ones. */
+	const archivedProjects = ref<Project[]>([])
 	const labels = ref<Label[]>([])
 	const tasks = reactive(new Map<number, Task>())
 	const loading = ref(false)
@@ -67,6 +69,7 @@ export const useData = defineStore('data', () => {
 	function reset() {
 		user.value = null
 		projects.value = []
+		archivedProjects.value = []
 		labels.value = []
 		tasks.clear()
 		loaded.value = false
@@ -154,6 +157,7 @@ export const useData = defineStore('data', () => {
 			for (const t of fresh) tasks.set(t.id, t)
 			loaded.value = true
 			loadNotifications()
+			loadArchived()
 			if (avatarLoadedFor !== u.username) loadAvatar()
 		} finally {
 			loading.value = false
@@ -304,7 +308,7 @@ export const useData = defineStore('data', () => {
 	})
 
 	function project(id: number) {
-		return projectMap.value.get(id)
+		return projectMap.value.get(id) ?? archivedProjects.value.find(p => p.id === id)
 	}
 
 	/** Loaded tasks by their parent task's id. */
@@ -580,6 +584,30 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
+	async function loadArchived() {
+		try {
+			archivedProjects.value = (await fetchAll<Project>('/projects', {is_archived: true})).filter(p => p.is_archived)
+		} catch {
+			archivedProjects.value = []
+		}
+	}
+
+	/** Archives or restores a list (and, on the server, its child lists). */
+	async function setArchived(id: number, archived: boolean) {
+		try {
+			const updated = await api<Project>('PATCH', `/projects/${id}`, {body: {is_archived: archived}, contentType: MERGE})
+			if (archived) {
+				projects.value = projects.value.filter(p => p.id !== id && p.parent_project_id !== id)
+				archivedProjects.value = [...archivedProjects.value.filter(p => p.id !== id), updated]
+			} else {
+				archivedProjects.value = archivedProjects.value.filter(p => p.id !== id)
+				projects.value = await fetchAll<Project>('/projects', {is_archived: false})
+			}
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
 	// ---------- saved filters ----------
 
 	/** Creates (no id) or replaces a saved filter, then reloads the sidebar's filters. */
@@ -610,6 +638,7 @@ export const useData = defineStore('data', () => {
 		try {
 			await api('DELETE', `/projects/${id}`)
 			projects.value = projects.value.filter(p => p.id !== id && p.parent_project_id !== id)
+			archivedProjects.value = archivedProjects.value.filter(p => p.id !== id)
 			for (const [tid, t] of tasks) if (t.project_id === id) tasks.delete(tid)
 		} catch (e) {
 			toast(String((e as Error).message))
@@ -669,6 +698,7 @@ export const useData = defineStore('data', () => {
 		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
+		archivedProjects, loadArchived, setArchived,
 		createProject, updateProject, deleteProject, saveFilter, deleteFilter, markNotificationsRead, loadNotifications,
 		uploadAvatar, removeAvatar,
 	}
