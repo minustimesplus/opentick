@@ -42,6 +42,8 @@ LABEL org.opencontainers.image.title='Vikunja'
 
 WORKDIR /app/vikunja
 ENTRYPOINT [ "/app/vikunja/vikunja" ]
+# Heroku runs the entrypoint path as the command when an image has no CMD.
+CMD [ "web" ]
 EXPOSE 3456
 
 COPY --from=apibuilder --chown=1000:1000 --chmod=1777 /tmp /tmp
