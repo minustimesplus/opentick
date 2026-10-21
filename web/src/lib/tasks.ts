@@ -1,4 +1,4 @@
-import type {Project, Task} from '@/api/types'
+import type {Project, Task, User} from '@/api/types'
 import {t} from './i18n'
 
 // TickTick has four priority levels; Vikunja has 0-5. High covers Vikunja's
@@ -50,4 +50,15 @@ export const SWATCHES = ['', 'E03131', 'F76707', 'FAB005', '40C057', '12B886', '
 
 export function compareTitles(a: Task, b: Task) {
 	return a.title.localeCompare(b.title, undefined, {sensitivity: 'base'})
+}
+
+/** Display name for a user: their name, else their username. */
+export function displayName(u?: User | null): string {
+	return u?.name || u?.username || ''
+}
+
+export function fmtFileSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+	return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }

@@ -295,6 +295,13 @@ const en = {
 	addSubtask: 'Add Subtask',
 	detachSubtask: 'Remove from Parent Task',
 	sortCustom: 'Custom',
+	comments: 'Comments',
+	comment: 'Comment',
+	commentPlaceholder: 'Write a comment…',
+	deleteCommentConfirm: 'Delete this comment?',
+	uploadAttachment: 'Upload Attachment',
+	deleteAttachmentConfirm: 'Delete "{name}"?',
+	download: 'Download',
 }
 
 type Dict = typeof en
@@ -593,6 +600,13 @@ const fr: Dict = {
 	addSubtask: 'Ajouter une sous-tâche',
 	detachSubtask: 'Retirer de la tâche parente',
 	sortCustom: 'Personnalisé',
+	comments: 'Commentaires',
+	comment: 'Commenter',
+	commentPlaceholder: 'Écrire un commentaire…',
+	deleteCommentConfirm: 'Supprimer ce commentaire ?',
+	uploadAttachment: 'Joindre un fichier',
+	deleteAttachmentConfirm: 'Supprimer « {name} » ?',
+	download: 'Télécharger',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

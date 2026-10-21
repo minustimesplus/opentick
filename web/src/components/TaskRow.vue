@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {AlarmClock, AlignLeft, ChevronDown, ChevronRight, Repeat} from 'lucide-vue-next'
+import {AlarmClock, AlignLeft, ChevronDown, ChevronRight, MessageSquare, Paperclip, Repeat} from 'lucide-vue-next'
 import TaskCheckbox from './TaskCheckbox.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
@@ -97,6 +97,8 @@ function onDragStart(e: DragEvent) {
 				<span v-if="listLabel.emoji">{{ listLabel.emoji }}</span>{{ listLabel.name }}
 			</span>
 			<AlignLeft v-if="hasDescription" :size="13" class="ic" />
+			<Paperclip v-if="task.attachments?.length" :size="13" class="ic" />
+			<MessageSquare v-if="task.comment_count" :size="13" class="ic" />
 			<Repeat v-if="task.repeat_after || task.repeat_mode" :size="13" class="ic" />
 			<AlarmClock v-if="task.reminders?.length" :size="13" class="ic" />
 			<span v-if="dateLabel" class="date" :class="{overdue}">{{ dateLabel }}</span>

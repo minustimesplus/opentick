@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {CalendarDays, ChevronLeft, Copy, Flag, Inbox, ListTree, Menu, MoreHorizontal, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
+import {CalendarDays, ChevronLeft, Copy, Flag, Inbox, ListTree, Menu, MessageSquare, MoreHorizontal, Paperclip, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
@@ -8,6 +8,8 @@ import PriorityMenu from './PriorityMenu.vue'
 import ListPicker from './ListPicker.vue'
 import MarkdownEditor from './MarkdownEditor.vue'
 import SubtaskList from './SubtaskList.vue'
+import TaskAttachments from './TaskAttachments.vue'
+import TaskComments from './TaskComments.vue'
 import {parentId, useData} from '@/stores/data'
 import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} from '@/lib/dates'
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
@@ -100,6 +102,36 @@ function addSubtask() {
 	subtaskEl.value?.focusAdd()
 }
 
+// attachments and comments
+const fileEl = ref<HTMLInputElement | null>(null)
+const commentsEl = ref<InstanceType<typeof TaskComments> | null>(null)
+const dropping = ref(false)
+
+function pickFiles() {
+	pop.value = null
+	fileEl.value?.click()
+}
+
+function onFiles(e: Event) {
+	const input = e.target as HTMLInputElement
+	data.uploadAttachments(props.taskId, [...(input.files ?? [])])
+	input.value = ''
+}
+
+function onFileDrag(e: DragEvent) {
+	if (!e.dataTransfer?.types.includes('Files')) return
+	e.preventDefault()
+	dropping.value = true
+}
+
+function onFileDrop(e: DragEvent) {
+	dropping.value = false
+	const files = [...(e.dataTransfer?.files ?? [])]
+	if (!files.length) return
+	e.preventDefault()
+	data.uploadAttachments(props.taskId, files)
+}
+
 function detach() {
 	pop.value = null
 	data.setParent(props.taskId, null)
@@ -171,7 +203,13 @@ const meta = computed(() => {
 			<button v-if="closable" class="icon-btn" @click="emit('close')"><X :size="18" /></button>
 		</header>
 
-		<div class="body">
+		<div
+			class="body"
+			:class="{dropping}"
+			@dragover="onFileDrag"
+			@dragleave.self="dropping = false"
+			@drop="onFileDrop"
+		>
 			<button v-if="parent" class="parent-link" @click="emit('open', parent.id)">
 				<ChevronLeft :size="14" /> <span>{{ parent.title }}</span>
 			</button>
@@ -203,6 +241,10 @@ const meta = computed(() => {
 				</span>
 				<button ref="tagEl" class="add-tag" @click="pop = 'tag'"><Tag :size="13" /> {{ t('tags_add') }}</button>
 			</div>
+
+			<TaskAttachments :task-id="task.id" />
+			<TaskComments ref="commentsEl" :task-id="task.id" />
+			<input ref="fileEl" type="file" multiple hidden @change="onFiles">
 		</div>
 
 		<footer class="foot">
@@ -213,6 +255,10 @@ const meta = computed(() => {
 				{{ listLabel.name }}
 			</button>
 			<span class="muted small">{{ meta }}</span>
+			<button class="icon-btn comment-btn" :title="t('comment')" @click="commentsEl?.focusComposer()">
+				<MessageSquare :size="17" />
+				<span v-if="task.comment_count" class="badge">{{ task.comment_count }}</span>
+			</button>
 			<button ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
 		</footer>
 
@@ -229,6 +275,7 @@ const meta = computed(() => {
 			<div class="menu">
 				<button class="menu-item" @click="addSubtask"><ListTree :size="16" /> {{ t('addSubtask') }}</button>
 				<button v-if="parent" class="menu-item" @click="detach"><Unlink :size="16" /> {{ t('detachSubtask') }}</button>
+				<button class="menu-item" @click="pickFiles"><Paperclip :size="16" /> {{ t('uploadAttachment') }}</button>
 				<div class="menu-sep" />
 				<button class="menu-item" @click="duplicate"><Copy :size="16" /> {{ t('duplicate') }}</button>
 				<button class="menu-item danger" @click="remove"><Trash2 :size="16" /> {{ t('delete') }}</button>
@@ -309,6 +356,28 @@ textarea {
 	resize: none;
 	background: transparent;
 	overflow: hidden;
+}
+
+.body.dropping {
+	outline: 2px dashed var(--accent);
+	outline-offset: -6px;
+}
+
+.comment-btn {
+	position: relative;
+}
+
+.badge {
+	position: absolute;
+	top: 2px;
+	right: 0;
+	min-width: 14px;
+	padding: 0 3px;
+	border-radius: 7px;
+	font-size: 10px;
+	line-height: 14px;
+	background: var(--accent);
+	color: #fff;
 }
 
 .parent-link {

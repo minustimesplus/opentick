@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef} from 'vue'
 import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
-import type {AppNotification, CurrentUser, Label, Project, RelationKind, Task} from '@/api/types'
+import type {AppNotification, Attachment, CurrentUser, Label, Project, RelationKind, Task} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
@@ -478,6 +478,41 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
+	// ---------- attachments ----------
+
+	/** Merges fields into a loaded task without saving them, e.g. after a side request. */
+	function patchLocal(id: number, patch: Partial<Task>) {
+		const t = tasks.get(id)
+		if (t) tasks.set(id, {...t, ...patch})
+	}
+
+	async function uploadAttachments(taskId: number, files: File[]) {
+		if (!files.length) return
+		const body = new FormData()
+		files.forEach(f => body.append('files', f))
+		try {
+			const res = await api<{success?: Attachment[] | null, errors?: {message?: string}[] | null}>('POST', `/tasks/${taskId}/attachments`, {body})
+			const added = res.success ?? []
+			patchLocal(taskId, {attachments: [...(tasks.get(taskId)?.attachments ?? []), ...added]})
+			res.errors?.forEach(e => toast(e.message ?? 'Upload failed'))
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function deleteAttachment(taskId: number, attachmentId: number) {
+		const before = tasks.get(taskId)?.attachments ?? []
+		patchLocal(taskId, {attachments: before.filter(a => a.id !== attachmentId)})
+		try {
+			await api('DELETE', `/tasks/${taskId}/attachments/${attachmentId}`)
+		} catch (e) {
+			if (!isNotFound(e)) {
+				patchLocal(taskId, {attachments: before})
+				toast(String((e as Error).message))
+			}
+		}
+	}
+
 	async function addLabel(taskId: number, label: Label) {
 		const t = tasks.get(taskId)
 		if (!t || t.labels?.some(l => l.id === label.id)) return
@@ -605,7 +640,7 @@ export const useData = defineStore('data', () => {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
 		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
-		positions, loadPositions, setPosition,
+		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,
