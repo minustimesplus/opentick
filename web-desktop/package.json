@@ -55,6 +55,25 @@
         "--replaces=vikunja-ticktick-desktop"
       ]
     },
+    "win": {
+      "icon": "icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "icon": "icon.png",
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
     "publish": {
       "provider": "github",
       "owner": "minustimesplus",
