@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, type Component} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component} from 'vue'
 import {
 	Bell, CircleUserRound, Clock, Crown, Funnel, Import, Info, Keyboard, LayoutGrid, PaintRoller, Server, Sparkles, Users, X,
 } from 'lucide-vue-next'
@@ -54,6 +54,12 @@ function close() {
 	ui.settings = null
 }
 
+// On phones the nav is a horizontal strip; keep the open section in view.
+const navEl = ref<HTMLElement | null>(null)
+watch(() => ui.settings, () => nextTick(() => {
+	navEl.value?.querySelector('.nav-item.active')?.scrollIntoView({block: 'nearest', inline: 'nearest'})
+}), {immediate: true})
+
 function onKey(e: KeyboardEvent) {
 	if (e.key === 'Escape') close()
 }
@@ -66,7 +72,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	<Teleport to="body">
 		<div class="overlay" @mousedown.self="close">
 			<div class="settings" role="dialog" aria-modal="true" :aria-label="t('settings')">
-				<aside class="nav">
+				<aside ref="navEl" class="nav">
 					<div class="nav-title">{{ t('settings') }}</div>
 					<div v-for="(group, i) in groups" :key="i" class="nav-group">
 						<button
@@ -199,9 +205,63 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	overflow-y: auto;
 }
 
-@media (max-width: 600px) {
+/* Phones: full screen, with the sections as a scrolling strip on top. */
+@media (max-width: 767px) {
+	.settings {
+		flex-direction: column;
+		width: 100%;
+		height: 100%;
+		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		border-radius: 0;
+	}
+
 	.nav {
-		width: 150px;
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		width: auto;
+		padding: 10px 52px 10px 10px;
+		overflow-x: auto;
+		overflow-y: hidden;
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+		scrollbar-width: none;
+	}
+
+	.nav-title {
+		display: none;
+	}
+
+	.nav-group {
+		flex-direction: row;
+		gap: 4px;
+	}
+
+	.nav-group + .nav-group {
+		margin-top: 0;
+		padding-left: 4px;
+		border-left: 1px solid var(--border);
+	}
+
+	.nav-item {
+		height: 36px;
+	}
+
+	.content {
+		position: static;
+		min-height: 0;
+	}
+
+	.close {
+		top: calc(env(safe-area-inset-top) + 13px);
+		right: calc(env(safe-area-inset-right) + 10px);
+		width: 32px;
+		height: 32px;
+		background: var(--bg-panel);
+	}
+
+	.panel {
+		padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
 	}
 }
 </style>

@@ -7,6 +7,7 @@ import {useData} from '@/stores/data'
 import {isOverdue, taskDateLabel} from '@/lib/dates'
 import {labelColor, splitEmoji} from '@/lib/tasks'
 import {openTaskMenu} from '@/lib/ui'
+import {isMobile} from '@/lib/viewport'
 import {t} from '@/lib/i18n'
 
 const props = withDefaults(defineProps<{task: Task, selected?: boolean, showList?: boolean, compact?: boolean}>(), {showList: false})
@@ -34,7 +35,7 @@ function onDragStart(e: DragEvent) {
 	<div
 		class="row"
 		:class="{selected, done: task.done, compact}"
-		draggable="true"
+		:draggable="!isMobile"
 		@click="emit('select', task.id)"
 		@contextmenu="openTaskMenu(task.id, $event)"
 		@dragstart="onDragStart"
@@ -82,8 +83,10 @@ function onDragStart(e: DragEvent) {
 	min-height: 40px;
 }
 
-.row:hover {
-	background: var(--bg-hover);
+@media (hover: hover) {
+	.row:hover {
+		background: var(--bg-hover);
+	}
 }
 
 .row.selected {
@@ -149,5 +152,34 @@ function onDragStart(e: DragEvent) {
 
 .done .date {
 	color: var(--text-3);
+}
+
+/* Phones: tags move out of the row so the title keeps its room. */
+@media (max-width: 767px) {
+	.row {
+		min-height: 48px;
+		padding: 0 8px 0 10px;
+		-webkit-touch-callout: none;
+		user-select: none;
+	}
+
+	.row::after {
+		left: 38px;
+		right: 8px;
+	}
+
+	.meta {
+		flex-shrink: 1;
+		min-width: 0;
+		gap: 6px;
+	}
+
+	.tag {
+		display: none;
+	}
+
+	.list {
+		max-width: 88px;
+	}
 }
 </style>

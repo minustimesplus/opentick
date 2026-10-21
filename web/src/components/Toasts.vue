@@ -40,6 +40,18 @@ import {dismiss, toasts} from '@/lib/toast'
 	max-width: 520px;
 }
 
+/* Phones: clear the tab bar. */
+@media (max-width: 767px) {
+	.toasts {
+		bottom: calc(66px + env(safe-area-inset-bottom));
+		width: calc(100vw - 24px);
+	}
+
+	.toast {
+		max-width: 100%;
+	}
+}
+
 .action {
 	color: #8fb0ff;
 	font-weight: 600;

@@ -23,6 +23,7 @@ import {
 } from '@/lib/dates'
 import {hasColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {openTaskDrawer} from '@/lib/ui'
+import {isMobile} from '@/lib/viewport'
 
 const data = useData()
 const calendars = useCalendars()
@@ -186,6 +187,23 @@ function openDay(d: Date) {
 	anchor.value = d
 }
 
+// ---- sidebar ----
+// Phones show it as a sheet over the grid that starts closed; the desktop
+// preference stays untouched.
+const sheetOpen = ref(false)
+const sidebarOpen = computed({
+	get: () => isMobile.value ? sheetOpen.value : prefs.calendarSidebar,
+	set: v => {
+		if (isMobile.value) sheetOpen.value = v
+		else prefs.calendarSidebar = v
+	},
+})
+
+function pickDay(d: Date) {
+	anchor.value = d
+	sheetOpen.value = false
+}
+
 // ---- list visibility ----
 const allLists = computed(() => data.realProjects)
 const allVisible = computed(() => prefs.calendarHidden.length === 0)
@@ -241,8 +259,9 @@ const addDefaults = computed(() => {
 
 <template>
 	<div class="cal-view">
-		<aside v-if="prefs.calendarSidebar" class="cal-side">
-			<MiniMonth :selected="anchor" :tasks="data.openTasks" :range-start="range.start" :range-end="mode === 'month' ? range.start : range.end" @pick="d => anchor = d" />
+		<div v-if="sidebarOpen && isMobile" class="sheet-backdrop" @click="sheetOpen = false" />
+		<aside v-if="sidebarOpen" class="cal-side" :class="{sheet: isMobile}">
+			<MiniMonth :selected="anchor" :tasks="data.openTasks" :range-start="range.start" :range-end="mode === 'month' ? range.start : range.end" @pick="pickDay" />
 			<div class="side-sep" />
 			<button class="side-row strong" @click="toggleAll">
 				<span class="name">{{ t('all') }}</span>
@@ -277,17 +296,17 @@ const addDefaults = computed(() => {
 
 		<section class="cal-main">
 			<header class="head">
-				<button class="icon-btn" @click="prefs.calendarSidebar = !prefs.calendarSidebar"><PanelLeft :size="19" /></button>
+				<button class="icon-btn" @click="sidebarOpen = !sidebarOpen"><PanelLeft :size="19" /></button>
 				<h1>{{ title }}</h1>
 				<div class="spacer" />
-				<button ref="addEl" class="hbtn square" :title="t('addTask')" @click="pop = 'add'"><Plus :size="18" /></button>
+				<button ref="addEl" class="hbtn square add" :title="t('addTask')" @click="pop = 'add'"><Plus :size="18" /></button>
 				<button ref="modeEl" class="hbtn" @click="pop = 'mode'">{{ t(mode) }} <ChevronDown :size="14" /></button>
 				<div class="nav-group">
 					<button class="nav" @click="step(-1)"><ChevronLeft :size="16" /></button>
 					<button class="nav today" @click="goToday">{{ t('today') }}</button>
 					<button class="nav" @click="step(1)"><ChevronRight :size="16" /></button>
 				</div>
-				<button class="icon-btn" :class="{active: arrangeOpen}" :title="t('arrange')" @click="arrangeOpen = !arrangeOpen"><ListTodo :size="19" /></button>
+				<button v-if="!isMobile" class="icon-btn" :class="{active: arrangeOpen}" :title="t('arrange')" @click="arrangeOpen = !arrangeOpen"><ListTodo :size="19" /></button>
 				<button ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="19" /></button>
 			</header>
 
@@ -306,7 +325,7 @@ const addDefaults = computed(() => {
 			</div>
 		</section>
 
-		<aside v-if="arrangeOpen" class="arrange" @dragover.prevent @drop.prevent="onArrangeDrop">
+		<aside v-if="arrangeOpen && !isMobile" class="arrange" @dragover.prevent @drop.prevent="onArrangeDrop">
 			<div class="ar-head">{{ t('unscheduled') }} <span class="muted">{{ unscheduled.length }}</span></div>
 			<div class="ar-hint">{{ t('dragHint') }}</div>
 			<div class="ar-list">
@@ -376,6 +395,7 @@ const addDefaults = computed(() => {
 
 <style scoped>
 .cal-view {
+	position: relative;
 	display: flex;
 	height: 100%;
 }
@@ -650,7 +670,7 @@ h1 {
 }
 
 .evp {
-	width: 320px;
+	width: min(320px, calc(100vw - 16px));
 	padding: 14px 16px;
 	background: var(--bg-elev);
 	border-radius: 10px;
@@ -718,10 +738,99 @@ h1 {
 }
 
 .add-pop {
-	width: 380px;
+	width: min(380px, calc(100vw - 16px));
 	padding: 8px;
 	background: var(--bg-elev);
 	border-radius: 10px;
 	box-shadow: var(--shadow);
+}
+
+.sheet-backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	background: rgba(0, 0, 0, 0.4);
+	animation: fade 0.18s ease-out;
+}
+
+.cal-side.sheet {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 21;
+	width: min(300px, 85vw);
+	background: var(--bg-elev);
+	box-shadow: var(--shadow);
+	animation: slide-in 0.18s ease-out;
+}
+
+@keyframes fade {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes slide-in {
+	from {
+		transform: translateX(-100%);
+	}
+}
+
+/* Phones: the toolbar wraps under the title. The spacer becomes the line
+   break, and the more button stays on the title row. */
+@media (max-width: 767px) {
+	.head {
+		flex-wrap: wrap;
+		row-gap: 6px;
+		height: auto;
+		padding: 8px 8px 8px 6px;
+	}
+
+	h1 {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-size: 20px;
+	}
+
+	.spacer {
+		order: 1;
+		flex-basis: 100%;
+		height: 0;
+	}
+
+	.hbtn,
+	.nav-group {
+		order: 2;
+		height: 38px;
+	}
+
+	.hbtn.square {
+		width: 38px;
+	}
+
+	.add {
+		margin-left: 6px;
+	}
+
+	.nav-group {
+		margin-left: auto;
+	}
+
+	.nav {
+		min-width: 40px;
+	}
+
+	.side-row {
+		height: 42px;
+	}
+}
+
+@media (hover: none) {
+	.sub-edit {
+		display: inline-flex;
+	}
 }
 </style>

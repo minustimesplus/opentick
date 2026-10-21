@@ -1,5 +1,6 @@
 import {reactive, watch} from 'vue'
 import type {ThemeColor} from './theme'
+import {isMobile} from './viewport'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
@@ -54,7 +55,8 @@ const defaults: Prefs = {
 	altCalendar: 'none',
 	showWeekNumbers: false,
 	defaultListId: null,
-	calendarMode: 'week',
+	// Seven columns are too narrow to read on a phone.
+	calendarMode: isMobile.value ? 'day' : 'week',
 	calendarHidden: [],
 	calendarHiddenSubs: [],
 	calendarShowCompleted: true,

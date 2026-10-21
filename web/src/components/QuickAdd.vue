@@ -113,6 +113,16 @@ input::placeholder {
 	color: var(--text-3);
 }
 
+@media (max-width: 767px) {
+	.bar {
+		height: 46px;
+	}
+
+	input {
+		font-size: 16px;
+	}
+}
+
 .chips {
 	display: flex;
 	flex-wrap: wrap;
