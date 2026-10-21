@@ -291,6 +291,9 @@ const en = {
 	backupImportDone: 'Import finished',
 	backupImportFailed: 'The import failed',
 	backupNoTitle: 'No title column found in this CSV file',
+	subtasks: 'Subtasks',
+	addSubtask: 'Add Subtask',
+	detachSubtask: 'Remove from Parent Task',
 }
 
 type Dict = typeof en
@@ -585,6 +588,9 @@ const fr: Dict = {
 	backupImportDone: 'Importation terminée',
 	backupImportFailed: 'L\'importation a échoué',
 	backupNoTitle: 'Aucune colonne de titre trouvée dans ce fichier CSV',
+	subtasks: 'Sous-tâches',
+	addSubtask: 'Ajouter une sous-tâche',
+	detachSubtask: 'Retirer de la tâche parente',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

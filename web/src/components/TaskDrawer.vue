@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted} from 'vue'
 import TaskDetail from './TaskDetail.vue'
-import {closeTaskDrawer} from '@/lib/ui'
+import {closeTaskDrawer, openTaskDrawer} from '@/lib/ui'
 import {useData} from '@/stores/data'
 
 const props = defineProps<{taskId: number}>()
@@ -22,7 +22,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 	<Teleport to="body">
 		<div class="backdrop" @mousedown.self="closeTaskDrawer()">
 			<aside class="drawer">
-				<TaskDetail :task-id="taskId" closable @close="closeTaskDrawer()" @deleted="closeTaskDrawer()" />
+				<TaskDetail :key="taskId" :task-id="taskId" closable @close="closeTaskDrawer()" @deleted="closeTaskDrawer()" @open="openTaskDrawer" />
 			</aside>
 		</div>
 	</Teleport>

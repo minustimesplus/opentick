@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef} from 'vue'
 import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
-import type {AppNotification, CurrentUser, Label, Project, Task} from '@/api/types'
+import type {AppNotification, CurrentUser, Label, Project, RelationKind, Task} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
@@ -15,7 +15,24 @@ function isNotFound(e: unknown) {
 	return e instanceof ApiError && e.status === 404
 }
 
-export type TaskPatch = Partial<Omit<Task, 'id' | 'labels'>>
+export type TaskPatch = Partial<Omit<Task, 'id' | 'labels' | 'related_tasks' | 'assignees' | 'attachments'>>
+
+/** Embedded collections a task PATCH response may leave out. */
+function keepEmbedded(before: Task, updated: Task): Task {
+	return {
+		...before,
+		...updated,
+		labels: updated.labels ?? before.labels,
+		related_tasks: updated.related_tasks ?? before.related_tasks,
+		assignees: updated.assignees ?? before.assignees,
+		attachments: updated.attachments ?? before.attachments,
+		comment_count: updated.comment_count ?? before.comment_count,
+	}
+}
+
+export function parentId(t: Task): number | undefined {
+	return t.related_tasks?.parenttask?.[0]?.id
+}
 
 export const useData = defineStore('data', () => {
 	const authed = ref(!!getToken())
@@ -117,7 +134,7 @@ export const useData = defineStore('data', () => {
 				api<CurrentUser>('GET', '/user'),
 				fetchAll<Project>('/projects', {is_archived: false}),
 				fetchAll<Label>('/labels'),
-				fetchAll<Task>('/tasks', {filter: 'done = false', sort_by: ['due_date', 'id'], order_by: ['asc', 'asc']}),
+				fetchAll<Task>('/tasks', {filter: 'done = false', sort_by: ['due_date', 'id'], order_by: ['asc', 'asc'], expand: 'comment_count'}),
 				fetchAll<Task>('/tasks', {filter: `done = true && done_at > "${doneSince}"`, sort_by: ['done_at'], order_by: ['desc']}, 4),
 				Promise.all([...doneQueries.values()].map(q => q())),
 			])
@@ -254,6 +271,34 @@ export const useData = defineStore('data', () => {
 		return projectMap.value.get(id)
 	}
 
+	/** Loaded tasks by their parent task's id. */
+	const childIndex = computed(() => {
+		const out = new Map<number, Task[]>()
+		for (const t of tasks.values()) {
+			const p = parentId(t)
+			if (p === undefined) continue
+			if (!out.has(p)) out.set(p, [])
+			out.get(p)!.push(t)
+		}
+		return out
+	})
+
+	/**
+	 * A task's subtasks: loaded ones plus the parent's own snapshots of
+	 * subtasks that are not loaded (old done ones, say).
+	 */
+	function subtasksOf(id: number): Task[] {
+		const live = childIndex.value.get(id) ?? []
+		const ids = new Set(live.map(t => t.id))
+		const snaps = (tasks.get(id)?.related_tasks?.subtask ?? []).filter(t => !ids.has(t.id))
+		return [...live, ...snaps].sort((a, b) => Number(a.done) - Number(b.done) || a.id - b.id)
+	}
+
+	/** Adds tasks that are not loaded yet, such as subtask snapshots, so they can be edited. */
+	function adoptTasks(list: Task[]) {
+		for (const t of list) if (!tasks.has(t.id)) tasks.set(t.id, t)
+	}
+
 	// ---------- task mutations ----------
 
 	async function createTask(input: TaskPatch & {title: string, project_id?: number}, labelTitles: string[] = []): Promise<Task | null> {
@@ -279,7 +324,7 @@ export const useData = defineStore('data', () => {
 		try {
 			const updated = await api<Task>('PATCH', `/tasks/${id}`, {body: patch, contentType: MERGE, query: {format: 'markdown'}})
 			// Keep embedded fields the PATCH response omits.
-			tasks.set(id, {...before, ...updated, labels: updated.labels ?? before.labels})
+			tasks.set(id, keepEmbedded(before, updated))
 			return tasks.get(id)!
 		} catch (e) {
 			if (isNotFound(e)) {
@@ -305,6 +350,8 @@ export const useData = defineStore('data', () => {
 
 	async function deleteTask(id: number) {
 		const before = tasks.get(id)
+		const parent = before ? parentId(before) : undefined
+		if (parent !== undefined) setRelated(parent, 'subtask', l => l.filter(x => x.id !== id))
 		tasks.delete(id)
 		if (inflight) deletedDuringSync.add(id)
 		try {
@@ -330,6 +377,68 @@ export const useData = defineStore('data', () => {
 		} catch (e) {
 			toast(String((e as Error).message))
 			return null
+		}
+	}
+
+	// ---------- relations ----------
+
+	function strip(t: Task): Task {
+		// Snapshots inside related_tasks must not nest further.
+		const {related_tasks: _r, ...rest} = t
+		return rest as Task
+	}
+
+	function setRelated(id: number, kind: RelationKind, update: (list: Task[]) => Task[]) {
+		const t = tasks.get(id)
+		if (!t) return
+		const rel = {...(t.related_tasks ?? {})}
+		rel[kind] = update(rel[kind] ?? [])
+		tasks.set(id, {...t, related_tasks: rel})
+	}
+
+	/** Records child as a subtask of parent locally, on both sides. */
+	function linkLocal(parent: number, child: number) {
+		const p = tasks.get(parent)
+		const c = tasks.get(child)
+		if (!p || !c) return
+		setRelated(parent, 'subtask', l => [...l.filter(x => x.id !== child), strip(c)])
+		setRelated(child, 'parenttask', () => [strip(p)])
+	}
+
+	function unlinkLocal(parent: number, child: number) {
+		setRelated(parent, 'subtask', l => l.filter(x => x.id !== child))
+		setRelated(child, 'parenttask', l => l.filter(x => x.id !== parent))
+	}
+
+	/** Creates a task as a subtask of `parent`, in the parent's list. */
+	async function createSubtask(parent: number, input: TaskPatch & {title: string}): Promise<Task | null> {
+		const p = tasks.get(parent)
+		if (!p) return null
+		const created = await createTask({...input, project_id: p.project_id})
+		if (!created) return null
+		await setParent(created.id, parent)
+		return tasks.get(created.id) ?? created
+	}
+
+	/** Moves a task under another one, or to the top level with `null`. */
+	async function setParent(child: number, parent: number | null) {
+		const c = tasks.get(child)
+		if (!c) return
+		const old = parentId(c)
+		if (old === (parent ?? undefined) || child === parent) return
+		try {
+			if (old !== undefined) {
+				unlinkLocal(old, child)
+				await api('DELETE', `/tasks/${child}/relations/parenttask/${old}`)
+			}
+			if (parent !== null) {
+				linkLocal(parent, child)
+				await api('POST', `/tasks/${parent}/relations`, {body: {other_task_id: child, relation_kind: 'subtask'}})
+			}
+		} catch (e) {
+			if (parent !== null) unlinkLocal(parent, child)
+			if (old !== undefined) linkLocal(old, child)
+			toast(String((e as Error).message))
 		}
 	}
 
@@ -460,6 +569,7 @@ export const useData = defineStore('data', () => {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
 		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
+		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,
 		uploadAvatar, removeAvatar,

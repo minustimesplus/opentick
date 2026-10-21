@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue'
-import {AlarmClock, AlignLeft, Repeat} from 'lucide-vue-next'
+import {AlarmClock, AlignLeft, ChevronDown, ChevronRight, Repeat} from 'lucide-vue-next'
 import TaskCheckbox from './TaskCheckbox.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
@@ -9,8 +9,18 @@ import {labelColor, splitEmoji} from '@/lib/tasks'
 import {openTaskMenu} from '@/lib/ui'
 import {t} from '@/lib/i18n'
 
-const props = withDefaults(defineProps<{task: Task, selected?: boolean, showList?: boolean, compact?: boolean}>(), {showList: false})
-const emit = defineEmits<{select: [number]}>()
+const props = withDefaults(defineProps<{
+	task: Task
+	selected?: boolean
+	showList?: boolean
+	compact?: boolean
+	/** Nesting level under parent tasks shown in the same list. */
+	depth?: number
+	/** Number of subtasks nested below this row; shows a collapse toggle. */
+	childCount?: number
+	expanded?: boolean
+}>(), {showList: false, depth: 0, childCount: 0, expanded: true})
+const emit = defineEmits<{select: [number], toggle: [number]}>()
 const data = useData()
 
 const project = computed(() => data.project(props.task.project_id))
@@ -34,15 +44,20 @@ function onDragStart(e: DragEvent) {
 	<div
 		class="row"
 		:class="{selected, done: task.done, compact}"
+		:style="depth ? {paddingLeft: `${16 + depth * 28}px`} : undefined"
 		draggable="true"
 		@click="emit('select', task.id)"
 		@contextmenu="openTaskMenu(task.id, $event)"
 		@dragstart="onDragStart"
 	>
+		<button v-if="childCount" class="fold" :style="{left: `${depth * 28}px`}" @click.stop="emit('toggle', task.id)">
+			<component :is="expanded ? ChevronDown : ChevronRight" :size="14" />
+		</button>
 		<TaskCheckbox :done="task.done" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 		<div class="title-wrap">
 			<span class="title">{{ task.title || '—' }}</span>
 		</div>
+		<span v-if="childCount && !expanded" class="sub-count">{{ childCount }}</span>
 		<div class="meta">
 			<span v-for="l in task.labels ?? []" :key="l.id" class="tag" :style="{'--tc': labelColor(l.hex_color)}">{{ l.title }}</span>
 			<span v-if="showList && listLabel" class="list">
@@ -76,6 +91,28 @@ function onDragStart(e: DragEvent) {
 	bottom: 0;
 	height: 1px;
 	background: var(--border);
+}
+
+.fold {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-3);
+	opacity: 0;
+}
+
+.row:hover .fold,
+.fold:focus-visible {
+	opacity: 1;
+}
+
+.sub-count {
+	font-size: 12px;
+	color: var(--text-3);
 }
 
 .row.compact {

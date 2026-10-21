@@ -9,7 +9,7 @@ import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
 import type {Task} from '@/api/types'
-import {useData, type TaskPatch} from '@/stores/data'
+import {parentId, useData, type TaskPatch} from '@/stores/data'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
 import {
@@ -239,6 +239,44 @@ function onCreated(id: number) {
 
 const collapsed = ref<Record<string, boolean>>({})
 
+// ---- subtasks nest under their parent when both are listed ----
+interface Row {
+	task: Task
+	depth: number
+	childCount: number
+}
+
+function nest(list: Task[]): Row[] {
+	const ids = new Set(list.map(task => task.id))
+	const kids = new Map<number, Task[]>()
+	const roots: Task[] = []
+	for (const task of list) {
+		const p = parentId(task)
+		if (p !== undefined && ids.has(p) && p !== task.id) {
+			if (!kids.has(p)) kids.set(p, [])
+			kids.get(p)!.push(task)
+		} else {
+			roots.push(task)
+		}
+	}
+	const out: Row[] = []
+	const seen = new Set<number>()
+	const walk = (task: Task, depth: number) => {
+		if (seen.has(task.id)) return
+		seen.add(task.id)
+		const children = kids.get(task.id) ?? []
+		out.push({task, depth, childCount: children.length})
+		if (prefs.collapsed[`t${task.id}`]) return
+		children.forEach(c => walk(c, depth + 1))
+	}
+	roots.forEach(task => walk(task, 0))
+	return out
+}
+
+function toggleChildren(id: number) {
+	prefs.collapsed[`t${id}`] = !prefs.collapsed[`t${id}`]
+}
+
 // ---- header menus ----
 const sortEl = ref<HTMLElement | null>(null)
 const moreEl = ref<HTMLElement | null>(null)
@@ -301,12 +339,16 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 						</div>
 						<template v-if="!collapsed[s.key]">
 							<TaskRow
-								v-for="task in s.tasks"
-								:key="task.id"
-								:task="task"
-								:selected="task.id === selectedId"
+								v-for="r in nest(s.tasks)"
+								:key="r.task.id"
+								:task="r.task"
+								:depth="r.depth"
+								:child-count="r.childCount"
+								:expanded="!prefs.collapsed[`t${r.task.id}`]"
+								:selected="r.task.id === selectedId"
 								:show-list="view.kind !== 'project' && view.kind !== 'inbox'"
 								@select="select"
+								@toggle="toggleChildren"
 							/>
 						</template>
 					</template>
@@ -346,7 +388,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 
 		<div class="resizer detail-resizer" @pointerdown="startResize($event, 'detailWidth', DETAIL_RANGE, -1)" />
 		<section class="detail-pane" :style="{width: clamp(prefs.detailWidth, DETAIL_RANGE) + 'px'}">
-			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" />
+			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" @open="select" />
 			<div v-else class="empty-state detail-empty">
 				<svg width="200" height="150" viewBox="0 0 200 150" fill="none" stroke="var(--text-4)" stroke-width="2">
 					<rect x="40" y="40" width="90" height="70" rx="6" transform="rotate(-12 85 75)" />
