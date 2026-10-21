@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {CalendarDays, ChevronLeft, Copy, Flag, Inbox, ListTree, Menu, MessageSquare, MoreHorizontal, Paperclip, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
+import {CalendarDays, ChevronLeft, CircleUserRound, Copy, Flag, Inbox, ListTree, Menu, MessageSquare, MoreHorizontal, Paperclip, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
@@ -10,6 +10,8 @@ import MarkdownEditor from './MarkdownEditor.vue'
 import SubtaskList from './SubtaskList.vue'
 import TaskAttachments from './TaskAttachments.vue'
 import TaskComments from './TaskComments.vue'
+import AssigneeMenu from './AssigneeMenu.vue'
+import PersonAvatar from './PersonAvatar.vue'
 import {parentId, useData} from '@/stores/data'
 import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} from '@/lib/dates'
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
@@ -85,7 +87,14 @@ const prioEl = ref<HTMLElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 const moreEl = ref<HTMLElement | null>(null)
 const tagEl = ref<HTMLElement | null>(null)
-const pop = ref<'date' | 'prio' | 'list' | 'more' | 'tag' | null>(null)
+const assignEl = ref<HTMLElement | null>(null)
+const pop = ref<'date' | 'prio' | 'list' | 'more' | 'tag' | 'assign' | null>(null)
+
+// Assignees only make sense in shared lists, as in TickTick.
+watch(() => task.value?.project_id, id => {
+	if (id) data.loadMembers(id)
+}, {immediate: true})
+const showAssign = computed(() => !!task.value && (data.isShared(task.value.project_id) || !!task.value.assignees?.length))
 
 const project = computed(() => task.value ? data.project(task.value.project_id) : undefined)
 
@@ -197,6 +206,12 @@ const meta = computed(() => {
 				<span>{{ schedule ? scheduleLabel(schedule) : t('date') }}</span>
 			</button>
 			<div class="spacer" />
+			<button v-if="showAssign" ref="assignEl" class="icon-btn assign-btn" :title="t('assignTo')" @click="pop = 'assign'">
+				<template v-if="task.assignees?.length">
+					<PersonAvatar v-for="u in task.assignees.slice(0, 3)" :key="u.id" :user="u" :size="22" />
+				</template>
+				<CircleUserRound v-else :size="18" />
+			</button>
 			<button ref="prioEl" class="icon-btn" :title="t('priority')" @click="pop = 'prio'">
 				<Flag :size="18" :color="PRIORITY_COLORS[level(task.priority)]" :fill="level(task.priority) ? PRIORITY_COLORS[level(task.priority)] : 'none'" />
 			</button>
@@ -264,6 +279,9 @@ const meta = computed(() => {
 
 		<Popover v-if="pop === 'date'" :anchor="dateEl" @close="pop = null">
 			<DatePicker :task="task" @apply="p => data.updateTask(task!.id, p)" @close="pop = null" />
+		</Popover>
+		<Popover v-if="pop === 'assign'" :anchor="assignEl" placement="bottom-end" @close="pop = null">
+			<AssigneeMenu :task="task" />
 		</Popover>
 		<Popover v-if="pop === 'prio'" :anchor="prioEl" placement="bottom-end" @close="pop = null">
 			<PriorityMenu :value="task.priority" @select="l => { data.updateTask(task!.id, {priority: l}); pop = null }" />
@@ -361,6 +379,16 @@ textarea {
 .body.dropping {
 	outline: 2px dashed var(--accent);
 	outline-offset: -6px;
+}
+
+.assign-btn {
+	width: auto;
+	min-width: 32px;
+	padding: 0 4px;
+}
+
+.assign-btn > * + * {
+	margin-left: -6px;
 }
 
 .comment-btn {

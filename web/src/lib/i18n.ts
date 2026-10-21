@@ -327,6 +327,21 @@ const en = {
 	archivedLists: 'Archived Lists',
 	listArchived: 'This list is archived.',
 	noArchivedLists: 'No archived lists',
+	shareList: 'Share List',
+	shareListTitle: 'Share List "{name}"',
+	inviteePlaceholder: 'Enter their username',
+	invite: 'Invite',
+	inviteFriends: 'Invite friends to start collaboration.',
+	userNotFound: 'No user named "{name}"',
+	shareNoPermission: 'Only list admins can change who this list is shared with.',
+	permRead: 'Can view',
+	permWrite: 'Can edit',
+	permAdmin: 'Admin',
+	owner: 'Owner',
+	you: 'you',
+	removeMember: 'Remove',
+	assignTo: 'Assign to',
+	noMembers: 'Share this list to assign tasks.',
 }
 
 type Dict = typeof en
@@ -657,6 +672,21 @@ const fr: Dict = {
 	archivedLists: 'Listes archivées',
 	listArchived: 'Cette liste est archivée.',
 	noArchivedLists: 'Aucune liste archivée',
+	shareList: 'Partager la liste',
+	shareListTitle: 'Partager la liste « {name} »',
+	inviteePlaceholder: "Nom d'utilisateur",
+	invite: 'Inviter',
+	inviteFriends: 'Invitez des amis pour collaborer.',
+	userNotFound: 'Aucun utilisateur « {name} »',
+	shareNoPermission: 'Seuls les administrateurs de la liste peuvent modifier son partage.',
+	permRead: 'Lecture',
+	permWrite: 'Modification',
+	permAdmin: 'Admin',
+	owner: 'Propriétaire',
+	you: 'vous',
+	removeMember: 'Retirer',
+	assignTo: 'Assigner à',
+	noMembers: 'Partagez cette liste pour assigner des tâches.',
 }
 
 const dicts: Record<string, Dict> = {en, fr}

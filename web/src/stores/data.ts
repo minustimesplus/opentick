@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef} from 'vue'
 import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
-import type {AppNotification, Attachment, CurrentUser, Label, Project, RelationKind, Task} from '@/api/types'
+import type {AppNotification, Attachment, CurrentUser, Label, Project, RelationKind, Task, User} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
@@ -47,6 +47,8 @@ export const useData = defineStore('data', () => {
 	const notifications = ref<AppNotification[]>([])
 	/** Manual task order per project, from the project's list view: project id → task id → position. */
 	const positions = reactive(new Map<number, Map<number, number>>())
+	/** Everyone with access to a list (owner, shares, teams), by project id; loaded on demand. */
+	const members = reactive(new Map<number, User[]>())
 	/** Object URL of the user's uploaded avatar, null when they have none. */
 	const avatarUrl = ref<string | null>(null)
 	let avatarLoadedFor: string | null = null
@@ -75,6 +77,7 @@ export const useData = defineStore('data', () => {
 		loaded.value = false
 		doneQueries.clear()
 		positions.clear()
+		members.clear()
 		setAvatarUrl(null)
 		avatarLoadedFor = null
 	}
@@ -482,6 +485,50 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
+	// ---------- members and assignees ----------
+
+	async function loadMembers(projectId: number, force = false): Promise<User[]> {
+		if (!force && members.has(projectId)) return members.get(projectId)!
+		try {
+			const list = await fetchAll<User>(`/projects/${projectId}/users/search`, {}, 5)
+			members.set(projectId, list)
+			return list
+		} catch {
+			return []
+		}
+	}
+
+	/** A list counts as shared once someone besides the current user can see it. */
+	function isShared(projectId: number): boolean {
+		return (members.get(projectId) ?? []).some(u => u.id !== user.value?.id)
+	}
+
+	async function assign(taskId: number, u: User) {
+		const t = tasks.get(taskId)
+		if (!t || t.assignees?.some(a => a.id === u.id)) return
+		patchLocal(taskId, {assignees: [...(t.assignees ?? []), u]})
+		try {
+			await api('POST', `/tasks/${taskId}/assignees`, {body: {user_id: u.id}})
+		} catch (e) {
+			patchLocal(taskId, {assignees: t.assignees})
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function unassign(taskId: number, userId: number) {
+		const t = tasks.get(taskId)
+		if (!t) return
+		patchLocal(taskId, {assignees: (t.assignees ?? []).filter(a => a.id !== userId)})
+		try {
+			await api('DELETE', `/tasks/${taskId}/assignees/${userId}`)
+		} catch (e) {
+			if (!isNotFound(e)) {
+				patchLocal(taskId, {assignees: t.assignees})
+				toast(String((e as Error).message))
+			}
+		}
+	}
+
 	// ---------- attachments ----------
 
 	/** Merges fields into a loaded task without saving them, e.g. after a side request. */
@@ -695,6 +742,7 @@ export const useData = defineStore('data', () => {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
 		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
+		members, loadMembers, isShared, assign, unassign,
 		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,

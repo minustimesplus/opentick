@@ -2,6 +2,7 @@
 import {computed, ref} from 'vue'
 import {AlarmClock, AlignLeft, ChevronDown, ChevronRight, MessageSquare, Paperclip, Repeat} from 'lucide-vue-next'
 import TaskCheckbox from './TaskCheckbox.vue'
+import PersonAvatar from './PersonAvatar.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {isOverdue, taskDateLabel} from '@/lib/dates'
@@ -102,6 +103,7 @@ function onDragStart(e: DragEvent) {
 			<Repeat v-if="task.repeat_after || task.repeat_mode" :size="13" class="ic" />
 			<AlarmClock v-if="task.reminders?.length" :size="13" class="ic" />
 			<span v-if="dateLabel" class="date" :class="{overdue}">{{ dateLabel }}</span>
+			<PersonAvatar v-for="u in (task.assignees ?? []).slice(0, 2)" :key="u.id" :user="u" :size="20" />
 		</div>
 	</div>
 </template>

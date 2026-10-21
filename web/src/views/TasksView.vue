@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Archive, ArchiveRestore, ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
@@ -10,6 +10,7 @@ import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
 import FilterEditDialog from '@/components/FilterEditDialog.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 import {filterIdOf} from '@/lib/filters'
 import type {Task} from '@/api/types'
 import {parentId, useData, type TaskPatch} from '@/stores/data'
@@ -381,6 +382,13 @@ const pop = ref<'sort' | 'more' | null>(null)
 const editing = ref(false)
 
 const editingFilter = ref(false)
+const sharing = ref(false)
+
+// Lists other people can see get a filled share icon.
+watch(() => view.value.kind === 'project' ? view.value.id : null, id => {
+	if (id) data.loadMembers(id)
+}, {immediate: true})
+const shared = computed(() => view.value.kind === 'project' && data.isShared(view.value.id))
 
 async function deleteFilter() {
 	pop.value = null
@@ -422,6 +430,9 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<span v-else-if="header.emoji" class="h-emoji">{{ header.emoji }}</span>
 					{{ header.name }}
 				</h1>
+				<button v-if="view.kind === 'project' && project && !archived" class="icon-btn share-btn" :class="{shared}" :title="t('shareList')" @click="sharing = true">
+					<component :is="shared ? Users : UserPlus" :size="18" />
+				</button>
 				<div class="spacer" />
 				<button v-if="layout === 'list' && view.kind !== 'archived'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
 				<button v-if="view.kind !== 'archived'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
@@ -571,6 +582,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 				</template>
 			</div>
 		</Popover>
+		<ShareDialog v-if="sharing && project" :project="project" @close="sharing = false" />
 		<FilterEditDialog v-if="editingFilter && savedFilter" :filter="savedFilter" @close="editingFilter = false" />
 		<ListEditDialog v-if="editing && project" :project="project" @close="editing = false" />
 	</div>
@@ -609,6 +621,14 @@ h1 {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.share-btn {
+	flex-shrink: 0;
+}
+
+.share-btn.shared {
+	color: var(--accent);
 }
 
 .h-ic {

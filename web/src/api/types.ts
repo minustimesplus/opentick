@@ -97,6 +97,12 @@ export interface Project {
 	is_archived?: boolean
 	is_favorite?: boolean
 	views?: ProjectView[] | null
+	owner?: User | null
+}
+
+/** A user a list is shared with directly. 0 = read only, 1 = read & write, 2 = admin. */
+export interface ProjectMember extends User {
+	permission: 0 | 1 | 2
 }
 
 export interface UserSettings {
