@@ -6,6 +6,7 @@ import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
 import PriorityMenu from './PriorityMenu.vue'
 import ListPicker from './ListPicker.vue'
+import MarkdownEditor from './MarkdownEditor.vue'
 import {useData} from '@/stores/data'
 import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} from '@/lib/dates'
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
@@ -55,7 +56,6 @@ watch(title, () => {
 watch(description, () => {
 	clearTimeout(descTimer)
 	descTimer = window.setTimeout(saveDescription, 1000)
-	nextTick(autosize)
 })
 
 onBeforeUnmount(() => {
@@ -64,14 +64,13 @@ onBeforeUnmount(() => {
 })
 
 const titleEl = ref<HTMLTextAreaElement | null>(null)
-const descEl = ref<HTMLTextAreaElement | null>(null)
+const descEl = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 
 function autosize() {
-	for (const el of [titleEl.value, descEl.value]) {
-		if (!el) continue
-		el.style.height = 'auto'
-		el.style.height = el.scrollHeight + 'px'
-	}
+	const el = titleEl.value
+	if (!el) return
+	el.style.height = 'auto'
+	el.style.height = el.scrollHeight + 'px'
 }
 
 onMounted(() => nextTick(autosize))
@@ -165,15 +164,13 @@ const meta = computed(() => {
 				@blur="titleFocused = false; saveTitle()"
 				@keydown.enter.prevent="($event.target as HTMLTextAreaElement).blur(); descEl?.focus()"
 			/>
-			<textarea
-				ref="descEl"
-				v-model="description"
-				class="desc"
-				rows="3"
-				:placeholder="t('description')"
-				@focus="descFocused = true"
-				@blur="descFocused = false; saveDescription()"
-			/>
+			<MarkdownEditor
+					ref="descEl"
+					v-model="description"
+					:placeholder="t('description')"
+					@focus="descFocused = true"
+					@blur="descFocused = false; saveDescription()"
+				/>
 
 			<div class="tags">
 				<span v-for="l in task.labels ?? []" :key="l.id" class="tag" :style="{'--tc': labelColor(l.hex_color)}">
@@ -296,13 +293,6 @@ textarea {
 
 .title.done {
 	color: var(--text-3);
-}
-
-.desc {
-	min-height: 120px;
-	font-size: 14px;
-	line-height: 1.6;
-	color: var(--text-2);
 }
 
 textarea::placeholder {
