@@ -580,6 +580,32 @@ export const useData = defineStore('data', () => {
 		}
 	}
 
+	// ---------- saved filters ----------
+
+	/** Creates (no id) or replaces a saved filter, then reloads the sidebar's filters. */
+	async function saveFilter(id: number | null, title: string, filter: string): Promise<number | null> {
+		const body = {title, filters: {filter, filter_include_nulls: false}}
+		try {
+			const saved = id === null
+				? await api<{id: number}>('POST', '/filters', {body})
+				: await api<{id: number}>('PUT', `/filters/${id}`, {body})
+			projects.value = await fetchAll<Project>('/projects', {is_archived: false})
+			return saved.id
+		} catch (e) {
+			toast(String((e as Error).message))
+			return null
+		}
+	}
+
+	async function deleteFilter(id: number) {
+		try {
+			await api('DELETE', `/filters/${id}`)
+			projects.value = projects.value.filter(p => p.id !== -id - 1)
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
 	async function deleteProject(id: number) {
 		try {
 			await api('DELETE', `/projects/${id}`)
@@ -643,7 +669,7 @@ export const useData = defineStore('data', () => {
 		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
 		createTask, updateTask, toggleDone, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
-		createProject, updateProject, deleteProject, markNotificationsRead, loadNotifications,
+		createProject, updateProject, deleteProject, saveFilter, deleteFilter, markNotificationsRead, loadNotifications,
 		uploadAvatar, removeAvatar,
 	}
 })

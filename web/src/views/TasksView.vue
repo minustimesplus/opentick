@@ -9,6 +9,8 @@ import KanbanBoard from '@/components/KanbanBoard.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
+import FilterEditDialog from '@/components/FilterEditDialog.vue'
+import {filterIdOf} from '@/lib/filters'
 import type {Task} from '@/api/types'
 import {parentId, useData, type TaskPatch} from '@/stores/data'
 import {prefs} from '@/lib/prefs'
@@ -362,6 +364,16 @@ const moreEl = ref<HTMLElement | null>(null)
 const pop = ref<'sort' | 'more' | null>(null)
 const editing = ref(false)
 
+const editingFilter = ref(false)
+
+async function deleteFilter() {
+	pop.value = null
+	const f = savedFilter.value
+	if (!f || !confirm(t('deleteFilterConfirm', {name: f.title}))) return
+	await data.deleteFilter(filterIdOf(f.id))
+	router.push('/tasks/today')
+}
+
 async function deleteList() {
 	pop.value = null
 	if (!project.value || !confirm(t('deleteListConfirm', {name: project.value.title}))) return
@@ -520,8 +532,14 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<button class="menu-item" @click="editing = true; pop = null"><Pencil :size="15" /> {{ t('editList') }}</button>
 					<button class="menu-item danger" @click="deleteList"><Trash2 :size="15" /> {{ t('delete') }}</button>
 				</template>
+				<template v-if="view.kind === 'filter' && savedFilter">
+					<div class="menu-sep" />
+					<button class="menu-item" @click="editingFilter = true; pop = null"><Pencil :size="15" /> {{ t('editFilter') }}</button>
+					<button class="menu-item danger" @click="deleteFilter"><Trash2 :size="15" /> {{ t('delete') }}</button>
+				</template>
 			</div>
 		</Popover>
+		<FilterEditDialog v-if="editingFilter && savedFilter" :filter="savedFilter" @close="editingFilter = false" />
 		<ListEditDialog v-if="editing && project" :project="project" @close="editing = false" />
 	</div>
 </template>

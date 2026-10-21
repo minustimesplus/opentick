@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted} from 'vue'
 
+withDefaults(defineProps<{width?: number}>(), {width: 420})
 const emit = defineEmits<{close: []}>()
 function onKey(e: KeyboardEvent) {
 	if (e.key === 'Escape') emit('close')
@@ -12,7 +13,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
 	<Teleport to="body">
 		<div class="overlay" @mousedown.self="emit('close')">
-			<div class="dialog">
+			<div class="dialog" :style="{width: `min(${width}px, calc(100vw - 32px))`}">
 				<slot />
 			</div>
 		</div>
@@ -31,7 +32,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .dialog {
-	width: min(420px, calc(100vw - 32px));
 	padding: 20px;
 	border-radius: 12px;
 	background: var(--bg-elev);

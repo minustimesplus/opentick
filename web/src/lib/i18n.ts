@@ -310,6 +310,18 @@ const en = {
 	deleteSectionConfirm: 'Delete the section "{name}"? Its tasks move to the default section.',
 	noKanbanView: 'This list has no kanban view.',
 	rename: 'Rename',
+	addFilter: 'Add Filter',
+	editFilter: 'Edit Filter',
+	deleteFilterConfirm: 'Delete the filter "{name}"?',
+	filtersHint: 'Show tasks matching lists, tags, dates and more.',
+	filterNormal: 'Normal',
+	filterAdvanced: 'Advanced',
+	filterInclude: 'Include',
+	filterKeywords: 'Task keywords',
+	filterAdvancedHint: 'Vikunja filter syntax, e.g. done = false && priority >= 3 && due_date < now/d+7d',
+	preview: 'Preview',
+	previewCount: '{n} matching tasks',
+	next30: 'Next 30 Days',
 }
 
 type Dict = typeof en
@@ -623,6 +635,18 @@ const fr: Dict = {
 	deleteSectionConfirm: 'Supprimer la section « {name} » ? Ses tâches iront dans la section par défaut.',
 	noKanbanView: "Cette liste n'a pas de vue kanban.",
 	rename: 'Renommer',
+	addFilter: 'Ajouter un filtre',
+	editFilter: 'Modifier le filtre',
+	deleteFilterConfirm: 'Supprimer le filtre « {name} » ?',
+	filtersHint: 'Affichez les tâches selon listes, étiquettes, dates, etc.',
+	filterNormal: 'Normal',
+	filterAdvanced: 'Avancé',
+	filterInclude: 'Contient',
+	filterKeywords: 'Mots-clés',
+	filterAdvancedHint: 'Syntaxe des filtres Vikunja, ex. done = false && priority >= 3 && due_date < now/d+7d',
+	preview: 'Aperçu',
+	previewCount: '{n} tâches correspondantes',
+	next30: '30 prochains jours',
 }
 
 const dicts: Record<string, Dict> = {en, fr}
