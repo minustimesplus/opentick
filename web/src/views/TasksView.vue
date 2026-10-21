@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ArrowUpDown, ChevronDown, ChevronRight, Inbox, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {ArrowUpDown, ChevronDown, ChevronRight, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
-import DayIcon from '@/components/DayIcon.vue'
 import type {Task} from '@/api/types'
 import {useData, type TaskPatch} from '@/stores/data'
 import {prefs} from '@/lib/prefs'
@@ -272,9 +271,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			<header class="head">
 				<button class="icon-btn" @click="prefs.tasksSidebar = !prefs.tasksSidebar"><PanelLeft :size="19" /></button>
 				<h1>
-					<DayIcon v-if="view.kind === 'today'" :label="new Date().getDate()" :size="20" class="h-ic" />
-					<Inbox v-else-if="view.kind === 'inbox'" :size="20" class="h-ic" />
-					<Tag v-else-if="view.kind === 'label'" :size="19" class="h-ic" />
+					<Tag v-if="view.kind === 'label'" :size="19" class="h-ic" />
 					<Filter v-else-if="view.kind === 'filter'" :size="19" class="h-ic" />
 					<span v-else-if="header.emoji" class="h-emoji">{{ header.emoji }}</span>
 					{{ header.name }}

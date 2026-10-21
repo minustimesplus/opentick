@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -277,16 +276,6 @@ const InfoColor = "\033[1;32m%s\033[0m"
 func printSuccess(text string, args ...any) {
 	text = fmt.Sprintf(text, args...)
 	fmt.Printf(InfoColor+"\n", text)
-}
-
-// getRandomPort finds a random available TCP port.
-func getRandomPort(ctx context.Context) (int, error) {
-	l, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func ensureFrontendDistExists() error {
