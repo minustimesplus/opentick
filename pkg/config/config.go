@@ -83,6 +83,12 @@ const (
 	AuthOpenIDEnabled   Key = `auth.openid.enabled`
 	AuthOpenIDProviders Key = `auth.openid.providers`
 
+	AuthClerkEnabled        Key = `auth.clerk.enabled`
+	AuthClerkPublishableKey Key = `auth.clerk.publishablekey`
+	// #nosec G101
+	AuthClerkSecretKey       Key = `auth.clerk.secretkey`
+	AuthClerkSocialProviders Key = `auth.clerk.socialproviders`
+
 	AuthLdapEnabled    Key = `auth.ldap.enabled`
 	AuthLdapHost       Key = `auth.ldap.host`
 	AuthLdapPort       Key = `auth.ldap.port`
@@ -407,6 +413,8 @@ func initDefaultConfig() {
 	// Auth
 	AuthLocalEnabled.setDefault(true)
 	AuthOpenIDEnabled.setDefault(false)
+	AuthClerkEnabled.setDefault(false)
+	AuthClerkSocialProviders.setDefault([]string{"google", "apple"})
 
 	AuthLdapEnabled.setDefault(false)
 	AuthLdapHost.setDefault("localhost")
@@ -698,6 +706,16 @@ func anchorRootpathToConfigFile() {
 	}
 }
 
+// applyPlatformPort listens on $PORT when the platform assigns one (Heroku,
+// Render, Cloud Run) and no interface was configured explicitly.
+func applyPlatformPort() {
+	port := os.Getenv("PORT")
+	if port == "" || ServiceInterface.GetString() != ":3456" {
+		return
+	}
+	ServiceInterface.Set(":" + port)
+}
+
 // InitConfig initializes the config, sets defaults etc.
 func InitConfig() {
 
@@ -758,6 +776,8 @@ func InitConfig() {
 	if err != nil {
 		log.Warningf("Failed to set config from environment variables: %s", err.Error())
 	}
+
+	applyPlatformPort()
 
 	readConfigValuesFromFiles()
 

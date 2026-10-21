@@ -29,6 +29,9 @@ export interface Prefs {
 	calendarSidebar: boolean
 	calendarExpandNight: boolean
 	tasksSidebar: boolean
+	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
+	sidebarWidth: number
+	detailWidth: number
 	listSort: Record<string, 'date' | 'priority' | 'title' | 'created'>
 	listShowCompleted: Record<string, boolean>
 	collapsed: Record<string, boolean>
@@ -59,6 +62,8 @@ const defaults: Prefs = {
 	calendarSidebar: false,
 	calendarExpandNight: false,
 	tasksSidebar: true,
+	sidebarWidth: 260,
+	detailWidth: 420,
 	listSort: {},
 	listShowCompleted: {},
 	collapsed: {},

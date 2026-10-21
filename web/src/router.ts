@@ -1,5 +1,6 @@
 import {createRouter, createWebHistory} from 'vue-router'
 import {openSettings} from './lib/ui'
+import {getToken} from './api/client'
 
 export const router = createRouter({
 	history: createWebHistory(),
@@ -10,6 +11,8 @@ export const router = createRouter({
 		{path: '/matrix', name: 'matrix', component: () => import('./views/MatrixView.vue')},
 		{path: '/calendar', name: 'calendar', component: () => import('./views/CalendarView.vue')},
 		{path: '/search', name: 'search', component: () => import('./views/SearchView.vue')},
+		// OAuth providers return here; the login screen finishes the sign in.
+		{path: '/sso-callback', component: {render: () => null}, beforeEnter: () => getToken() ? '/tasks/today' : true},
 		{path: '/settings', redirect: () => {
 			openSettings()
 			return '/tasks/today'

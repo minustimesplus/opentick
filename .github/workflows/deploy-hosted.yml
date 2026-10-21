@@ -1,0 +1,51 @@
+name: Deploy hosted
+
+# Builds the Docker image and releases it to the hosted Heroku app. Runs only
+# when the repository sets the HEROKU_APP_NAME variable and HEROKU_API_KEY secret.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hosted
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: vars.HEROKU_APP_NAME != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APP: ${{ vars.HEROKU_APP_NAME }}
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to the Heroku registry
+        run: echo "$HEROKU_API_KEY" | docker login registry.heroku.com --username=_ --password-stdin
+
+      # Heroku only accepts single-platform images without attestations.
+      - name: Build and push
+        run: |
+          docker buildx create --use
+          docker buildx build . \
+            --platform linux/amd64 \
+            --provenance=false --sbom=false \
+            --build-arg RELEASE_VERSION="$(git rev-parse --short HEAD)" \
+            --tag "registry.heroku.com/$APP/web" \
+            --metadata-file meta.json \
+            --push
+
+      - name: Release
+        run: |
+          image_id=$(jq -r '."containerimage.config.digest"' meta.json)
+          curl --fail-with-body -sS -X PATCH "https://api.heroku.com/apps/$APP/formation" \
+            -H "Authorization: Bearer $HEROKU_API_KEY" \
+            -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
+            -H "Content-Type: application/json" \
+            -d "{\"updates\":[{\"type\":\"web\",\"docker_image\":\"$image_id\"}]}"
