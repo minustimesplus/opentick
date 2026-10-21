@@ -584,7 +584,7 @@ func TestDoneTask(t *testing.T) {
 // The OpenTick web client's CSV backup (web/src/lib/backup.ts) relies on
 // detection mapping every one of its columns without user input.
 func TestDetectOpenTickBackup(t *testing.T) {
-	csvContent := "﻿Title,Description,Due Date,Start Date,End Date,Done,Priority,Labels,Project,Reminder\r\n" +
+	csvContent := "\ufeffTitle,Description,Due Date,Start Date,End Date,Done,Priority,Labels,Project,Reminder\r\n" +
 		"\"Buy milk, eggs\",\"<p>From the \"\"good\"\" shop</p>\",2026-10-20T08:30:00Z,,,false,3,\"home, errands\",Groceries,2026-10-20T08:00:00Z\r\n" +
 		"Ship it,,,2026-10-01T00:00:00Z,2026-10-02T00:00:00Z,true,5,,Work,\r\n"
 
