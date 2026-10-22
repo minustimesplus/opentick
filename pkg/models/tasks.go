@@ -71,7 +71,20 @@ func validateTaskForCreation(t *Task) error {
 		return ErrTaskCannotBeEmpty{}
 	}
 
-	return validateRepeatAfter(t.RepeatAfter)
+	return validateRepeat(t)
+}
+
+// validateRepeat checks the repeat fields and stores the repeat rule in canonical form.
+func validateRepeat(t *Task) error {
+	if err := validateRepeatAfter(t.RepeatAfter); err != nil {
+		return err
+	}
+	rule, err := NormalizeTaskRepeatRule(t.RepeatRule)
+	if err != nil {
+		return err
+	}
+	t.RepeatRule = rule
+	return nil
 }
 
 // Task represents a task in a project
@@ -97,6 +110,8 @@ type Task struct {
 	RepeatAfter int64 `xorm:"bigint INDEX null" json:"repeat_after" valid:"range(0|9223372036854775807)" doc:"The interval in seconds this task repeats. When set, marking the task done re-opens it and bumps its reminders and due date by this amount."`
 	// Can have three possible values which will trigger when the task is marked as done: 0 = repeats after the amount specified in repeat_after, 1 = repeats all dates each months (ignoring repeat_after), 3 = repeats from the current date rather than the last set date.
 	RepeatMode TaskRepeatMode `xorm:"not null default 0" json:"repeat_mode" doc:"How the task repeats when marked done: 0 = after repeat_after seconds, 1 = monthly (ignores repeat_after), 2 = from the current date rather than the last set date."`
+	// An RFC 5545 recurrence rule. When set it takes precedence over repeat_after and repeat_mode 1.
+	RepeatRule string `xorm:"varchar(500) null 'repeat_rule'" json:"repeat_rule" maxLength:"500" doc:"An RFC 5545 RRULE value (without the RRULE: prefix) describing how the task repeats, e.g. FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR or FREQ=MONTHLY;BYDAY=-1FR;COUNT=5. Supports FREQ=DAILY|WEEKLY|MONTHLY|YEARLY with INTERVAL, BYDAY (ordinals for monthly/yearly), BYMONTHDAY, BYMONTH, WKST and one of COUNT or UNTIL. COUNT is the number of occurrences left including the current one and counts down as the task is completed. Takes precedence over repeat_after; with repeat_mode 2 the next occurrence counts from the completion date. Stored in canonical form; empty means no rule."`
 	// The task priority. Can be anything you want, it is possible to sort by this later.
 	Priority int64 `xorm:"bigint null" json:"priority"`
 	// When this task starts.
@@ -219,7 +234,8 @@ func (t *Task) GetFrontendURL() string {
 }
 
 func (t *Task) isRepeating() bool {
-	return t.RepeatAfter > 0 ||
+	return t.RepeatRule != "" ||
+		t.RepeatAfter > 0 ||
 		t.RepeatMode == TaskRepeatModeMonth
 }
 
@@ -1332,6 +1348,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		"project_id",
 		"bucket_id",
 		"repeat_mode",
+		"repeat_rule",
 		"cover_image_attachment_id",
 	}
 
@@ -1392,12 +1409,15 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		if !fieldSet["repeat_mode"] {
 			t.RepeatMode = ot.RepeatMode
 		}
+		if !fieldSet["repeat_rule"] {
+			t.RepeatRule = ot.RepeatRule
+		}
 		if !fieldSet["cover_image_attachment_id"] {
 			t.CoverImageAttachmentID = ot.CoverImageAttachmentID
 		}
 	}
 
-	if err := validateRepeatAfter(t.RepeatAfter); err != nil {
+	if err := validateRepeat(t); err != nil {
 		return err
 	}
 
@@ -1490,8 +1510,15 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		}
 	}
 
+	// Only rule-based series can end, and only when their stored rule runs out on this completion.
+	loc := config.GetTimeZone()
+	if ot.RepeatRule != "" && !ot.Done && t.Done {
+		loc = repeatLocation(s, a)
+	}
+	repeating := t.isRepeating() && !repeatSeriesEndsOnCompletion(&ot, time.Now(), loc)
+
 	// When a task changed its done status, make sure it is in the correct bucket
-	if t.ProjectID == ot.ProjectID && !t.isRepeating() && t.Done != ot.Done {
+	if t.ProjectID == ot.ProjectID && !repeating && t.Done != ot.Done {
 		err = t.moveTaskToDoneBuckets(s, a, views)
 		if err != nil {
 			return
@@ -1501,7 +1528,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// Repeating tasks don't stay in the done bucket — route them back
 	// to the default bucket so the next iteration shows up in the
 	// "To-Do" column. See #2573.
-	if t.ProjectID == ot.ProjectID && t.isRepeating() && !ot.Done && t.Done {
+	if t.ProjectID == ot.ProjectID && repeating && !ot.Done && t.Done {
 		err = t.moveTaskToDefaultBuckets(s, a, views)
 		if err != nil {
 			return
@@ -1509,10 +1536,10 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	}
 
 	preRepeatDueDate, preRepeatStartDate, preRepeatEndDate := t.DueDate, t.StartDate, t.EndDate
-	preRepeatDescription := t.Description
+	preRepeatDescription, preRepeatRule := t.Description, t.RepeatRule
 
 	// When a repeating task is marked as done, we update all deadlines and reminders and set it as undone
-	updateDoneAt := updateDone(&ot, t)
+	updateDoneAt := updateDoneIn(&ot, t, loc)
 	if updateDoneAt {
 		colsToUpdate = append(colsToUpdate, "done_at")
 	}
@@ -1531,6 +1558,9 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		}
 		if !fieldSet["description"] && t.Description != preRepeatDescription {
 			colsToUpdate = append(colsToUpdate, "description")
+		}
+		if !fieldSet["repeat_rule"] && t.RepeatRule != preRepeatRule {
+			colsToUpdate = append(colsToUpdate, "repeat_rule")
 		}
 	}
 
@@ -1642,6 +1672,10 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// Repeat from current date
 	if t.RepeatMode == TaskRepeatModeDefault {
 		ot.RepeatMode = TaskRepeatModeDefault
+	}
+	// Repeat rule
+	if t.RepeatRule == "" {
+		ot.RepeatRule = ""
 	}
 	// Is Favorite
 	if !t.IsFavorite {
@@ -2001,17 +2035,25 @@ func resetDescriptionChecklist(description string) string {
 // We make a few assumptions here:
 //  1. Everything in oldTask is the truth - we figure out if we update anything at all if oldTask.RepeatAfter has a value > 0
 //  2. Because of 1., this functions should not be used to update values other than Done in the same go
-func updateDone(oldTask *Task, newTask *Task) (updateDoneAt bool) {
+func updateDone(oldTask *Task, newTask *Task) {
+	updateDoneIn(oldTask, newTask, config.GetTimeZone())
+}
+
+// updateDoneIn is updateDone with the time zone repeat rules are evaluated in, which
+// decides what "the same weekday" or "the last day of the month" means.
+func updateDoneIn(oldTask *Task, newTask *Task, loc *time.Location) (updateDoneAt bool) {
 	// Track if the done status changed before repeat helpers modify it
 	doneStatusChanged := oldTask.Done != newTask.Done
 
 	if !oldTask.Done && newTask.Done {
-		switch oldTask.RepeatMode {
-		case TaskRepeatModeMonth:
+		switch {
+		case oldTask.RepeatRule != "":
+			setTaskDatesRepeatRule(oldTask, newTask, time.Now(), loc)
+		case oldTask.RepeatMode == TaskRepeatModeMonth:
 			setTaskDatesMonthRepeat(oldTask, newTask)
-		case TaskRepeatModeFromCurrentDate:
+		case oldTask.RepeatMode == TaskRepeatModeFromCurrentDate:
 			setTaskDatesFromCurrentDateRepeat(oldTask, newTask)
-		case TaskRepeatModeDefault:
+		case oldTask.RepeatMode == TaskRepeatModeDefault:
 			setTaskDatesDefault(oldTask, newTask)
 		}
 

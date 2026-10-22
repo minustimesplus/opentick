@@ -101,7 +101,7 @@ function onDragStart(e: DragEvent) {
 			<AlignLeft v-if="hasDescription" :size="13" class="ic" />
 			<Paperclip v-if="task.attachments?.length" :size="13" class="ic" />
 			<MessageSquare v-if="task.comment_count" :size="13" class="ic" />
-			<Repeat v-if="task.repeat_after || task.repeat_mode" :size="13" class="ic" />
+			<Repeat v-if="task.repeat_rule || task.repeat_after || task.repeat_mode" :size="13" class="ic" />
 			<AlarmClock v-if="task.reminders?.length" :size="13" class="ic" />
 			<span v-if="dateLabel" class="date" :class="{overdue}">{{ dateLabel }}</span>
 			<PersonAvatar v-for="u in (task.assignees ?? []).slice(0, 2)" :key="u.id" :user="u" :size="20" />
