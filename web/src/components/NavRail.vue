@@ -7,7 +7,7 @@ import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {useFocus} from '@/stores/focus'
 import {t} from '@/lib/i18n'
-import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, StatsIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
@@ -26,6 +26,7 @@ const items = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
+	{key: 'statistics', icon: StatsIcon, to: '/statistics', active: route.path.startsWith('/statistics'), title: t('statistics')},
 	{key: 'habits', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
 	{key: 'focus', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
 	{key: 'countdowns', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},

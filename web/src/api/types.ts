@@ -248,6 +248,47 @@ export interface McpInfo {
 	}
 }
 
+export interface StatsBucket {
+	/** First day of the period, YYYY-MM-DD. */
+	date: string
+	count: number
+}
+
+export interface StatsProject {
+	project_id: number
+	title: string
+	hex_color: string
+	count: number
+}
+
+export interface UserStatistics {
+	timezone: string
+	total_completed: number
+	completed_today: number
+	open_overdue: number
+	daily: StatsBucket[] | null
+	weekly: StatsBucket[] | null
+	monthly: StatsBucket[] | null
+	completion_rate: {
+		on_time: number
+		late: number
+		no_due_date: number
+		/** on_time / (on_time + late), 0–1. */
+		rate: number
+	}
+	projects: StatsProject[] | null
+	score: {
+		score: number
+		level: number
+		level_score: number
+		next_level_score: number
+		completion_points: number
+		on_time_points: number
+		late_penalty: number
+		overdue_penalty: number
+	}
+}
+
 export type FocusSessionType = 'pomo' | 'stopwatch'
 
 export interface FocusSession {
