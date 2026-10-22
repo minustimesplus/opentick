@@ -449,7 +449,7 @@ onMounted(async () => {
 	padding: 26px 40px 0;
 }
 
-:global(html.desktop) .top {
+html.desktop .top {
 	padding-top: 30px;
 }
 
