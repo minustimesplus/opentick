@@ -176,7 +176,7 @@ async function remove() {
 	pop.value = null
 	emit('deleted')
 	await data.deleteTask(tk.id)
-	toast(`🗑 ${tk.title}`)
+	toast(t('movedToTrash', {name: tk.title}), {label: t('undo'), run: () => data.restoreTask(tk.id)})
 }
 
 async function duplicate() {

@@ -64,6 +64,7 @@ const (
 	ServiceTestingtoken                   Key = `service.testingtoken`
 	ServiceEnableEmailReminders           Key = `service.enableemailreminders`
 	ServiceEnableUserDeletion             Key = `service.enableuserdeletion`
+	ServiceTrashRetentionDays             Key = `service.trashretentiondays`
 	ServiceMaxAvatarSize                  Key = `service.maxavatarsize`
 	ServiceAllowIconChanges               Key = `service.allowiconchanges`
 	ServiceCustomLogoURL                  Key = `service.customlogourl`
@@ -398,6 +399,7 @@ func initDefaultConfig() {
 	ServiceEnableTotp.setDefault(true)
 	ServiceEnableEmailReminders.setDefault(true)
 	ServiceEnableUserDeletion.setDefault(true)
+	ServiceTrashRetentionDays.setDefault(30)
 	ServiceMaxAvatarSize.setDefault(1024)
 	ServiceDemoMode.setDefault(false)
 	ServiceEnablePublicTeams.setDefault(false)

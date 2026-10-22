@@ -19,6 +19,7 @@ package models
 import (
 	"time"
 
+	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/cron"
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/log"
@@ -26,28 +27,38 @@ import (
 	"xorm.io/builder"
 )
 
-// TaskDeleteRetention is how long soft-deleted tasks are kept before permanent
-// removal. Hard-coded like the user deletion grace period.
-const TaskDeleteRetention = 30 * 24 * time.Hour
+// TaskDeleteRetention is how long soft-deleted tasks stay in the trash before
+// permanent removal, from service.trashretentiondays. Zero disables the purge.
+func TaskDeleteRetention() time.Duration {
+	days := config.ServiceTrashRetentionDays.GetInt()
+	if days <= 0 {
+		return 0
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
 
 // RegisterTaskCleanupCron registers the cron job that permanently removes
 // tasks which were soft-deleted more than TaskDeleteRetention ago.
 func RegisterTaskCleanupCron() {
 	err := cron.Schedule("0 * * * *", func() {
-		deleteExpiredTasks(time.Now())
+		retention := TaskDeleteRetention()
+		if retention == 0 {
+			return
+		}
+		deleteExpiredTasks(time.Now(), retention)
 	})
 	if err != nil {
 		log.Errorf("Could not register task cleanup cron: %s", err.Error())
 	}
 }
 
-func deleteExpiredTasks(now time.Time) {
+func deleteExpiredTasks(now time.Time, retention time.Duration) {
 	s := db.NewSession()
 	tasks := []*Task{}
 	err := s.Unscoped().
 		Where(builder.And(
 			builder.NotNull{"deleted_at"},
-			builder.Lt{"deleted_at": now.Add(-TaskDeleteRetention)},
+			builder.Lt{"deleted_at": now.Add(-retention)},
 		)).
 		Find(&tasks)
 	s.Close()
@@ -67,7 +78,7 @@ func deleteExpiredTasks(now time.Time) {
 			ts := db.NewSession()
 			defer ts.Close()
 
-			err = hardDeleteTask(ts, task)
+			err = purgeTrashedTasks(ts, []*Task{task})
 			if err != nil {
 				_ = ts.Rollback()
 				log.Errorf("Could not permanently delete task %d: %s", task.ID, err)

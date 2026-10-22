@@ -142,9 +142,9 @@ type Task struct {
 	Created time.Time `xorm:"created not null" json:"created" readOnly:"true" doc:"When this task was created. Set by the server; ignored on write."`
 	// A timestamp when this task was last updated. You cannot change this value.
 	Updated time.Time `xorm:"updated not null" json:"updated" readOnly:"true" doc:"When this task was last updated. Set by the server; ignored on write."`
-	// A timestamp when this task was deleted. Soft-deleted tasks are kept for 30 days before they are removed permanently.
-	// omitzero keeps the field out of the JSON of regular tasks — it only ever appears on soft-deleted ones (the later trash listing).
-	DeletedAt time.Time `xorm:"deleted datetime null INDEX 'deleted_at'" json:"deleted_at,omitzero" readOnly:"true" doc:"When this task was soft-deleted. Soft-deleted tasks are kept for 30 days before they are removed permanently."`
+	// A timestamp when this task was moved to the trash. Trashed tasks are removed permanently after service.trashretentiondays.
+	// omitzero keeps the field out of the JSON of regular tasks — it only ever appears on trashed ones.
+	DeletedAt time.Time `xorm:"deleted datetime null INDEX 'deleted_at'" json:"deleted_at,omitzero" readOnly:"true" doc:"When this task was moved to the trash. Only present on trashed tasks, which are removed permanently after the instance's trash retention period (30 days by default)."`
 
 	// The bucket id. Will only be populated when the task is accessed via a view with buckets.
 	// Can be used to move a task between buckets. In that case, the new bucket must be in the same view as the old one.
@@ -1104,37 +1104,9 @@ func createTasks(s *xorm.Session, projectID int64, tasks []*Task, a web.Auth, up
 		return err
 	}
 
-	positions, taskBuckets, err := setTasksInBucketInViews(s, views, tasks, a, setBucket, taskProvidedBucket)
+	err = insertTaskBucketsAndPositions(s, views, tasks, a, setBucket, taskProvidedBucket)
 	if err != nil {
 		return err
-	}
-
-	if len(positions) > 0 {
-		positions, err = filterNewTaskPositions(s, positions)
-		if err != nil {
-			return err
-		}
-	}
-
-	if len(positions) > 0 {
-		err = bulkInsertTaskPositions(s, positions, false)
-		if err != nil {
-			return
-		}
-
-		err = resolvePositionConflictsAfterInsert(s, positions)
-		if err != nil {
-			return
-		}
-	}
-
-	// Keep statements well below the parameter limits of all supported databases.
-	const taskBucketBatchSize = 100
-	for chunk := range slices.Chunk(taskBuckets, taskBucketBatchSize) {
-		_, err = s.Insert(chunk)
-		if err != nil {
-			return
-		}
 	}
 
 	// Link shares can't have subscriptions
@@ -1182,6 +1154,45 @@ func createTasks(s *xorm.Session, projectID int64, tasks []*Task, a web.Auth, up
 
 	err = updateProjectLastUpdated(s, &Project{ID: projectID})
 	return
+}
+
+// insertTaskBucketsAndPositions puts tasks that have no bucket or position rows
+// yet into the buckets and positions of the given views of their project.
+func insertTaskBucketsAndPositions(s *xorm.Session, views []*ProjectView, tasks []*Task, a web.Auth, setBucket bool, providedBuckets map[int64]*Bucket) (err error) {
+	positions, taskBuckets, err := setTasksInBucketInViews(s, views, tasks, a, setBucket, providedBuckets)
+	if err != nil {
+		return err
+	}
+
+	if len(positions) > 0 {
+		positions, err = filterNewTaskPositions(s, positions)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(positions) > 0 {
+		err = bulkInsertTaskPositions(s, positions, false)
+		if err != nil {
+			return
+		}
+
+		err = resolvePositionConflictsAfterInsert(s, positions)
+		if err != nil {
+			return
+		}
+	}
+
+	// Keep statements well below the parameter limits of all supported databases.
+	const taskBucketBatchSize = 100
+	for chunk := range slices.Chunk(taskBuckets, taskBucketBatchSize) {
+		_, err = s.Insert(chunk)
+		if err != nil {
+			return
+		}
+	}
+
+	return nil
 }
 
 func setTasksInBucketInViews(s *xorm.Session, views []*ProjectView, tasks []*Task, a web.Auth, setBucket bool, providedBuckets map[int64]*Bucket) ([]*TaskPosition, []*TaskBucket, error) {
@@ -2148,9 +2159,9 @@ func (t *Task) Delete(s *xorm.Session, a web.Auth) (err error) {
 	}
 
 	// Bucket and position rows are removed right away because bucket counts
-	// don't join the tasks table and would leak soft-deleted tasks; the heal
-	// routines re-create them on restore. All other related data is kept until
-	// the cleanup cron permanently deletes the task.
+	// don't join the tasks table and would leak soft-deleted tasks;
+	// RestoreTrashedTask re-creates them. All other related data is kept until
+	// the task is permanently deleted from the trash.
 	_, err = s.Where("task_id = ?", t.ID).Delete(&TaskPosition{})
 	if err != nil {
 		return
