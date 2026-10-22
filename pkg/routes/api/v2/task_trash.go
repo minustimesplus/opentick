@@ -31,10 +31,12 @@ type trashListBody struct {
 	Body Paginated[*models.Task]
 }
 
+type TrashEmptyResult struct {
+	Deleted int `json:"deleted" doc:"How many tasks were permanently deleted."`
+}
+
 type trashEmptyBody struct {
-	Body struct {
-		Deleted int `json:"deleted" doc:"How many tasks were permanently deleted."`
-	}
+	Body TrashEmptyResult
 }
 
 func RegisterTaskTrashRoutes(api huma.API) {
@@ -170,7 +172,5 @@ func tasksTrashEmpty(ctx context.Context, _ *struct{}) (*trashEmptyBody, error) 
 		return nil, translateDomainError(err)
 	}
 	events.DispatchPending(ctx, s)
-	out := &trashEmptyBody{}
-	out.Body.Deleted = deleted
-	return out, nil
+	return &trashEmptyBody{Body: TrashEmptyResult{Deleted: deleted}}, nil
 }

@@ -105,7 +105,11 @@ func TestHumaTaskTrash(t *testing.T) {
 
 		rec := req(http.MethodPost, "/tasks/trash/empty", user1)
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-		assert.JSONEq(t, `{"deleted":2}`, rec.Body.String())
+		var result struct {
+			Deleted int `json:"deleted"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &result))
+		assert.Equal(t, 2, result.Deleted)
 		assert.Empty(t, trashItemIDs(t, req(http.MethodGet, "/tasks/trash", user1)))
 		assert.Equal(t, http.StatusNotFound, req(http.MethodPost, "/tasks/trash/1/restore", user1).Code)
 	})
