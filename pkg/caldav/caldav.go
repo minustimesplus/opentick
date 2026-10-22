@@ -54,6 +54,7 @@ type Todo struct {
 	Summary     string
 	Description string
 	Done        bool
+	WontDo      bool
 	Completed   time.Time
 	Organizer   *user.User
 	Priority    int64 // 0-9, 1 is highest
@@ -204,8 +205,13 @@ DESCRIPTION:` + escapeICalText(description)
 				caldavtodos += `
 COMPLETED:` + makeCalDavTimeFromTimeStamp(t.Completed)
 			}
-			caldavtodos += `
+			if t.WontDo {
+				caldavtodos += `
+STATUS:CANCELLED`
+			} else {
+				caldavtodos += `
 STATUS:COMPLETED`
+			}
 		} else {
 			caldavtodos += `
 STATUS:NEEDS-ACTION`

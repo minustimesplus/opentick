@@ -89,6 +89,9 @@ type Task struct {
 	Done bool `xorm:"INDEX null index(project_done_due_date)" json:"done"`
 	// The time when a task was marked as done. This field is system-controlled and cannot be set via API.
 	DoneAt time.Time `xorm:"INDEX null 'done_at'" json:"done_at" readOnly:"true" doc:"When the task was marked as done. Set by the server; ignored on write."`
+	// Whether the task was closed as "won't do" instead of being completed. A won't-do task is always done (closed);
+	// setting this marks the task done, and re-opening the task clears it.
+	WontDo bool `xorm:"bool not null default false 'wont_do'" json:"wont_do" doc:"Whether the task was closed as won't do rather than completed. Implies done = true: setting it closes the task, re-opening the task clears it. Filter completed-but-not-abandoned tasks with done = true && wont_do = false."`
 	// The time when the task is due.
 	DueDate time.Time `xorm:"DATETIME INDEX null index(project_done_due_date) 'due_date'" json:"due_date"`
 	// An array of reminders that are associated with this task.
@@ -258,7 +261,7 @@ type taskSearchOptions struct {
 // @Param page query int false "The page number. Used for pagination. If not provided, the first page of results is returned."
 // @Param per_page query int false "The maximum number of items per page. Note this parameter is limited by the configured maximum of items per page."
 // @Param s query string false "Search tasks by task text."
-// @Param sort_by query string false "The sorting parameter. You can pass this multiple times to get the tasks ordered by multiple different parametes, along with `order_by`. Possible values to sort by are `id`, `title`, `description`, `done`, `done_at`, `due_date`, `created_by_id`, `project_id`, `repeat_after`, `priority`, `start_date`, `end_date`, `hex_color`, `percent_done`, `uid`, `created`, `updated`, `relevance`. `relevance` sorts by search relevance (most relevant first, requires `s`; ignored when the database cannot score the query). Default is `id`."
+// @Param sort_by query string false "The sorting parameter. You can pass this multiple times to get the tasks ordered by multiple different parametes, along with `order_by`. Possible values to sort by are `id`, `title`, `description`, `done`, `done_at`, `wont_do`, `due_date`, `created_by_id`, `project_id`, `repeat_after`, `priority`, `start_date`, `end_date`, `hex_color`, `percent_done`, `uid`, `created`, `updated`, `relevance`. `relevance` sorts by search relevance (most relevant first, requires `s`; ignored when the database cannot score the query). Default is `id`."
 // @Param order_by query string false "The ordering parameter. Possible values to order by are `asc` or `desc`. Default is `asc`."
 // @Param filter query string false "The filter query to match tasks by. Check out https://vikunja.io/docs/filters for a full explanation of the feature."
 // @Param filter_timezone query string false "The time zone which should be used for date match (statements like "now" resolve to different actual times)"
@@ -1087,6 +1090,7 @@ func createTasks(s *xorm.Session, projectID int64, tasks []*Task, a web.Auth, up
 		}
 
 		t.HexColor = utils.NormalizeHex(t.HexColor)
+		normalizeWontDo(&Task{}, t)
 
 		_, err = s.Insert(t)
 		if err != nil {
@@ -1322,6 +1326,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		"title",
 		"description",
 		"done",
+		"wont_do",
 		"due_date",
 		"repeat_after",
 		"priority",
@@ -1362,6 +1367,16 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 			t.Done = ot.Done
 			t.DoneAt = ot.DoneAt
 		}
+		if !fieldSet["wont_do"] {
+			t.WontDo = ot.WontDo
+		}
+		// done and wont_do are coupled (see normalizeWontDo), so changing one may rewrite the other.
+		if fieldSet["done"] && !fieldSet["wont_do"] {
+			colsToUpdate = append(colsToUpdate, "wont_do")
+		}
+		if fieldSet["wont_do"] && !fieldSet["done"] {
+			colsToUpdate = append(colsToUpdate, "done")
+		}
 		if !fieldSet["due_date"] {
 			t.DueDate = ot.DueDate
 		}
@@ -1400,6 +1415,8 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	if err := validateRepeatAfter(t.RepeatAfter); err != nil {
 		return err
 	}
+
+	normalizeWontDo(&ot, t)
 
 	// If the task is being moved between projects, make sure to move the bucket + index as well
 	if t.ProjectID != 0 && ot.ProjectID != t.ProjectID {
@@ -1516,6 +1533,10 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	if updateDoneAt {
 		colsToUpdate = append(colsToUpdate, "done_at")
 	}
+	// A repeating task reopens for its next occurrence, which is not won't-do anymore.
+	if !t.Done {
+		t.WontDo = false
+	}
 
 	// updateDone reschedules after colsToUpdate was frozen from the caller's field list,
 	// so whatever it rewrote has to be added back or it gets computed and thrown away.
@@ -1606,6 +1627,9 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// Done
 	if !t.Done {
 		ot.Done = false
+	}
+	if !t.WontDo {
+		ot.WontDo = false
 	}
 	// Priority
 	if t.Priority == 0 {
@@ -1994,6 +2018,18 @@ func resetDescriptionChecklist(description string) string {
 	description = checklistTiptapCheckedRegex.ReplaceAllString(description, "${1}false${2}")
 	description = checklistInputCheckedRegex.ReplaceAllString(description, "$1")
 	return description
+}
+
+// normalizeWontDo keeps wont_do consistent with done: a won't-do task is always closed, an open task is never
+// won't-do. When a full update carries both flags, the one that changed relative to the stored task wins, so
+// re-opening a won't-do task and abandoning an open one both work without the client clearing the other flag.
+func normalizeWontDo(oldTask *Task, newTask *Task) {
+	if newTask.WontDo && !oldTask.WontDo {
+		newTask.Done = true
+	}
+	if !newTask.Done {
+		newTask.WontDo = false
+	}
 }
 
 // This helper function updates the reminders, doneAt, start, end and due dates of the *old* task

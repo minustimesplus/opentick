@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {CalendarPlus, ChevronRight, Copy, Flag, FolderInput, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
+import {Ban, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import ListPicker from './ListPicker.vue'
 import DatePicker from './DatePicker.vue'
@@ -48,6 +48,11 @@ async function duplicate() {
 	close()
 }
 
+function toggleWontDo() {
+	if (task.value) data.toggleWontDo(task.value.id)
+	close()
+}
+
 function remove() {
 	const tk = task.value
 	if (!tk) return
@@ -78,6 +83,10 @@ const today = startOfDay(new Date())
 			</div>
 			<div class="menu-sep" />
 			<button ref="moveEl" class="menu-item" @click="sub = 'move'"><FolderInput :size="16" /> {{ t('moveTo') }} <ChevronRight :size="14" class="end" /></button>
+			<button class="menu-item" @click="toggleWontDo">
+				<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
+				<template v-else><Ban :size="16" /> {{ t('wontDo') }}</template>
+			</button>
 			<button class="menu-item" @click="duplicate"><Copy :size="16" /> {{ t('duplicate') }}</button>
 			<button class="menu-item danger" @click="remove"><Trash2 :size="16" /> {{ t('delete') }}</button>
 		</div>

@@ -220,6 +220,7 @@ func GetCaldavTodosForTasks(project *models.ProjectWithTasksAndBuckets, projectT
 			Summary:     t.Title,
 			Description: t.Description,
 			Done:        t.Done,
+			WontDo:      t.WontDo,
 			Completed:   t.DoneAt,
 			// Organizer:     &t.CreatedBy, // Disabled until we figure out how this works
 			Categories:  categories,
@@ -458,11 +459,13 @@ func ParseTaskFromVTODO(content string) (vTask *models.Task, props ParsedVTODOPr
 	_, hasCompleted := task["COMPLETED"]
 
 	// RFC 5545: COMPLETED alone implies done; explicit STATUS always wins.
+	// CANCELLED is how won't-do tasks round-trip: closed, but not completed.
 	if hasCompleted {
 		vTask.Done = true
 	}
 	if status, ok := task["STATUS"]; ok {
-		vTask.Done = status.Value == "COMPLETED"
+		vTask.WontDo = status.Value == "CANCELLED"
+		vTask.Done = status.Value == "COMPLETED" || vTask.WontDo
 	}
 
 	for _, vAlarm := range vTodo.SubComponents() {

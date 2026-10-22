@@ -436,7 +436,7 @@ const today0 = computed(() => startOfDay(now.value))
 							@pointerdown="startOnAllDay($event, entry.task!, i)"
 							@contextmenu="openTaskMenu(entry.task!.id, $event)"
 						>
-							<TaskCheckbox :done="entry.task.done" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
+							<TaskCheckbox :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
 							<span class="ad-title">{{ entry.task.title }}</span>
 						</div>
 					</template>
@@ -498,7 +498,7 @@ const today0 = computed(() => startOfDay(now.value))
 							@contextmenu="openTaskMenu(it.task!.id, $event)"
 						>
 							<div class="ev-top">
-								<TaskCheckbox :done="it.task.done" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
+								<TaskCheckbox :done="it.task.done" :wont-do="it.task.wont_do" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
 								<span class="ev-title">{{ it.task.title }}</span>
 							</div>
 							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>

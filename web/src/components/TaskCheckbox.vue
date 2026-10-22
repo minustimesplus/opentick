@@ -2,7 +2,7 @@
 import {computed} from 'vue'
 import {level, PRIORITY_COLORS} from '@/lib/tasks'
 
-const props = withDefaults(defineProps<{done: boolean, priority?: number, size?: number, onColor?: boolean}>(), {size: 16})
+const props = withDefaults(defineProps<{done: boolean, wontDo?: boolean, priority?: number, size?: number, onColor?: boolean}>(), {size: 16})
 const emit = defineEmits<{toggle: []}>()
 
 const color = computed(() => props.onColor ? 'currentColor' : PRIORITY_COLORS[level(props.priority)])
@@ -12,7 +12,7 @@ const fill = computed(() => !props.onColor && level(props.priority) > 0 ? `color
 <template>
 	<button
 		class="cb"
-		:class="{done}"
+		:class="{done, 'wont-do': done && wontDo}"
 		:style="{width: size + 'px', height: size + 'px', '--c': color, '--f': fill}"
 		role="checkbox"
 		:aria-checked="done"
@@ -20,7 +20,8 @@ const fill = computed(() => !props.onColor && level(props.priority) > 0 ? `color
 		@mousedown.stop
 		@pointerdown.stop
 	>
-		<svg v-if="done" viewBox="0 0 16 16"><path d="M4 8.2l2.6 2.6L12 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+		<svg v-if="done && wontDo" viewBox="0 0 16 16"><path d="M5 5l6 6M11 5l-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+		<svg v-else-if="done" viewBox="0 0 16 16"><path d="M4 8.2l2.6 2.6L12 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
 	</button>
 </template>
 
@@ -59,6 +60,13 @@ const fill = computed(() => !props.onColor && level(props.priority) > 0 ? `color
 .cb.done {
 	border-color: var(--text-4);
 	background: var(--text-4);
+}
+
+/* Won't do: an outlined box with a cross, so it reads as closed rather than completed. */
+.cb.wont-do {
+	border-color: var(--text-4);
+	background: transparent;
+	color: var(--text-3);
 }
 
 .cb svg {
