@@ -396,7 +396,7 @@ const creatingLabel = computed(() => {
 							@click="openTaskDrawer(entry.task!.id)"
 							@contextmenu="openTaskMenu(entry.task!.id, $event)"
 						>
-							<TaskCheckbox v-if="!chipTime(entry)" :done="entry.task.done" on-color :size="12" @toggle="data.toggleDone(entry.task!.id)" />
+							<TaskCheckbox v-if="!chipTime(entry)" :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="12" @toggle="data.toggleDone(entry.task!.id)" />
 							<span v-else class="dot" />
 							<span class="title">{{ entry.task.title }}</span>
 							<span v-if="chipTime(entry)" class="time">{{ chipTime(entry) }}</span>

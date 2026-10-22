@@ -175,11 +175,20 @@ func handleSyncCollectionReport(c *echo.Context, body string, storage *VikunjaCa
 		return writeForbiddenValidSyncToken(c)
 	}
 
-	// Tokens older than the soft-delete retention window cannot see deletions
-	// whose tasks were already purged — force a full resync instead of
-	// silently serving an incomplete delta.
-	if time.Since(tokenTS) > models.TaskDeleteRetention {
-		log.Debugf("[CALDAV sync-collection] project=%d token %q older than retention → 403 valid-sync-token", projectID, rawToken)
+	s := db.NewSession()
+	defer s.Close()
+
+	// Deletions whose tasks were already purged from the trash can't be
+	// reported — force a full resync instead of silently serving an
+	// incomplete delta.
+	missesDeletions, err := models.SyncTokenMissesPurgedDeletions(s, projectID, tokenTS)
+	if err != nil {
+		_ = s.Rollback()
+		log.Errorf("[CALDAV sync-collection] Failed to check purged deletions: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error").Wrap(err)
+	}
+	if missesDeletions {
+		log.Debugf("[CALDAV sync-collection] project=%d token %q predates purged deletions → 403 valid-sync-token", projectID, rawToken)
 		return writeForbiddenValidSyncToken(c)
 	}
 
@@ -193,8 +202,6 @@ func handleSyncCollectionReport(c *echo.Context, body string, storage *VikunjaCa
 		}
 	}
 
-	s := db.NewSession()
-	defer s.Close()
 	deletions, err := models.GetDeletedTasksSince(s, projectID, tokenTS)
 	if err != nil {
 		_ = s.Rollback()

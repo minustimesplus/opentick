@@ -71,7 +71,20 @@ func validateTaskForCreation(t *Task) error {
 		return ErrTaskCannotBeEmpty{}
 	}
 
-	return validateRepeatAfter(t.RepeatAfter)
+	return validateRepeat(t)
+}
+
+// validateRepeat checks the repeat fields and stores the repeat rule in canonical form.
+func validateRepeat(t *Task) error {
+	if err := validateRepeatAfter(t.RepeatAfter); err != nil {
+		return err
+	}
+	rule, err := NormalizeTaskRepeatRule(t.RepeatRule)
+	if err != nil {
+		return err
+	}
+	t.RepeatRule = rule
+	return nil
 }
 
 // Task represents a task in a project
@@ -89,6 +102,9 @@ type Task struct {
 	Done bool `xorm:"INDEX null index(project_done_due_date)" json:"done"`
 	// The time when a task was marked as done. This field is system-controlled and cannot be set via API.
 	DoneAt time.Time `xorm:"INDEX null 'done_at'" json:"done_at" readOnly:"true" doc:"When the task was marked as done. Set by the server; ignored on write."`
+	// Whether the task was closed as "won't do" instead of being completed. A won't-do task is always done (closed);
+	// setting this marks the task done, and re-opening the task clears it.
+	WontDo bool `xorm:"bool not null default false 'wont_do'" json:"wont_do" doc:"Whether the task was closed as won't do rather than completed. Implies done = true: setting it closes the task, re-opening the task clears it. Filter completed-but-not-abandoned tasks with done = true && wont_do = false."`
 	// The time when the task is due.
 	DueDate time.Time `xorm:"DATETIME INDEX null index(project_done_due_date) 'due_date'" json:"due_date"`
 	// An array of reminders that are associated with this task.
@@ -97,6 +113,8 @@ type Task struct {
 	RepeatAfter int64 `xorm:"bigint INDEX null" json:"repeat_after" valid:"range(0|9223372036854775807)" doc:"The interval in seconds this task repeats. When set, marking the task done re-opens it and bumps its reminders and due date by this amount."`
 	// Can have three possible values which will trigger when the task is marked as done: 0 = repeats after the amount specified in repeat_after, 1 = repeats all dates each months (ignoring repeat_after), 3 = repeats from the current date rather than the last set date.
 	RepeatMode TaskRepeatMode `xorm:"not null default 0" json:"repeat_mode" doc:"How the task repeats when marked done: 0 = after repeat_after seconds, 1 = monthly (ignores repeat_after), 2 = from the current date rather than the last set date."`
+	// An RFC 5545 recurrence rule. When set it takes precedence over repeat_after and repeat_mode 1.
+	RepeatRule string `xorm:"varchar(500) null 'repeat_rule'" json:"repeat_rule" maxLength:"500" doc:"An RFC 5545 RRULE value (without the RRULE: prefix) describing how the task repeats, e.g. FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR or FREQ=MONTHLY;BYDAY=-1FR;COUNT=5. Supports FREQ=DAILY|WEEKLY|MONTHLY|YEARLY with INTERVAL, BYDAY (ordinals for monthly/yearly), BYMONTHDAY, BYMONTH, WKST and one of COUNT or UNTIL. COUNT is the number of occurrences left including the current one and counts down as the task is completed. Takes precedence over repeat_after; with repeat_mode 2 the next occurrence counts from the completion date. Stored in canonical form; empty means no rule."`
 	// The task priority. Can be anything you want, it is possible to sort by this later.
 	Priority int64 `xorm:"bigint null" json:"priority"`
 	// When this task starts.
@@ -142,9 +160,9 @@ type Task struct {
 	Created time.Time `xorm:"created not null" json:"created" readOnly:"true" doc:"When this task was created. Set by the server; ignored on write."`
 	// A timestamp when this task was last updated. You cannot change this value.
 	Updated time.Time `xorm:"updated not null" json:"updated" readOnly:"true" doc:"When this task was last updated. Set by the server; ignored on write."`
-	// A timestamp when this task was deleted. Soft-deleted tasks are kept for 30 days before they are removed permanently.
-	// omitzero keeps the field out of the JSON of regular tasks — it only ever appears on soft-deleted ones (the later trash listing).
-	DeletedAt time.Time `xorm:"deleted datetime null INDEX 'deleted_at'" json:"deleted_at,omitzero" readOnly:"true" doc:"When this task was soft-deleted. Soft-deleted tasks are kept for 30 days before they are removed permanently."`
+	// A timestamp when this task was moved to the trash. Trashed tasks are removed permanently after service.trashretentiondays.
+	// omitzero keeps the field out of the JSON of regular tasks — it only ever appears on trashed ones.
+	DeletedAt time.Time `xorm:"deleted datetime null INDEX 'deleted_at'" json:"deleted_at,omitzero" readOnly:"true" doc:"When this task was moved to the trash. Only present on trashed tasks, which are removed permanently after the instance's trash retention period (30 days by default)."`
 
 	// The bucket id. Will only be populated when the task is accessed via a view with buckets.
 	// Can be used to move a task between buckets. In that case, the new bucket must be in the same view as the old one.
@@ -219,7 +237,8 @@ func (t *Task) GetFrontendURL() string {
 }
 
 func (t *Task) isRepeating() bool {
-	return t.RepeatAfter > 0 ||
+	return t.RepeatRule != "" ||
+		t.RepeatAfter > 0 ||
 		t.RepeatMode == TaskRepeatModeMonth
 }
 
@@ -258,7 +277,7 @@ type taskSearchOptions struct {
 // @Param page query int false "The page number. Used for pagination. If not provided, the first page of results is returned."
 // @Param per_page query int false "The maximum number of items per page. Note this parameter is limited by the configured maximum of items per page."
 // @Param s query string false "Search tasks by task text."
-// @Param sort_by query string false "The sorting parameter. You can pass this multiple times to get the tasks ordered by multiple different parametes, along with `order_by`. Possible values to sort by are `id`, `title`, `description`, `done`, `done_at`, `due_date`, `created_by_id`, `project_id`, `repeat_after`, `priority`, `start_date`, `end_date`, `hex_color`, `percent_done`, `uid`, `created`, `updated`, `relevance`. `relevance` sorts by search relevance (most relevant first, requires `s`; ignored when the database cannot score the query). Default is `id`."
+// @Param sort_by query string false "The sorting parameter. You can pass this multiple times to get the tasks ordered by multiple different parametes, along with `order_by`. Possible values to sort by are `id`, `title`, `description`, `done`, `done_at`, `wont_do`, `due_date`, `created_by_id`, `project_id`, `repeat_after`, `priority`, `start_date`, `end_date`, `hex_color`, `percent_done`, `uid`, `created`, `updated`, `relevance`. `relevance` sorts by search relevance (most relevant first, requires `s`; ignored when the database cannot score the query). Default is `id`."
 // @Param order_by query string false "The ordering parameter. Possible values to order by are `asc` or `desc`. Default is `asc`."
 // @Param filter query string false "The filter query to match tasks by. Check out https://vikunja.io/docs/filters for a full explanation of the feature."
 // @Param filter_timezone query string false "The time zone which should be used for date match (statements like "now" resolve to different actual times)"
@@ -1087,6 +1106,7 @@ func createTasks(s *xorm.Session, projectID int64, tasks []*Task, a web.Auth, up
 		}
 
 		t.HexColor = utils.NormalizeHex(t.HexColor)
+		normalizeWontDo(&Task{}, t)
 
 		_, err = s.Insert(t)
 		if err != nil {
@@ -1104,37 +1124,9 @@ func createTasks(s *xorm.Session, projectID int64, tasks []*Task, a web.Auth, up
 		return err
 	}
 
-	positions, taskBuckets, err := setTasksInBucketInViews(s, views, tasks, a, setBucket, taskProvidedBucket)
+	err = insertTaskBucketsAndPositions(s, views, tasks, a, setBucket, taskProvidedBucket)
 	if err != nil {
 		return err
-	}
-
-	if len(positions) > 0 {
-		positions, err = filterNewTaskPositions(s, positions)
-		if err != nil {
-			return err
-		}
-	}
-
-	if len(positions) > 0 {
-		err = bulkInsertTaskPositions(s, positions, false)
-		if err != nil {
-			return
-		}
-
-		err = resolvePositionConflictsAfterInsert(s, positions)
-		if err != nil {
-			return
-		}
-	}
-
-	// Keep statements well below the parameter limits of all supported databases.
-	const taskBucketBatchSize = 100
-	for chunk := range slices.Chunk(taskBuckets, taskBucketBatchSize) {
-		_, err = s.Insert(chunk)
-		if err != nil {
-			return
-		}
 	}
 
 	// Link shares can't have subscriptions
@@ -1182,6 +1174,45 @@ func createTasks(s *xorm.Session, projectID int64, tasks []*Task, a web.Auth, up
 
 	err = updateProjectLastUpdated(s, &Project{ID: projectID})
 	return
+}
+
+// insertTaskBucketsAndPositions puts tasks that have no bucket or position rows
+// yet into the buckets and positions of the given views of their project.
+func insertTaskBucketsAndPositions(s *xorm.Session, views []*ProjectView, tasks []*Task, a web.Auth, setBucket bool, providedBuckets map[int64]*Bucket) (err error) {
+	positions, taskBuckets, err := setTasksInBucketInViews(s, views, tasks, a, setBucket, providedBuckets)
+	if err != nil {
+		return err
+	}
+
+	if len(positions) > 0 {
+		positions, err = filterNewTaskPositions(s, positions)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(positions) > 0 {
+		err = bulkInsertTaskPositions(s, positions, false)
+		if err != nil {
+			return
+		}
+
+		err = resolvePositionConflictsAfterInsert(s, positions)
+		if err != nil {
+			return
+		}
+	}
+
+	// Keep statements well below the parameter limits of all supported databases.
+	const taskBucketBatchSize = 100
+	for chunk := range slices.Chunk(taskBuckets, taskBucketBatchSize) {
+		_, err = s.Insert(chunk)
+		if err != nil {
+			return
+		}
+	}
+
+	return nil
 }
 
 func setTasksInBucketInViews(s *xorm.Session, views []*ProjectView, tasks []*Task, a web.Auth, setBucket bool, providedBuckets map[int64]*Bucket) ([]*TaskPosition, []*TaskBucket, error) {
@@ -1322,6 +1353,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		"title",
 		"description",
 		"done",
+		"wont_do",
 		"due_date",
 		"repeat_after",
 		"priority",
@@ -1332,6 +1364,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		"project_id",
 		"bucket_id",
 		"repeat_mode",
+		"repeat_rule",
 		"cover_image_attachment_id",
 	}
 
@@ -1361,6 +1394,16 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		if !fieldSet["done"] {
 			t.Done = ot.Done
 			t.DoneAt = ot.DoneAt
+		}
+		if !fieldSet["wont_do"] {
+			t.WontDo = ot.WontDo
+		}
+		// done and wont_do are coupled (see normalizeWontDo), so changing one may rewrite the other.
+		if fieldSet["done"] && !fieldSet["wont_do"] {
+			colsToUpdate = append(colsToUpdate, "wont_do")
+		}
+		if fieldSet["wont_do"] && !fieldSet["done"] {
+			colsToUpdate = append(colsToUpdate, "done")
 		}
 		if !fieldSet["due_date"] {
 			t.DueDate = ot.DueDate
@@ -1392,14 +1435,19 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		if !fieldSet["repeat_mode"] {
 			t.RepeatMode = ot.RepeatMode
 		}
+		if !fieldSet["repeat_rule"] {
+			t.RepeatRule = ot.RepeatRule
+		}
 		if !fieldSet["cover_image_attachment_id"] {
 			t.CoverImageAttachmentID = ot.CoverImageAttachmentID
 		}
 	}
 
-	if err := validateRepeatAfter(t.RepeatAfter); err != nil {
+	if err := validateRepeat(t); err != nil {
 		return err
 	}
+
+	normalizeWontDo(&ot, t)
 
 	// If the task is being moved between projects, make sure to move the bucket + index as well
 	if t.ProjectID != 0 && ot.ProjectID != t.ProjectID {
@@ -1490,8 +1538,15 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		}
 	}
 
+	// Only rule-based series can end, and only when their stored rule runs out on this completion.
+	loc := config.GetTimeZone()
+	if ot.RepeatRule != "" && !ot.Done && t.Done {
+		loc = repeatLocation(s, a)
+	}
+	repeating := t.isRepeating() && !repeatSeriesEndsOnCompletion(&ot, time.Now(), loc)
+
 	// When a task changed its done status, make sure it is in the correct bucket
-	if t.ProjectID == ot.ProjectID && !t.isRepeating() && t.Done != ot.Done {
+	if t.ProjectID == ot.ProjectID && !repeating && t.Done != ot.Done {
 		err = t.moveTaskToDoneBuckets(s, a, views)
 		if err != nil {
 			return
@@ -1501,7 +1556,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// Repeating tasks don't stay in the done bucket — route them back
 	// to the default bucket so the next iteration shows up in the
 	// "To-Do" column. See #2573.
-	if t.ProjectID == ot.ProjectID && t.isRepeating() && !ot.Done && t.Done {
+	if t.ProjectID == ot.ProjectID && repeating && !ot.Done && t.Done {
 		err = t.moveTaskToDefaultBuckets(s, a, views)
 		if err != nil {
 			return
@@ -1509,12 +1564,16 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	}
 
 	preRepeatDueDate, preRepeatStartDate, preRepeatEndDate := t.DueDate, t.StartDate, t.EndDate
-	preRepeatDescription := t.Description
+	preRepeatDescription, preRepeatRule := t.Description, t.RepeatRule
 
 	// When a repeating task is marked as done, we update all deadlines and reminders and set it as undone
-	updateDoneAt := updateDone(&ot, t)
+	updateDoneAt := updateDoneIn(&ot, t, loc)
 	if updateDoneAt {
 		colsToUpdate = append(colsToUpdate, "done_at")
+	}
+	// A repeating task reopens for its next occurrence, which is not won't-do anymore.
+	if !t.Done {
+		t.WontDo = false
 	}
 
 	// updateDone reschedules after colsToUpdate was frozen from the caller's field list,
@@ -1531,6 +1590,9 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		}
 		if !fieldSet["description"] && t.Description != preRepeatDescription {
 			colsToUpdate = append(colsToUpdate, "description")
+		}
+		if !fieldSet["repeat_rule"] && t.RepeatRule != preRepeatRule {
+			colsToUpdate = append(colsToUpdate, "repeat_rule")
 		}
 	}
 
@@ -1607,6 +1669,9 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	if !t.Done {
 		ot.Done = false
 	}
+	if !t.WontDo {
+		ot.WontDo = false
+	}
 	// Priority
 	if t.Priority == 0 {
 		ot.Priority = 0
@@ -1642,6 +1707,10 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// Repeat from current date
 	if t.RepeatMode == TaskRepeatModeDefault {
 		ot.RepeatMode = TaskRepeatModeDefault
+	}
+	// Repeat rule
+	if t.RepeatRule == "" {
+		ot.RepeatRule = ""
 	}
 	// Is Favorite
 	if !t.IsFavorite {
@@ -1996,22 +2065,42 @@ func resetDescriptionChecklist(description string) string {
 	return description
 }
 
+// normalizeWontDo keeps wont_do consistent with done: a won't-do task is always closed, an open task is never
+// won't-do. When a full update carries both flags, the one that changed relative to the stored task wins, so
+// re-opening a won't-do task and abandoning an open one both work without the client clearing the other flag.
+func normalizeWontDo(oldTask *Task, newTask *Task) {
+	if newTask.WontDo && !oldTask.WontDo {
+		newTask.Done = true
+	}
+	if !newTask.Done {
+		newTask.WontDo = false
+	}
+}
+
 // This helper function updates the reminders, doneAt, start, end and due dates of the *old* task
 // and saves the new values in the newTask object.
 // We make a few assumptions here:
 //  1. Everything in oldTask is the truth - we figure out if we update anything at all if oldTask.RepeatAfter has a value > 0
 //  2. Because of 1., this functions should not be used to update values other than Done in the same go
-func updateDone(oldTask *Task, newTask *Task) (updateDoneAt bool) {
+func updateDone(oldTask *Task, newTask *Task) {
+	updateDoneIn(oldTask, newTask, config.GetTimeZone())
+}
+
+// updateDoneIn is updateDone with the time zone repeat rules are evaluated in, which
+// decides what "the same weekday" or "the last day of the month" means.
+func updateDoneIn(oldTask *Task, newTask *Task, loc *time.Location) (updateDoneAt bool) {
 	// Track if the done status changed before repeat helpers modify it
 	doneStatusChanged := oldTask.Done != newTask.Done
 
 	if !oldTask.Done && newTask.Done {
-		switch oldTask.RepeatMode {
-		case TaskRepeatModeMonth:
+		switch {
+		case oldTask.RepeatRule != "":
+			setTaskDatesRepeatRule(oldTask, newTask, time.Now(), loc)
+		case oldTask.RepeatMode == TaskRepeatModeMonth:
 			setTaskDatesMonthRepeat(oldTask, newTask)
-		case TaskRepeatModeFromCurrentDate:
+		case oldTask.RepeatMode == TaskRepeatModeFromCurrentDate:
 			setTaskDatesFromCurrentDateRepeat(oldTask, newTask)
-		case TaskRepeatModeDefault:
+		case oldTask.RepeatMode == TaskRepeatModeDefault:
 			setTaskDatesDefault(oldTask, newTask)
 		}
 
@@ -2148,9 +2237,9 @@ func (t *Task) Delete(s *xorm.Session, a web.Auth) (err error) {
 	}
 
 	// Bucket and position rows are removed right away because bucket counts
-	// don't join the tasks table and would leak soft-deleted tasks; the heal
-	// routines re-create them on restore. All other related data is kept until
-	// the cleanup cron permanently deletes the task.
+	// don't join the tasks table and would leak soft-deleted tasks;
+	// RestoreTrashedTask re-creates them. All other related data is kept until
+	// the task is permanently deleted from the trash.
 	_, err = s.Where("task_id = ?", t.ID).Delete(&TaskPosition{})
 	if err != nil {
 		return

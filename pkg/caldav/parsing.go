@@ -220,6 +220,7 @@ func GetCaldavTodosForTasks(project *models.ProjectWithTasksAndBuckets, projectT
 			Summary:     t.Title,
 			Description: t.Description,
 			Done:        t.Done,
+			WontDo:      t.WontDo,
 			Completed:   t.DoneAt,
 			// Organizer:     &t.CreatedBy, // Disabled until we figure out how this works
 			Categories:  categories,
@@ -232,6 +233,7 @@ func GetCaldavTodosForTasks(project *models.ProjectWithTasksAndBuckets, projectT
 			Duration:    duration,
 			RepeatAfter: t.RepeatAfter,
 			RepeatMode:  t.RepeatMode,
+			RepeatRule:  t.RepeatRule,
 			Alarms:      alarms,
 			Relations:   relations,
 		})
@@ -278,6 +280,7 @@ type ParsedVTODOProperties struct {
 	StartDate   bool
 	EndDate     bool
 	Color       bool
+	Repeat      bool
 }
 
 // ParseTaskFromVTODO parses a VTODO into a Task. Partial updates must overlay only
@@ -411,6 +414,18 @@ func ParseTaskFromVTODO(content string) (vTask *models.Task, props ParsedVTODOPr
 
 	hexColor := getHexColorFromCaldavColor(color)
 
+	var repeatRule string
+	var repeatAfter int64
+	rruleProp, hasRepeat := task["RRULE"]
+	if hasRepeat {
+		repeatRule, repeatAfter, err = parseVTODORrule(rruleProp.Value)
+		if err != nil {
+			// An unsupported rule leaves the stored repeat settings alone rather than failing the sync.
+			log.Warningf("[CALDAV] Ignoring unsupported RRULE %q: %v", rruleProp.Value, err)
+			hasRepeat = false
+		}
+	}
+
 	vTask = &models.Task{
 		UID:         uidValue,
 		Title:       titleValue,
@@ -423,6 +438,8 @@ func ParseTaskFromVTODO(content string) (vTask *models.Task, props ParsedVTODOPr
 		EndDate:     endDate,
 		DoneAt:      caldavTimeToTimestamp(task["COMPLETED"]),
 		HexColor:    hexColor,
+		RepeatRule:  repeatRule,
+		RepeatAfter: repeatAfter,
 	}
 
 	for _, c := range relations {
@@ -458,11 +475,13 @@ func ParseTaskFromVTODO(content string) (vTask *models.Task, props ParsedVTODOPr
 	_, hasCompleted := task["COMPLETED"]
 
 	// RFC 5545: COMPLETED alone implies done; explicit STATUS always wins.
+	// CANCELLED is how won't-do tasks round-trip: closed, but not completed.
 	if hasCompleted {
 		vTask.Done = true
 	}
 	if status, ok := task["STATUS"]; ok {
-		vTask.Done = status.Value == "COMPLETED"
+		vTask.WontDo = status.Value == "CANCELLED"
+		vTask.Done = status.Value == "COMPLETED" || vTask.WontDo
 	}
 
 	for _, vAlarm := range vTodo.SubComponents() {
@@ -480,6 +499,7 @@ func ParseTaskFromVTODO(content string) (vTask *models.Task, props ParsedVTODOPr
 		StartDate:   parsedDateProperty(dtStartProp, hasDTStart, startDate),
 		EndDate:     hasEndDate,
 		Color:       hasColor && (color == "" || hexColor != ""),
+		Repeat:      hasRepeat,
 	}
 
 	return vTask, props, nil
@@ -579,4 +599,49 @@ func caldavTimeToTimestamp(ianaProperty ics.IANAProperty) time.Time {
 	}
 
 	return t.In(config.GetTimeZone())
+}
+
+var subDailyRruleFreqs = map[string]int64{
+	"SECONDLY": 1,
+	"MINUTELY": 60,
+	"HOURLY":   3600,
+}
+
+// parseVTODORrule maps an RRULE value onto a task's repeat_rule, or onto repeat_after for
+// the plain sub-daily intervals repeat rules don't cover (which older exports produce).
+// An empty value clears the repeat.
+func parseVTODORrule(value string) (repeatRule string, repeatAfter int64, err error) {
+	repeatRule, err = models.NormalizeTaskRepeatRule(value)
+	if err == nil {
+		return repeatRule, 0, nil
+	}
+
+	var unit, interval int64 = 0, 1
+	for _, part := range strings.Split(strings.ToUpper(strings.TrimSpace(value)), ";") {
+		key, val, _ := strings.Cut(part, "=")
+		switch key {
+		case "FREQ":
+			unit = subDailyRruleFreqs[val]
+		case "INTERVAL":
+			n, convErr := strconv.ParseInt(val, 10, 64)
+			if convErr != nil || n < 1 {
+				return "", 0, err
+			}
+			interval = n
+		default:
+			return "", 0, err
+		}
+	}
+	if unit == 0 || interval > models.MaxTaskRepeatAfterSeconds/unit {
+		return "", 0, err
+	}
+	return "", unit * interval, nil
+}
+
+// SameRepeat reports whether an incoming VTODO's repeat settings are what the stored
+// task already exports, so a client echoing them back doesn't rewrite legacy repeat
+// fields or drop "repeat after completion".
+func SameRepeat(stored, incoming *models.Task) bool {
+	rule, after, err := parseVTODORrule(todoRrule(stored.RepeatRule, stored.RepeatAfter, stored.RepeatMode, stored.DueDate))
+	return err == nil && rule == incoming.RepeatRule && after == incoming.RepeatAfter
 }

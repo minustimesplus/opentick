@@ -701,6 +701,35 @@ func (err ErrInvalidTaskRepeatInterval) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrInvalidTaskRepeatRule represents an error where the provided task repeat rule
+// is not a recurrence rule the server can evaluate.
+type ErrInvalidTaskRepeatRule struct {
+	Rule   string
+	Reason string
+}
+
+// IsErrInvalidTaskRepeatRule checks if an error is ErrInvalidTaskRepeatRule.
+func IsErrInvalidTaskRepeatRule(err error) bool {
+	_, ok := err.(ErrInvalidTaskRepeatRule)
+	return ok
+}
+
+func (err ErrInvalidTaskRepeatRule) Error() string {
+	return fmt.Sprintf("Invalid task repeat rule. [Rule: %q, Reason: %s]", err.Rule, err.Reason)
+}
+
+// ErrCodeInvalidTaskRepeatRule holds the unique world-error code of this error.
+const ErrCodeInvalidTaskRepeatRule = 4036
+
+// HTTPError holds the http error description.
+func (err ErrInvalidTaskRepeatRule) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidTaskRepeatRule,
+		Message:  "The task repeat rule is invalid: " + err.Reason,
+	}
+}
+
 // ErrInvalidBulkTaskCreationCount represents an error where a bulk task creation request has no tasks or more than the maximum.
 type ErrInvalidBulkTaskCreationCount struct {
 	Count int
@@ -3114,5 +3143,306 @@ func (err ErrCalendarSubscriptionInvalidRange) HTTPError() web.HTTPError {
 		HTTPCode: http.StatusBadRequest,
 		Code:     ErrCodeCalendarSubscriptionInvalidRange,
 		Message:  "The end of the range must be after its start, and the range can span at most 366 days.",
+	}
+}
+
+// =============================
+// Habit errors
+// =============================
+
+// ErrHabitDoesNotExist represents an error where a habit does not exist.
+type ErrHabitDoesNotExist struct {
+	ID int64
+}
+
+// IsErrHabitDoesNotExist checks if an error is ErrHabitDoesNotExist.
+func IsErrHabitDoesNotExist(err error) bool {
+	_, ok := err.(ErrHabitDoesNotExist)
+	return ok
+}
+
+func (err ErrHabitDoesNotExist) Error() string {
+	return fmt.Sprintf("Habit does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeHabitDoesNotExist holds the unique world-error code of this error
+const ErrCodeHabitDoesNotExist = 21001
+
+// HTTPError holds the http error description
+func (err ErrHabitDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeHabitDoesNotExist,
+		Message:  "This habit does not exist.",
+	}
+}
+
+// ErrHabitInvalidFrequency represents an error where a habit frequency is unknown.
+type ErrHabitInvalidFrequency struct {
+	Frequency string
+}
+
+// IsErrHabitInvalidFrequency checks if an error is ErrHabitInvalidFrequency.
+func IsErrHabitInvalidFrequency(err error) bool {
+	_, ok := err.(ErrHabitInvalidFrequency)
+	return ok
+}
+
+func (err ErrHabitInvalidFrequency) Error() string {
+	return "Habit frequency is invalid: " + err.Frequency
+}
+
+// ErrCodeHabitInvalidFrequency holds the unique world-error code of this error
+const ErrCodeHabitInvalidFrequency = 21002
+
+// HTTPError holds the http error description
+func (err ErrHabitInvalidFrequency) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeHabitInvalidFrequency,
+		Message:  "The habit frequency must be daily or weekdays.",
+	}
+}
+
+// ErrHabitInvalidWeekdays represents an error where a weekdays habit is due on no day.
+type ErrHabitInvalidWeekdays struct{}
+
+// IsErrHabitInvalidWeekdays checks if an error is ErrHabitInvalidWeekdays.
+func IsErrHabitInvalidWeekdays(err error) bool {
+	_, ok := err.(ErrHabitInvalidWeekdays)
+	return ok
+}
+
+func (err ErrHabitInvalidWeekdays) Error() string {
+	return "Habit weekdays are invalid"
+}
+
+// ErrCodeHabitInvalidWeekdays holds the unique world-error code of this error
+const ErrCodeHabitInvalidWeekdays = 21003
+
+// HTTPError holds the http error description
+func (err ErrHabitInvalidWeekdays) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeHabitInvalidWeekdays,
+		Message:  "A habit due on specific weekdays needs at least one weekday.",
+	}
+}
+
+// ErrHabitInvalidDate represents an error where a habit date is not a valid YYYY-MM-DD day or YYYY-MM month.
+type ErrHabitInvalidDate struct {
+	Date string
+}
+
+// IsErrHabitInvalidDate checks if an error is ErrHabitInvalidDate.
+func IsErrHabitInvalidDate(err error) bool {
+	_, ok := err.(ErrHabitInvalidDate)
+	return ok
+}
+
+func (err ErrHabitInvalidDate) Error() string {
+	return "Habit date is invalid: " + err.Date
+}
+
+// ErrCodeHabitInvalidDate holds the unique world-error code of this error
+const ErrCodeHabitInvalidDate = 21004
+
+// HTTPError holds the http error description
+func (err ErrHabitInvalidDate) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeHabitInvalidDate,
+		Message:  "Dates must be YYYY-MM-DD days and months YYYY-MM.",
+	}
+}
+
+// ErrHabitInvalidRange represents an error where habit check-ins were requested for an invalid range.
+type ErrHabitInvalidRange struct{}
+
+// IsErrHabitInvalidRange checks if an error is ErrHabitInvalidRange.
+func IsErrHabitInvalidRange(err error) bool {
+	_, ok := err.(ErrHabitInvalidRange)
+	return ok
+}
+
+func (err ErrHabitInvalidRange) Error() string {
+	return "Habit check-in range is invalid"
+}
+
+// ErrCodeHabitInvalidRange holds the unique world-error code of this error
+const ErrCodeHabitInvalidRange = 21005
+
+// HTTPError holds the http error description
+func (err ErrHabitInvalidRange) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeHabitInvalidRange,
+		Message:  "The end of the range must not be before its start, and the range can span at most 366 days.",
+	}
+}
+
+// ErrHabitCheckinInFuture represents an error where a check-in is for a day that has not started yet.
+type ErrHabitCheckinInFuture struct{}
+
+// IsErrHabitCheckinInFuture checks if an error is ErrHabitCheckinInFuture.
+func IsErrHabitCheckinInFuture(err error) bool {
+	_, ok := err.(ErrHabitCheckinInFuture)
+	return ok
+}
+
+func (err ErrHabitCheckinInFuture) Error() string {
+	return "Habit check-in is in the future"
+}
+
+// ErrCodeHabitCheckinInFuture holds the unique world-error code of this error
+const ErrCodeHabitCheckinInFuture = 21006
+
+// HTTPError holds the http error description
+func (err ErrHabitCheckinInFuture) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeHabitCheckinInFuture,
+		Message:  "You cannot check in for a future day.",
+	}
+}
+
+// =============================
+// Countdown errors
+// =============================
+
+// ErrCountdownDoesNotExist represents an error where a countdown does not exist.
+type ErrCountdownDoesNotExist struct {
+	ID int64
+}
+
+// IsErrCountdownDoesNotExist checks if an error is ErrCountdownDoesNotExist.
+func IsErrCountdownDoesNotExist(err error) bool {
+	_, ok := err.(ErrCountdownDoesNotExist)
+	return ok
+}
+
+func (err ErrCountdownDoesNotExist) Error() string {
+	return fmt.Sprintf("Countdown does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeCountdownDoesNotExist holds the unique world-error code of this error
+const ErrCodeCountdownDoesNotExist = 22001
+
+// HTTPError holds the http error description
+func (err ErrCountdownDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeCountdownDoesNotExist,
+		Message:  "This countdown does not exist.",
+	}
+}
+
+// ErrCountdownInvalidType represents an error where a countdown has an unknown type.
+type ErrCountdownInvalidType struct {
+	Type string
+}
+
+// IsErrCountdownInvalidType checks if an error is ErrCountdownInvalidType.
+func IsErrCountdownInvalidType(err error) bool {
+	_, ok := err.(ErrCountdownInvalidType)
+	return ok
+}
+
+func (err ErrCountdownInvalidType) Error() string {
+	return fmt.Sprintf("Countdown type is invalid [Type: %s]", err.Type)
+}
+
+// ErrCodeCountdownInvalidType holds the unique world-error code of this error
+const ErrCodeCountdownInvalidType = 22002
+
+// HTTPError holds the http error description
+func (err ErrCountdownInvalidType) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeCountdownInvalidType,
+		Message:  "The countdown type must be countdown, anniversary or birthday.",
+	}
+}
+
+// =====================
+// Focus session errors
+// =====================
+
+// ErrFocusSessionDoesNotExist represents an error where a focus session does not exist.
+type ErrFocusSessionDoesNotExist struct {
+	ID int64
+}
+
+// IsErrFocusSessionDoesNotExist checks if an error is ErrFocusSessionDoesNotExist.
+func IsErrFocusSessionDoesNotExist(err error) bool {
+	_, ok := err.(ErrFocusSessionDoesNotExist)
+	return ok
+}
+
+func (err ErrFocusSessionDoesNotExist) Error() string {
+	return fmt.Sprintf("Focus session does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeFocusSessionDoesNotExist holds the unique world-error code of this error
+const ErrCodeFocusSessionDoesNotExist = 23001
+
+// HTTPError holds the http error description
+func (err ErrFocusSessionDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeFocusSessionDoesNotExist,
+		Message:  "This focus session does not exist.",
+	}
+}
+
+// ErrFocusSessionInvalidType represents an error where a focus session has an unknown type.
+type ErrFocusSessionInvalidType struct {
+	Type string
+}
+
+// IsErrFocusSessionInvalidType checks if an error is ErrFocusSessionInvalidType.
+func IsErrFocusSessionInvalidType(err error) bool {
+	_, ok := err.(ErrFocusSessionInvalidType)
+	return ok
+}
+
+func (err ErrFocusSessionInvalidType) Error() string {
+	return fmt.Sprintf("Focus session type is invalid [Type: %s]", err.Type)
+}
+
+// ErrCodeFocusSessionInvalidType holds the unique world-error code of this error
+const ErrCodeFocusSessionInvalidType = 23002
+
+// HTTPError holds the http error description
+func (err ErrFocusSessionInvalidType) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeFocusSessionInvalidType,
+		Message:  "The focus session type must be either 'pomo' or 'stopwatch'.",
+	}
+}
+
+// ErrFocusSessionInvalidTimes represents an error where a focus session's times or duration don't add up.
+type ErrFocusSessionInvalidTimes struct{}
+
+// IsErrFocusSessionInvalidTimes checks if an error is ErrFocusSessionInvalidTimes.
+func IsErrFocusSessionInvalidTimes(err error) bool {
+	_, ok := err.(ErrFocusSessionInvalidTimes)
+	return ok
+}
+
+func (err ErrFocusSessionInvalidTimes) Error() string {
+	return "Focus session times are invalid"
+}
+
+// ErrCodeFocusSessionInvalidTimes holds the unique world-error code of this error
+const ErrCodeFocusSessionInvalidTimes = 23003
+
+// HTTPError holds the http error description
+func (err ErrFocusSessionInvalidTimes) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeFocusSessionInvalidTimes,
+		Message:  "A focus session needs a start time, must not end before it starts, and its duration must fit between start and end.",
 	}
 }

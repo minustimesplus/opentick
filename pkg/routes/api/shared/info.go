@@ -49,6 +49,7 @@ type VikunjaInfos struct {
 	AuthInfo                   AuthInfo  `json:"auth" doc:"The authentication methods enabled on this instance."`
 	EmailRemindersEnabled      bool      `json:"email_reminders_enabled" doc:"Whether email reminders are enabled."`
 	UserDeletionEnabled        bool      `json:"user_deletion_enabled" doc:"Whether users may delete their own account."`
+	TrashRetentionDays         int       `json:"trash_retention_days" doc:"How many days deleted tasks stay in the trash before they are removed permanently. 0 means they stay until deleted by hand."`
 	TaskCommentsEnabled        bool      `json:"task_comments_enabled" doc:"Whether task comments are enabled."`
 	DemoModeEnabled            bool      `json:"demo_mode_enabled" doc:"Whether this instance runs in demo mode (data is periodically reset)."`
 	WebhooksEnabled            bool      `json:"webhooks_enabled" doc:"Whether webhooks are enabled."`
@@ -118,6 +119,7 @@ func BuildInfo() VikunjaInfos {
 		CaldavEnabled:          config.ServiceEnableCaldav.GetBool(),
 		EmailRemindersEnabled:  config.ServiceEnableEmailReminders.GetBool(),
 		UserDeletionEnabled:    config.ServiceEnableUserDeletion.GetBool(),
+		TrashRetentionDays:     max(config.ServiceTrashRetentionDays.GetInt(), 0),
 		TaskCommentsEnabled:    config.ServiceEnableTaskComments.GetBool(),
 		DemoModeEnabled:        config.ServiceDemoMode.GetBool(),
 		WebhooksEnabled:        config.WebhooksEnabled.GetBool(),

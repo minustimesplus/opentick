@@ -81,6 +81,10 @@ type Project struct {
 	Expand        ProjectExpandable `xorm:"-" json:"-" query:"expand"`
 	MaxPermission *Permission       `xorm:"-" json:"max_permission" readOnly:"true" doc:"The maximum permission the requesting user has on this project (0 = read, 1 = read/write, 2 = admin), or null when the permission was not computed for this response."`
 
+	// The newest deleted_at of the trashed tasks permanently removed from this project.
+	// CalDAV sync tokens from before it can no longer see those deletions.
+	TasksPurgedUntil time.Time `xorm:"datetime null 'tasks_purged_until'" json:"-"`
+
 	// A timestamp when this project was created. You cannot change this value.
 	Created time.Time `xorm:"created not null" json:"created" readOnly:"true" doc:"A timestamp when this project was created. You cannot change this value."`
 	// A timestamp when this project was last updated. You cannot change this value.

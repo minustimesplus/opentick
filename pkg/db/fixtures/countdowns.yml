@@ -1,0 +1,26 @@
+- id: 1
+  user_id: 1
+  title: Trip to Japan
+  date: 2027-04-01 00:00:00
+  type: countdown
+  repeat_yearly: false
+  icon: ✈️
+  hex_color: 1973ff
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+- id: 2
+  user_id: 1
+  title: Anna's birthday
+  date: 1990-06-15 00:00:00
+  type: birthday
+  repeat_yearly: true
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+- id: 3
+  user_id: 2
+  title: Someone else's anniversary
+  date: 2015-09-01 00:00:00
+  type: anniversary
+  repeat_yearly: true
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12

@@ -73,7 +73,7 @@ function onDragStart(e: DragEvent) {
 <template>
 	<div
 		class="row"
-		:class="{selected, done: task.done, compact}"
+		:class="{selected, done: task.done, 'wont-do': task.done && task.wont_do, compact}"
 		:style="depth ? {paddingLeft: `${16 + depth * 28}px`} : undefined"
 		:draggable="!isMobile"
 		@click="emit('select', task.id)"
@@ -88,7 +88,7 @@ function onDragStart(e: DragEvent) {
 		<button v-if="childCount" class="fold" :style="{left: `${depth * 28}px`}" @click.stop="emit('toggle', task.id)">
 			<component :is="expanded ? ChevronDown : ChevronRight" :size="14" />
 		</button>
-		<TaskCheckbox :done="task.done" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
+		<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 		<div class="title-wrap">
 			<span class="title">{{ task.title || '—' }}</span>
 		</div>
@@ -101,7 +101,7 @@ function onDragStart(e: DragEvent) {
 			<AlignLeft v-if="hasDescription" :size="13" class="ic" />
 			<Paperclip v-if="task.attachments?.length" :size="13" class="ic" />
 			<MessageSquare v-if="task.comment_count" :size="13" class="ic" />
-			<Repeat v-if="task.repeat_after || task.repeat_mode" :size="13" class="ic" />
+			<Repeat v-if="task.repeat_rule || task.repeat_after || task.repeat_mode" :size="13" class="ic" />
 			<AlarmClock v-if="task.reminders?.length" :size="13" class="ic" />
 			<span v-if="dateLabel" class="date" :class="{overdue}">{{ dateLabel }}</span>
 			<PersonAvatar v-for="u in (task.assignees ?? []).slice(0, 2)" :key="u.id" :user="u" :size="20" />
@@ -205,6 +205,10 @@ function onDragStart(e: DragEvent) {
 .done .title {
 	color: var(--text-3);
 	text-decoration: line-through;
+}
+
+.wont-do .title {
+	color: var(--text-4);
 }
 
 .meta {

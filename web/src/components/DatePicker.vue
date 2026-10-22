@@ -7,7 +7,9 @@ import {
 	schedulePatch, startOfDay, startOfMonth, startOfWeek, withMinutes,
 } from '@/lib/dates'
 import {t, type MessageKey} from '@/lib/i18n'
+import {describeRepeat, matchPreset, parseRepeat, PRESETS, presetLabel, presetSpec, repeatPatch, type RepeatPreset, type RepeatSpec} from '@/lib/repeat'
 import type {TaskPatch} from '@/stores/data'
+import RepeatEditor from './RepeatEditor.vue'
 
 const props = defineProps<{task?: Task | null}>()
 const emit = defineEmits<{apply: [TaskPatch], close: []}>()
@@ -67,21 +69,28 @@ const reminder = ref<RemKey>(initialReminder())
 const extraReminders: Reminder[] = (props.task?.reminders ?? []).slice(1)
 
 // ---- repeat ----
-type RepKey = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'
-const REP: Record<RepKey, {after: number, mode: number, label: MessageKey}> = {
-	none: {after: 0, mode: 0, label: 'repNone'},
-	daily: {after: 86400, mode: 0, label: 'repDaily'},
-	weekly: {after: 604800, mode: 0, label: 'repWeekly'},
-	biweekly: {after: 1209600, mode: 0, label: 'repBiweekly'},
-	monthly: {after: 0, mode: 1, label: 'repMonthly'},
-	yearly: {after: 31536000, mode: 0, label: 'repYearly'},
+const repeatSpec = ref<RepeatSpec | null>(parseRepeat(props.task))
+// Untouched repeats are left as stored, so legacy repeat_after values survive a date change.
+const repeatDirty = ref(false)
+const editingRepeat = ref(false)
+const anchorDay = computed(() => day.value ?? today)
+const repeatChoice = computed<RepeatPreset | 'custom' | 'edit'>({
+	get: () => matchPreset(repeatSpec.value) ?? 'custom',
+	set: v => {
+		if (v === 'edit') {
+			editingRepeat.value = true
+		} else if (v !== 'custom') {
+			repeatSpec.value = presetSpec(v)
+			repeatDirty.value = true
+		}
+	},
+})
+
+function saveRepeat(spec: RepeatSpec) {
+	repeatSpec.value = spec
+	repeatDirty.value = true
+	editingRepeat.value = false
 }
-function initialRepeat(): RepKey {
-	if (props.task?.repeat_mode === 1) return 'monthly'
-	const after = props.task?.repeat_after ?? 0
-	return (Object.keys(REP) as RepKey[]).find(k => k !== 'monthly' && REP[k].after === after) ?? 'none'
-}
-const repeat = ref<RepKey>(initialRepeat())
 
 // ---- calendar grid ----
 const weeks = computed(() => {
@@ -137,8 +146,11 @@ function buildPatch(): TaskPatch {
 	} else if (!d) {
 		reminders = []
 	}
-	const rep = d ? REP[repeat.value] : REP.none
-	return {...sched, reminders, repeat_after: rep.after, repeat_mode: rep.mode}
+	const spec = repeatSpec.value
+	// An nth-weekday rule is pinned to the date, so it follows a date change.
+	const rebuild = repeatDirty.value || (spec && !spec.raw && spec.freq === 'MONTHLY' && spec.monthMode === 'nth')
+	const rep = !d ? repeatPatch(null, today) : rebuild ? repeatPatch(spec, d) : {}
+	return {...sched, reminders, ...rep}
 }
 
 function apply() {
@@ -147,13 +159,16 @@ function apply() {
 }
 
 function clear() {
-	emit('apply', {...schedulePatch(null, false), reminders: [], repeat_after: 0, repeat_mode: 0})
+	emit('apply', {...schedulePatch(null, false), reminders: [], ...repeatPatch(null, today)})
 	emit('close')
 }
 </script>
 
 <template>
-	<div class="dp" @keydown.enter.prevent="apply">
+	<div v-if="editingRepeat" class="dp">
+		<RepeatEditor :spec="repeatSpec" :anchor="anchorDay" @save="saveRepeat" @cancel="editingRepeat = false" />
+	</div>
+	<div v-else class="dp" @keydown.enter.prevent="apply">
 		<div class="tabs">
 			<button :class="{on: tab === 'date'}" @click="tab = 'date'">{{ t('date') }}</button>
 			<button :class="{on: tab === 'duration'}" @click="tab = 'duration'">{{ t('duration') }}</button>
@@ -220,8 +235,10 @@ function clear() {
 			<label class="row">
 				<Repeat :size="16" />
 				<span class="row-label">{{ t('repeat') }}</span>
-				<select v-model="repeat" class="sel">
-					<option v-for="(v, k) in REP" :key="k" :value="k">{{ t(v.label) }}</option>
+				<select v-model="repeatChoice" class="sel" :title="describeRepeat(repeatSpec, anchorDay)">
+					<option v-for="p in PRESETS" :key="p" :value="p">{{ presetLabel(p, anchorDay) }}</option>
+					<option v-if="repeatChoice === 'custom'" value="custom">{{ describeRepeat(repeatSpec, anchorDay) }}</option>
+					<option value="edit">{{ t('repCustomEdit') }}</option>
 				</select>
 			</label>
 		</div>
