@@ -29,8 +29,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/conditional"
 )
 
-const habitTodayDoc = "The day today's progress and streaks are relative to, YYYY-MM-DD — normally the client's local date. Defaults to today in the user's timezone setting."
-
 type habitListBody struct {
 	Body Paginated[*models.Habit]
 }
