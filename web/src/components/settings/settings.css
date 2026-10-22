@@ -1,0 +1,94 @@
+/* Shared layout for the TickTick-style settings panels: a section title,
+   grey cards of rows, and muted descriptions under a row. */
+
+.settings .s-title {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin: 0 0 11px 15px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.settings .s-title.flush {
+	margin-left: 0;
+}
+
+.settings .s-title svg {
+	color: var(--text-3);
+}
+
+.settings .s-title:not(:first-child) {
+	margin-top: 24px;
+}
+
+.settings .s-card {
+	margin-bottom: 10px;
+	padding: 3px 15px;
+	border-radius: 8px;
+	background: var(--settings-card);
+}
+
+.settings .s-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	min-height: 36px;
+	font-size: 13px;
+}
+
+.settings .s-label {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-width: 0;
+}
+
+.settings .s-label > svg {
+	flex-shrink: 0;
+	color: var(--text-2);
+}
+
+.settings .s-desc {
+	margin: -7px 40px 0 0;
+	padding-bottom: 9px;
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--text-3);
+}
+
+.settings .s-value {
+	color: var(--text-2);
+	font-size: 13px;
+}
+
+.settings .s-links {
+	display: flex;
+	gap: 12px;
+}
+
+.settings .s-link {
+	color: var(--accent);
+	font-size: 13px;
+}
+
+.settings .s-link:hover {
+	text-decoration: underline;
+}
+
+.settings .s-link.danger {
+	color: var(--danger);
+}
+
+.settings .s-check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 28px;
+	font-size: 12px;
+}
+
+.settings .s-card > .s-check:last-child {
+	margin-bottom: 4px;
+}
