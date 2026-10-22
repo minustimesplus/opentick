@@ -10,6 +10,10 @@
 	font-weight: 600;
 }
 
+.settings .s-title.flush {
+	margin-left: 0;
+}
+
 .settings .s-title svg {
 	color: var(--text-3);
 }
