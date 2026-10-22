@@ -17,9 +17,9 @@
 package models
 
 import (
-	"code.vikunja.io/api/pkg/config"
 	"time"
 
+	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/events"
 	"code.vikunja.io/api/pkg/web"
@@ -143,15 +143,7 @@ func updateTaskBucket(s *xorm.Session, a web.Auth, b *TaskBucket) (err error) {
 		if view.DoneBucketID == b.BucketID && !task.Done {
 			doneChanged = true
 			task.Done = true
-			if task.isRepeating() {
-				oldTask := *task
-				oldTask.Done = false
-				loc := config.GetTimeZone()
-				if task.RepeatRule != "" {
-					loc = repeatLocation(s, a)
-				}
-				updateDoneIn(&oldTask, task, loc)
-			}
+			reopenRepeatingTask(s, a, task)
 			// A rule-based series that just ended stays done like any other task.
 			if task.isRepeating() && !task.Done {
 				// A repeating task doesn't stay in the done bucket; route
@@ -237,6 +229,20 @@ func updateTaskBucket(s *xorm.Session, a web.Auth, b *TaskBucket) (err error) {
 	b.Bucket = bucket
 
 	return
+}
+
+// reopenRepeatingTask moves a repeating task that was just marked done to its next occurrence.
+func reopenRepeatingTask(s *xorm.Session, a web.Auth, task *Task) {
+	if !task.isRepeating() {
+		return
+	}
+	oldTask := *task
+	oldTask.Done = false
+	loc := config.GetTimeZone()
+	if task.RepeatRule != "" {
+		loc = repeatLocation(s, a)
+	}
+	updateDoneIn(&oldTask, task, loc)
 }
 
 // Update is the handler to update a task bucket

@@ -788,13 +788,8 @@ func (vcls *VikunjaCaldavProjectStorage) UpdateResource(rpath, content string) (
 	if props.Color {
 		base.HexColor = vTask.HexColor
 	}
-	if props.Repeat && !caldav.SameRepeat(stored, vTask) {
-		base.RepeatRule = vTask.RepeatRule
-		base.RepeatAfter = vTask.RepeatAfter
-		// RRULE can't say "repeat after completion"; keep that choice while the task still repeats.
-		if base.RepeatMode != models.TaskRepeatModeFromCurrentDate || (base.RepeatRule == "" && base.RepeatAfter == 0) {
-			base.RepeatMode = models.TaskRepeatModeDefault
-		}
+	if props.Repeat {
+		applyRepeatFromVTODO(&base, stored, vTask)
 	}
 	// nil = no VALARM, keep stored reminders; non-nil (even empty) = client owns the alarm set.
 	if vTask.Reminders != nil {
@@ -1209,4 +1204,18 @@ func addTaskResource(collectionProjectID int64, task *models.Task, rr *VikunjaPr
 	taskResourceInstance := data.NewResource(taskURL(collectionProjectID, task), rr)
 	taskResourceInstance.Name = task.Title
 	*resources = append(*resources, taskResourceInstance)
+}
+
+// applyRepeatFromVTODO overlays an incoming RRULE onto base, unless it is just the
+// stored task's own export echoed back.
+func applyRepeatFromVTODO(base, stored, vTask *models.Task) {
+	if caldav.SameRepeat(stored, vTask) {
+		return
+	}
+	base.RepeatRule = vTask.RepeatRule
+	base.RepeatAfter = vTask.RepeatAfter
+	// RRULE can't say "repeat after completion"; keep that choice while the task still repeats.
+	if base.RepeatMode != models.TaskRepeatModeFromCurrentDate || (base.RepeatRule == "" && base.RepeatAfter == 0) {
+		base.RepeatMode = models.TaskRepeatModeDefault
+	}
 }

@@ -2035,8 +2035,8 @@ func resetDescriptionChecklist(description string) string {
 // We make a few assumptions here:
 //  1. Everything in oldTask is the truth - we figure out if we update anything at all if oldTask.RepeatAfter has a value > 0
 //  2. Because of 1., this functions should not be used to update values other than Done in the same go
-func updateDone(oldTask *Task, newTask *Task) (updateDoneAt bool) {
-	return updateDoneIn(oldTask, newTask, config.GetTimeZone())
+func updateDone(oldTask *Task, newTask *Task) {
+	updateDoneIn(oldTask, newTask, config.GetTimeZone())
 }
 
 // updateDoneIn is updateDone with the time zone repeat rules are evaluated in, which

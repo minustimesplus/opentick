@@ -422,7 +422,6 @@ func ParseTaskFromVTODO(content string) (vTask *models.Task, props ParsedVTODOPr
 			// An unsupported rule leaves the stored repeat settings alone rather than failing the sync.
 			log.Warningf("[CALDAV] Ignoring unsupported RRULE %q: %v", rruleProp.Value, err)
 			hasRepeat = false
-			err = nil
 		}
 	}
 

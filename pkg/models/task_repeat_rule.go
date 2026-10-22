@@ -249,6 +249,8 @@ func parseRepeatRule(raw string) (*repeatRule, error) {
 		if r.Freq == repeatFreqWeekly && len(r.ByMonthDay) > 0 {
 			return nil, invalidRepeatRule(raw, "BYMONTHDAY cannot be used with FREQ=WEEKLY")
 		}
+	case repeatFreqMonthly:
+		// Every BYDAY/BYMONTHDAY/BYMONTH combination applies.
 	case repeatFreqYearly:
 		if len(r.ByDay) > 0 && len(r.ByMonth) == 0 {
 			return nil, invalidRepeatRule(raw, "BYDAY with FREQ=YEARLY needs BYMONTH")

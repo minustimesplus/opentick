@@ -105,8 +105,8 @@ func TestNormalizeTaskRepeatRule(t *testing.T) {
 
 func TestRepeatRuleNextOccurrence(t *testing.T) {
 	berlin := mustLoc(t, "Europe/Berlin")
-	d := func(y int, m time.Month, day, h, min int) time.Time {
-		return time.Date(y, m, day, h, min, 0, 0, berlin)
+	d := func(y int, m time.Month, day, h, mi int) time.Time {
+		return time.Date(y, m, day, h, mi, 0, 0, berlin)
 	}
 
 	tests := []struct {
@@ -241,8 +241,8 @@ func TestRepeatRuleAllowsOccurrence(t *testing.T) {
 
 func TestSetTaskDatesRepeatRule(t *testing.T) {
 	berlin := mustLoc(t, "Europe/Berlin")
-	d := func(y int, m time.Month, day, h, min int) time.Time {
-		return time.Date(y, m, day, h, min, 0, 0, berlin)
+	d := func(y int, m time.Month, day, h, mi int) time.Time {
+		return time.Date(y, m, day, h, mi, 0, 0, berlin)
 	}
 	// Thursday afternoon.
 	now := d(2026, 10, 22, 15, 0)
