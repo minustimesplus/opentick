@@ -85,7 +85,7 @@ func init() {
 		"ErrCodeInvalidTaskFilterValue":                    reflect.ValueOf(constant.MakeFromLiteral("4019", token.INT, 0)),
 		"ErrCodeInvalidTaskInBulkCreation":                 reflect.ValueOf(constant.MakeFromLiteral("4031", token.INT, 0)),
 		"ErrCodeInvalidTaskRepeatInterval":                 reflect.ValueOf(constant.MakeFromLiteral("4029", token.INT, 0)),
-		"ErrCodeInvalidTaskRepeatRule":                     reflect.ValueOf(constant.MakeFromLiteral("4034", token.INT, 0)),
+		"ErrCodeInvalidTaskRepeatRule":                     reflect.ValueOf(constant.MakeFromLiteral("4036", token.INT, 0)),
 		"ErrCodeInvalidTimeEntryFilterField":               reflect.ValueOf(constant.MakeFromLiteral("18003", token.INT, 0)),
 		"ErrCodeInvalidTimeEntryFilterValue":               reflect.ValueOf(constant.MakeFromLiteral("18004", token.INT, 0)),
 		"ErrCodeInvalidTimezone":                           reflect.ValueOf(constant.MakeFromLiteral("2003", token.INT, 0)),

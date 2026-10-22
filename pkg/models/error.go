@@ -719,7 +719,7 @@ func (err ErrInvalidTaskRepeatRule) Error() string {
 }
 
 // ErrCodeInvalidTaskRepeatRule holds the unique world-error code of this error.
-const ErrCodeInvalidTaskRepeatRule = 4034
+const ErrCodeInvalidTaskRepeatRule = 4036
 
 // HTTPError holds the http error description.
 func (err ErrInvalidTaskRepeatRule) HTTPError() web.HTTPError {
