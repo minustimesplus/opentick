@@ -51,6 +51,8 @@ export interface Task {
 	position?: number
 	bucket_id?: number
 	created_by?: User | null
+	/** Only set on tasks in the trash. */
+	deleted_at?: string | null
 }
 
 export type RelationKind = 'subtask' | 'parenttask' | 'related' | 'duplicateof' | 'duplicates' | 'blocking' | 'blocked' | 'precedes' | 'follows' | 'copiedfrom' | 'copiedto'
