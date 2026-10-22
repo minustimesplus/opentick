@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import {Check, ImageOff, Plus, X} from 'lucide-vue-next'
+import AppearanceDisplay from './AppearanceDisplay.vue'
+import SettingSelect from './SettingSelect.vue'
 import SettingToggle from './SettingToggle.vue'
 import {prefs} from '@/lib/prefs'
 import {t, type MessageKey} from '@/lib/i18n'
@@ -22,6 +24,11 @@ const labels: Record<ThemeColor, MessageKey> = {
 	gray: 'themeGray',
 	dark: 'themeDark',
 }
+
+const tab = ref<'theme' | 'display'>('theme')
+
+// Not wired up yet: there is only the flat style.
+const interfaceStyle = ref('flat')
 
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -47,74 +54,102 @@ async function remove() {
 </script>
 
 <template>
-	<h2 class="section-title">{{ t('appearance') }}</h2>
-
-	<div class="card">
-		<div class="row">
-			<span>{{ t('followSystemDark') }}</span>
-			<SettingToggle v-model="prefs.followSystemDark" />
-		</div>
+	<div class="tabs">
+		<button :class="{active: tab === 'theme'}" @click="tab = 'theme'">{{ t('theme') }}</button>
+		<button :class="{active: tab === 'display'}" @click="tab = 'display'">{{ t('displayTab') }}</button>
 	</div>
 
-	<h3 class="group-title">{{ t('colorSeries') }}</h3>
-	<div class="swatches">
-		<button
-			v-for="c in colorSeries"
-			:key="c.key"
-			class="swatch"
-			:class="{active: prefs.themeColor === c.key}"
-			:aria-pressed="prefs.themeColor === c.key"
-			@click="prefs.themeColor = c.key"
-		>
-			<span class="chip" :class="c.key" :style="{background: c.swatch}">
-				<span v-if="c.key === 'dark'" class="dots"><i /><i /><i /></span>
-				<span v-if="prefs.themeColor === c.key" class="badge"><Check :size="10" :stroke-width="3" /></span>
-			</span>
-			<span class="name">{{ t(labels[c.key]) }}</span>
-		</button>
-	</div>
-
-	<h3 class="group-title">{{ t('backgroundImage') }}</h3>
-	<p class="hint">{{ background.uploadEnabled ? t('backgroundHint') : t('backgroundUnavailable') }}</p>
-	<template v-if="background.uploadEnabled">
-		<div class="images">
-			<button class="image" :class="{active: !background.url}" :disabled="background.busy" @click="background.url && remove()">
-				<span class="thumb none"><ImageOff :size="20" :stroke-width="1.6" /></span>
-				<span class="name">{{ t('backgroundNone') }}</span>
-			</button>
-			<div v-if="background.url" class="image active">
-				<span class="thumb" :style="{backgroundImage: `url(${background.url})`}">
-					<span class="badge"><Check :size="10" :stroke-width="3" /></span>
-					<button class="remove" :title="t('delete')" :aria-label="t('delete')" :disabled="background.busy" @click="remove">
-						<X :size="12" :stroke-width="2.2" />
-					</button>
-				</span>
-				<span class="name">{{ t('backgroundCustom') }}</span>
-			</div>
-			<button class="image" :disabled="background.busy" @click="fileInput?.click()">
-				<span class="thumb upload">
-					<span v-if="background.busy" class="spinner" />
-					<Plus v-else :size="20" :stroke-width="1.6" />
-				</span>
-				<span class="name">{{ t('backgroundUpload') }}</span>
-			</button>
-			<input ref="fileInput" type="file" accept="image/*" hidden @change="onFile">
-		</div>
-
+	<AppearanceDisplay v-if="tab === 'display'" />
+	<template v-else>
 		<div class="card">
 			<div class="row">
-				<span>{{ t('backgroundBlur') }}</span>
-				<SettingToggle v-model="prefs.backgroundBlur" />
+				<span>{{ t('interfaceStyle') }}</span>
+				<SettingSelect v-model="interfaceStyle" :options="[{value: 'flat', label: t('interfaceFlat')}]" />
+			</div>
+			<div class="row">
+				<span>{{ t('followSystemDark') }}</span>
+				<SettingToggle v-model="prefs.followSystemDark" />
 			</div>
 		</div>
+
+		<h3 class="group-title">{{ t('colorSeries') }}</h3>
+		<div class="swatches">
+			<button
+				v-for="c in colorSeries"
+				:key="c.key"
+				class="swatch"
+				:class="{active: prefs.themeColor === c.key}"
+				:aria-pressed="prefs.themeColor === c.key"
+				@click="prefs.themeColor = c.key"
+			>
+				<span class="chip" :class="c.key" :style="{background: c.swatch}">
+					<span v-if="c.key === 'dark'" class="dots"><i /><i /><i /></span>
+					<span v-if="prefs.themeColor === c.key" class="badge"><Check :size="10" :stroke-width="3" /></span>
+				</span>
+				<span class="name">{{ t(labels[c.key]) }}</span>
+			</button>
+		</div>
+
+		<h3 class="group-title">{{ t('backgroundImage') }}</h3>
+		<p class="hint">{{ background.uploadEnabled ? t('backgroundHint') : t('backgroundUnavailable') }}</p>
+		<template v-if="background.uploadEnabled">
+			<div class="images">
+				<button class="image" :class="{active: !background.url}" :disabled="background.busy" @click="background.url && remove()">
+					<span class="thumb none"><ImageOff :size="20" :stroke-width="1.6" /></span>
+					<span class="name">{{ t('backgroundNone') }}</span>
+				</button>
+				<div v-if="background.url" class="image active">
+					<span class="thumb" :style="{backgroundImage: `url(${background.url})`}">
+						<span class="badge"><Check :size="10" :stroke-width="3" /></span>
+						<button class="remove" :title="t('delete')" :aria-label="t('delete')" :disabled="background.busy" @click="remove">
+							<X :size="12" :stroke-width="2.2" />
+						</button>
+					</span>
+					<span class="name">{{ t('backgroundCustom') }}</span>
+				</div>
+				<button class="image" :disabled="background.busy" @click="fileInput?.click()">
+					<span class="thumb upload">
+						<span v-if="background.busy" class="spinner" />
+						<Plus v-else :size="20" :stroke-width="1.6" />
+					</span>
+					<span class="name">{{ t('backgroundUpload') }}</span>
+				</button>
+				<input ref="fileInput" type="file" accept="image/*" hidden @change="onFile">
+			</div>
+
+			<div class="card">
+				<div class="row">
+					<span>{{ t('backgroundBlur') }}</span>
+					<SettingToggle v-model="prefs.backgroundBlur" />
+				</div>
+			</div>
+		</template>
 	</template>
 </template>
 
 <style scoped>
-.section-title {
-	margin: 0 0 13px 15px;
-	font-size: 14px;
-	font-weight: 600;
+.tabs {
+	display: flex;
+	width: fit-content;
+	margin: -30px auto 16px;
+	padding: 2px;
+	border-radius: 8px;
+	background: var(--settings-card);
+}
+
+.tabs button {
+	height: 26px;
+	padding: 0 16px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-3);
+}
+
+.tabs button.active {
+	background: var(--bg);
+	color: var(--text);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .card {

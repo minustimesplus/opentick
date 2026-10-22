@@ -3,10 +3,19 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Compone
 import {
 	Bell, CircleUserRound, Clock, Crown, Funnel, Import, Info, Keyboard, LayoutGrid, PaintRoller, Server, Sparkles, Users, X,
 } from 'lucide-vue-next'
+import AboutSettings from './AboutSettings.vue'
 import AiFeaturesSettings from './AiFeaturesSettings.vue'
 import AccountSettings from './AccountSettings.vue'
 import AppearanceSettings from './AppearanceSettings.vue'
+import CollaborateSettings from './CollaborateSettings.vue'
 import DateTimeSettings from './DateTimeSettings.vue'
+import FeaturesSettings from './FeaturesSettings.vue'
+import IntegrationSettings from './IntegrationSettings.vue'
+import MoreSettings from './MoreSettings.vue'
+import NotificationSettings from './NotificationSettings.vue'
+import ShortcutSettings from './ShortcutSettings.vue'
+import SmartListSettings from './SmartListSettings.vue'
+import './settings.css'
 import {t, type MessageKey} from '@/lib/i18n'
 import {ui, type SettingsSection} from '@/lib/ui'
 
@@ -40,12 +49,20 @@ const groups: NavItem[][] = [
 	],
 ]
 
-// Sections without a panel yet render an empty page.
+// Premium has no panel and renders an empty page.
 const panels: Partial<Record<SettingsSection, Component>> = {
 	account: AccountSettings,
+	features: FeaturesSettings,
+	smartList: SmartListSettings,
+	notifications: NotificationSettings,
 	dateTime: DateTimeSettings,
 	appearance: AppearanceSettings,
 	aiFeatures: AiFeaturesSettings,
+	more: MoreSettings,
+	integrations: IntegrationSettings,
+	collaborate: CollaborateSettings,
+	shortcuts: ShortcutSettings,
+	about: AboutSettings,
 }
 
 const panel = computed(() => (ui.settings ? panels[ui.settings] : undefined))
