@@ -6,7 +6,7 @@ import Popover from './Popover.vue'
 import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
-import {BellIcon, CalendarIcon, CountdownIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {BellIcon, CalendarIcon, CountdownIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
@@ -24,6 +24,7 @@ const items = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
+	{key: 'habits', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
 	{key: 'countdowns', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
@@ -90,6 +91,7 @@ const shortcuts = [
 	['G I', 'inbox'],
 	['G M', 'matrix'],
 	['G C', 'week'],
+	['G H', 'habits'],
 	['G D', 'countdowns'],
 ] as const
 </script>

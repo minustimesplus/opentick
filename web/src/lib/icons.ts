@@ -34,6 +34,16 @@ export const CalendarIcon = createLucideIcon('rail-calendar', [
 	}],
 ])
 
+// A disc with a check mark cut out, ringed like a streak.
+export const HabitIcon = createLucideIcon('rail-habit', [
+	['path', {
+		...solid,
+		key: 'disc',
+		d: 'M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19z'
+			+ 'M7.6 11.9 10.6 14.9l5.8-5.8a.9.9 0 0 1 1.3 1.3l-7.1 7.1-4.3-4.3a.9.9 0 0 1 1.3-1.3z',
+	}],
+])
+
 // An hourglass: two solid bulbs meeting at the neck, between a top and a bottom bar.
 export const CountdownIcon = createLucideIcon('rail-countdown', [
 	['path', {...solid, key: 'top', d: 'M5.5 2.5h13a1.2 1.2 0 0 1 0 2.4h-13a1.2 1.2 0 0 1 0-2.4z'}],
