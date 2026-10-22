@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import UserAvatar from '../UserAvatar.vue'
+import AvatarCropDialog from './AvatarCropDialog.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
@@ -11,6 +12,7 @@ const data = useData()
 const avatarInput = ref<HTMLInputElement | null>(null)
 const importInput = ref<HTMLInputElement | null>(null)
 const avatarBusy = ref(false)
+const cropFile = ref<File | null>(null)
 const exporting = ref(false)
 const importing = ref(false)
 
@@ -18,10 +20,14 @@ function errorText(e: unknown) {
 	return (e as Error).message || t('error')
 }
 
-async function onAvatarPicked() {
+function onAvatarPicked() {
 	const file = avatarInput.value?.files?.[0]
 	if (avatarInput.value) avatarInput.value.value = ''
-	if (!file) return
+	if (file) cropFile.value = file
+}
+
+async function onAvatarCropped(file: File) {
+	cropFile.value = null
 	avatarBusy.value = true
 	try {
 		await data.uploadAvatar(file)
@@ -95,6 +101,7 @@ async function onImportPicked() {
 		</div>
 		<input ref="avatarInput" type="file" accept="image/png,image/jpeg,image/gif,image/bmp,image/tiff" hidden @change="onAvatarPicked">
 	</div>
+	<AvatarCropDialog v-if="cropFile" :file="cropFile" @close="cropFile = null" @cropped="onAvatarCropped" />
 
 	<h2 class="section-title">{{ t('backup') }}</h2>
 
