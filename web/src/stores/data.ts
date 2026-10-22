@@ -386,7 +386,7 @@ export const useData = defineStore('data', () => {
 		if (!t) return
 		const done = !t.done
 		const res = await updateTask(id, {done, done_at: done ? new Date().toISOString() : null})
-		if (res && done && !res.done && res.repeat_after) {
+		if (res && done && !res.done && (res.repeat_rule || res.repeat_after || res.repeat_mode)) {
 			toast('↻ ' + res.title)
 		}
 	}

@@ -701,6 +701,35 @@ func (err ErrInvalidTaskRepeatInterval) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrInvalidTaskRepeatRule represents an error where the provided task repeat rule
+// is not a recurrence rule the server can evaluate.
+type ErrInvalidTaskRepeatRule struct {
+	Rule   string
+	Reason string
+}
+
+// IsErrInvalidTaskRepeatRule checks if an error is ErrInvalidTaskRepeatRule.
+func IsErrInvalidTaskRepeatRule(err error) bool {
+	_, ok := err.(ErrInvalidTaskRepeatRule)
+	return ok
+}
+
+func (err ErrInvalidTaskRepeatRule) Error() string {
+	return fmt.Sprintf("Invalid task repeat rule. [Rule: %q, Reason: %s]", err.Rule, err.Reason)
+}
+
+// ErrCodeInvalidTaskRepeatRule holds the unique world-error code of this error.
+const ErrCodeInvalidTaskRepeatRule = 4034
+
+// HTTPError holds the http error description.
+func (err ErrInvalidTaskRepeatRule) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidTaskRepeatRule,
+		Message:  "The task repeat rule is invalid: " + err.Reason,
+	}
+}
+
 // ErrInvalidBulkTaskCreationCount represents an error where a bulk task creation request has no tasks or more than the maximum.
 type ErrInvalidBulkTaskCreationCount struct {
 	Count int

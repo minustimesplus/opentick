@@ -33,6 +33,8 @@ export interface Task {
 	reminders?: Reminder[] | null
 	repeat_after?: number
 	repeat_mode?: number
+	/** RFC 5545 RRULE value; takes precedence over repeat_after. */
+	repeat_rule?: string
 	hex_color?: string
 	is_favorite?: boolean
 	created?: string

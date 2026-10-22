@@ -17,6 +17,7 @@
 package models
 
 import (
+	"code.vikunja.io/api/pkg/config"
 	"time"
 
 	"code.vikunja.io/api/pkg/db"
@@ -145,7 +146,14 @@ func updateTaskBucket(s *xorm.Session, a web.Auth, b *TaskBucket) (err error) {
 			if task.isRepeating() {
 				oldTask := *task
 				oldTask.Done = false
-				updateDone(&oldTask, task)
+				loc := config.GetTimeZone()
+				if task.RepeatRule != "" {
+					loc = repeatLocation(s, a)
+				}
+				updateDoneIn(&oldTask, task, loc)
+			}
+			// A rule-based series that just ended stays done like any other task.
+			if task.isRepeating() && !task.Done {
 				// A repeating task doesn't stay in the done bucket; route
 				// it back to the view's default bucket so the user sees
 				// the next iteration waiting in the "To-Do" column.
@@ -181,6 +189,7 @@ func updateTaskBucket(s *xorm.Session, a web.Auth, b *TaskBucket) (err error) {
 				"start_date",
 				"end_date",
 				"done_at",
+				"repeat_rule",
 			).
 			Update(task)
 		if err != nil {
