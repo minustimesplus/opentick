@@ -3363,3 +3363,86 @@ func (err ErrCountdownInvalidType) HTTPError() web.HTTPError {
 		Message:  "The countdown type must be countdown, anniversary or birthday.",
 	}
 }
+
+// =====================
+// Focus session errors
+// =====================
+
+// ErrFocusSessionDoesNotExist represents an error where a focus session does not exist.
+type ErrFocusSessionDoesNotExist struct {
+	ID int64
+}
+
+// IsErrFocusSessionDoesNotExist checks if an error is ErrFocusSessionDoesNotExist.
+func IsErrFocusSessionDoesNotExist(err error) bool {
+	_, ok := err.(ErrFocusSessionDoesNotExist)
+	return ok
+}
+
+func (err ErrFocusSessionDoesNotExist) Error() string {
+	return fmt.Sprintf("Focus session does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeFocusSessionDoesNotExist holds the unique world-error code of this error
+const ErrCodeFocusSessionDoesNotExist = 23001
+
+// HTTPError holds the http error description
+func (err ErrFocusSessionDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeFocusSessionDoesNotExist,
+		Message:  "This focus session does not exist.",
+	}
+}
+
+// ErrFocusSessionInvalidType represents an error where a focus session has an unknown type.
+type ErrFocusSessionInvalidType struct {
+	Type string
+}
+
+// IsErrFocusSessionInvalidType checks if an error is ErrFocusSessionInvalidType.
+func IsErrFocusSessionInvalidType(err error) bool {
+	_, ok := err.(ErrFocusSessionInvalidType)
+	return ok
+}
+
+func (err ErrFocusSessionInvalidType) Error() string {
+	return fmt.Sprintf("Focus session type is invalid [Type: %s]", err.Type)
+}
+
+// ErrCodeFocusSessionInvalidType holds the unique world-error code of this error
+const ErrCodeFocusSessionInvalidType = 23002
+
+// HTTPError holds the http error description
+func (err ErrFocusSessionInvalidType) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeFocusSessionInvalidType,
+		Message:  "The focus session type must be either 'pomo' or 'stopwatch'.",
+	}
+}
+
+// ErrFocusSessionInvalidTimes represents an error where a focus session's times or duration don't add up.
+type ErrFocusSessionInvalidTimes struct{}
+
+// IsErrFocusSessionInvalidTimes checks if an error is ErrFocusSessionInvalidTimes.
+func IsErrFocusSessionInvalidTimes(err error) bool {
+	_, ok := err.(ErrFocusSessionInvalidTimes)
+	return ok
+}
+
+func (err ErrFocusSessionInvalidTimes) Error() string {
+	return "Focus session times are invalid"
+}
+
+// ErrCodeFocusSessionInvalidTimes holds the unique world-error code of this error
+const ErrCodeFocusSessionInvalidTimes = 23003
+
+// HTTPError holds the http error description
+func (err ErrFocusSessionInvalidTimes) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeFocusSessionInvalidTimes,
+		Message:  "A focus session needs a start time, must not end before it starts, and its duration must fit between start and end.",
+	}
+}

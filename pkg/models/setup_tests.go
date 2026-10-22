@@ -76,6 +76,7 @@ func SetupTests() {
 		"habits",
 		"habit_checkins",
 		"countdowns",
+		"focus_sessions",
 		"saved_filters",
 		"subscriptions",
 		"favorites",
