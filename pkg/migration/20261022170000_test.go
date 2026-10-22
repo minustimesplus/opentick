@@ -25,21 +25,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAddFocusSessions20261022120000(t *testing.T) {
+func TestAddFocusSessions20261022170000(t *testing.T) {
 	x, err := db.CreateTestEngine()
 	require.NoError(t, err)
-	require.NoError(t, dropFocusSessions20261022120000(x))
+	require.NoError(t, dropFocusSessions20261022170000(x))
 
-	require.NoError(t, addFocusSessions20261022120000(x))
+	require.NoError(t, addFocusSessions20261022170000(x))
 	// Re-running on an existing table must be harmless.
-	require.NoError(t, addFocusSessions20261022120000(x))
+	require.NoError(t, addFocusSessions20261022170000(x))
 
 	start := time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)
-	row := &focusSessions20261022120000{UserID: 1, Type: "pomo", StartTime: start, EndTime: start.Add(25 * time.Minute), Duration: 1500}
+	row := &focusSessions20261022170000{UserID: 1, Type: "pomo", StartTime: start, EndTime: start.Add(25 * time.Minute), Duration: 1500}
 	_, err = x.Insert(row)
 	require.NoError(t, err)
 
-	got := &focusSessions20261022120000{}
+	got := &focusSessions20261022170000{}
 	has, err := x.ID(row.ID).Get(got)
 	require.NoError(t, err)
 	require.True(t, has)
@@ -62,7 +62,7 @@ func TestAddFocusSessions20261022120000(t *testing.T) {
 	assert.True(t, indexed["user_id"], "user_id must be indexed: every query filters on it")
 	assert.True(t, indexed["start_time"], "start_time must be indexed: the stats and range queries filter on it")
 
-	require.NoError(t, dropFocusSessions20261022120000(x))
+	require.NoError(t, dropFocusSessions20261022170000(x))
 	exists, err := x.IsTableExist("focus_sessions")
 	require.NoError(t, err)
 	assert.False(t, exists)

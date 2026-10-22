@@ -33,6 +33,8 @@ export interface Task {
 	reminders?: Reminder[] | null
 	repeat_after?: number
 	repeat_mode?: number
+	/** RFC 5545 RRULE value; takes precedence over repeat_after. */
+	repeat_rule?: string
 	hex_color?: string
 	is_favorite?: boolean
 	created?: string
@@ -49,6 +51,8 @@ export interface Task {
 	position?: number
 	bucket_id?: number
 	created_by?: User | null
+	/** Only set on tasks in the trash. */
+	deleted_at?: string | null
 }
 
 export type RelationKind = 'subtask' | 'parenttask' | 'related' | 'duplicateof' | 'duplicates' | 'blocking' | 'blocked' | 'precedes' | 'follows' | 'copiedfrom' | 'copiedto'
@@ -132,6 +136,70 @@ export interface CalendarSubscription {
 	hex_color?: string
 	created?: string
 	updated?: string
+}
+
+export type HabitFrequency = 'daily' | 'weekdays'
+
+export interface HabitCheckin {
+	habit_id: number
+	/** YYYY-MM-DD */
+	date: string
+	value: number
+}
+
+export interface Habit {
+	id: number
+	title: string
+	icon: string
+	hex_color?: string
+	frequency: HabitFrequency
+	/** Bitmask of due days: bit 0 is Sunday, bit 6 Saturday. */
+	weekdays: number
+	goal: number
+	unit: string
+	archived: boolean
+	today_value: number
+	current_streak: number
+	/** The last 7 days, today included. */
+	recent_checkins: HabitCheckin[] | null
+	created?: string
+	updated?: string
+}
+
+export type CountdownType = 'countdown' | 'anniversary' | 'birthday'
+
+export interface Countdown {
+	id: number
+	title: string
+	/** Midnight UTC of the counted date; only its UTC calendar date matters. */
+	date: string
+	type: CountdownType
+	repeat_yearly: boolean
+	icon?: string
+	hex_color?: string
+	created?: string
+	updated?: string
+}
+
+export interface HabitStatsDay {
+	date: string
+	value: number
+	due: boolean
+	completed: boolean
+}
+
+export interface HabitStats {
+	habit_id: number
+	today: string
+	current_streak: number
+	longest_streak: number
+	completed_days: number
+	due_days: number
+	completion_rate: number
+	total_checkins: number
+	total_value: number
+	month: string
+	days: HabitStatsDay[]
 }
 
 /** One occurrence of an event from a subscribed calendar, as the API returns it. */
