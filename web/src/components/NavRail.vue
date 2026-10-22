@@ -6,7 +6,7 @@ import Popover from './Popover.vue'
 import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
-import {BellIcon, CalendarIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {BellIcon, CalendarIcon, HelpIcon, MatrixIcon, SearchIcon, StatsIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
@@ -24,6 +24,7 @@ const items = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
+	{key: 'statistics', icon: StatsIcon, to: '/statistics', active: route.path.startsWith('/statistics'), title: t('statistics')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
 

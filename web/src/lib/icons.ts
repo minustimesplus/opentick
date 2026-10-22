@@ -22,6 +22,16 @@ export const MatrixIcon = createLucideIcon('rail-matrix', [
 	['path', {...solid, key: 'br', d: 'M12.8 12.8h4.1a4.1 4.1 0 0 1 4.1 4.1 4.1 4.1 0 0 1-4.1 4.1 4.1 4.1 0 0 1-4.1-4.1z'}],
 ])
 
+// Rounded tile with three rising bars cut out.
+export const StatsIcon = createLucideIcon('rail-stats', [
+	['path', {
+		...solid,
+		key: 'tile',
+		d: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z'
+			+ 'M7.2 12.6h2v4.6h-2z' + 'M11 9.6h2v7.6h-2z' + 'M14.8 6.8h2v10.4h-2z',
+	}],
+])
+
 const dot = (x: number, y: number) => `M${x - 1} ${y - 1}h2v2h-2z`
 
 export const CalendarIcon = createLucideIcon('rail-calendar', [
