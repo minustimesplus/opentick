@@ -247,3 +247,35 @@ export interface McpInfo {
 		full: Record<string, string>
 	}
 }
+
+export type FocusSessionType = 'pomo' | 'stopwatch'
+
+export interface FocusSession {
+	id: number
+	/** 0 when the session is not linked to a task. */
+	task_id: number
+	type: FocusSessionType
+	start_time: string
+	end_time: string
+	/** Focused seconds, excluding pauses. */
+	duration: number
+	note?: string
+	created?: string
+	updated?: string
+}
+
+export interface FocusDay {
+	/** YYYY-MM-DD in the requested timezone. */
+	date: string
+	pomos: number
+	focus_minutes: number
+}
+
+export interface FocusStats {
+	today_pomos: number
+	today_focus_minutes: number
+	total_pomos: number
+	total_focus_minutes: number
+	/** Oldest first, ending with today. */
+	history: FocusDay[]
+}

@@ -5,14 +5,16 @@ import {CircleArrowDown, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
+import {useFocus} from '@/stores/focus'
 import {t} from '@/lib/i18n'
-import {BellIcon, CalendarIcon, CountdownIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
 import {isMobile} from '@/lib/viewport'
 
 const data = useData()
+const focus = useFocus()
 const route = useRoute()
 
 const avatarEl = ref<HTMLElement | null>(null)
@@ -25,6 +27,7 @@ const items = computed(() => [
 	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
 	{key: 'habits', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
+	{key: 'focus', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
 	{key: 'countdowns', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
@@ -92,6 +95,7 @@ const shortcuts = [
 	['G M', 'matrix'],
 	['G C', 'week'],
 	['G H', 'habits'],
+	['G F', 'focus'],
 	['G D', 'countdowns'],
 ] as const
 </script>
@@ -101,6 +105,7 @@ const shortcuts = [
 		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'"><UserAvatar :size="30" /></button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
 			<component :is="i.icon" :size="24" />
+			<span v-if="i.key === 'focus' && focus.state.running" class="dot running" :class="{break: focus.state.phase === 'break'}" />
 		</RouterLink>
 		<div class="spacer" />
 		<button
@@ -223,6 +228,14 @@ const shortcuts = [
 	height: 7px;
 	border-radius: 50%;
 	background: var(--danger);
+}
+
+.dot.running {
+	background: var(--accent);
+}
+
+.dot.running.break {
+	background: #2fb36f;
 }
 
 .spinning {
