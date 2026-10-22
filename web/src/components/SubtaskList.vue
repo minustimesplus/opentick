@@ -55,7 +55,7 @@ defineExpose({focusAdd})
 			@click="emit('open', s.id)"
 			@contextmenu="openTaskMenu(s.id, $event)"
 		>
-			<TaskCheckbox :done="s.done" :priority="s.priority" :size="15" @toggle="data.toggleDone(s.id)" />
+			<TaskCheckbox :done="s.done" :wont-do="s.wont_do" :priority="s.priority" :size="15" @toggle="data.toggleDone(s.id)" />
 			<span class="sub-title">{{ s.title }}</span>
 			<span v-if="taskDateLabel(s)" class="sub-date" :class="{overdue: isOverdue(s)}">{{ taskDateLabel(s) }}</span>
 		</div>

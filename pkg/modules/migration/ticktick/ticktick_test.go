@@ -217,6 +217,35 @@ func TestConvertTicktickTasksChildBeforeParent(t *testing.T) {
 	}, projectTasks[1].RelatedTasks)
 }
 
+func TestConvertTicktickWontDoTask(t *testing.T) {
+	tickTickTasks := []*tickTickTask{
+		{TaskID: 1, ProjectName: "Project 1", Title: "Abandoned", Status: "-1"},
+		{TaskID: 2, ProjectName: "Project 1", Title: "Completed", Status: "1"},
+	}
+
+	vikunjaTasks := convertTickTickToVikunja(tickTickTasks)
+
+	var projectTasks []*models.TaskWithComments
+	for _, p := range vikunjaTasks {
+		if len(p.Tasks) > 0 {
+			projectTasks = p.Tasks
+			break
+		}
+	}
+	require.Len(t, projectTasks, 2)
+
+	for _, task := range projectTasks {
+		switch task.Title {
+		case "Abandoned":
+			assert.True(t, task.Done, "won't do tasks are closed")
+			assert.True(t, task.WontDo)
+		case "Completed":
+			assert.True(t, task.Done)
+			assert.False(t, task.WontDo)
+		}
+	}
+}
+
 func TestConvertTicktickTasksDeeplyNested(t *testing.T) {
 	// Grandchild -> child -> parent, all in reverse order
 	tickTickTasks := []*tickTickTask{

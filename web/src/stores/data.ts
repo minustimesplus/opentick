@@ -385,8 +385,19 @@ export const useData = defineStore('data', () => {
 		const t = tasks.get(id)
 		if (!t) return
 		const done = !t.done
-		const res = await updateTask(id, {done, done_at: done ? new Date().toISOString() : null})
+		const res = await updateTask(id, {done, wont_do: false, done_at: done ? new Date().toISOString() : null})
 		if (res && done && !res.done && (res.repeat_rule || res.repeat_after || res.repeat_mode)) {
+			toast('↻ ' + res.title)
+		}
+	}
+
+	/** Closes a task as won't do, or re-opens it. The server keeps done and wont_do in step. */
+	async function toggleWontDo(id: number) {
+		const t = tasks.get(id)
+		if (!t) return
+		const wontDo = !(t.done && t.wont_do)
+		const res = await updateTask(id, {done: wontDo, wont_do: wontDo, done_at: wontDo ? new Date().toISOString() : null})
+		if (res && wontDo && !res.done && (res.repeat_rule || res.repeat_after || res.repeat_mode)) {
 			toast('↻ ' + res.title)
 		}
 	}
@@ -807,7 +818,7 @@ export const useData = defineStore('data', () => {
 		members, loadMembers, isShared, assign, unassign,
 		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
-		createTask, updateTask, toggleDone, deleteTask, duplicateTask,
+		createTask, updateTask, toggleDone, toggleWontDo, deleteTask, duplicateTask,
 		trash, loadTrash, restoreTask, deleteForever, emptyTrash, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		archivedProjects, loadArchived, setArchived,
 		createProject, updateProject, deleteProject, saveFilter, deleteFilter, markNotificationsRead, loadNotifications,

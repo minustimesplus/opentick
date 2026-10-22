@@ -337,7 +337,7 @@ const addDefaults = computed(() => {
 					@dragstart="onArrangeDragStart($event, task)"
 					@click="openTaskDrawer(task.id)"
 				>
-					<TaskCheckbox :done="task.done" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
+					<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 					<div class="ar-text">
 						<div class="ar-title">{{ task.title }}</div>
 						<div class="ar-list-name">{{ listName(task.project_id).emoji }} {{ listName(task.project_id).name }}</div>

@@ -772,6 +772,7 @@ func (vcls *VikunjaCaldavProjectStorage) UpdateResource(rpath, content string) (
 	}
 	if props.Done {
 		base.Done = vTask.Done
+		base.WontDo = vTask.WontDo
 	}
 	if props.Priority {
 		base.Priority = vTask.Priority

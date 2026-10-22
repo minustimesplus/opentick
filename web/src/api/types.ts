@@ -24,6 +24,8 @@ export interface Task {
 	description?: string
 	done: boolean
 	done_at?: string | null
+	/** Closed without being completed. Always comes with done = true. */
+	wont_do?: boolean
 	due_date?: string | null
 	start_date?: string | null
 	end_date?: string | null
