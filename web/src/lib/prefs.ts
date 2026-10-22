@@ -1,5 +1,6 @@
 import {reactive, watch} from 'vue'
 import type {ThemeColor} from './theme'
+import type {TimelineScale} from './timeline'
 import {isMobile} from './viewport'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
@@ -35,8 +36,9 @@ export interface Prefs {
 	detailWidth: number
 	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
-	/** Layout per list key: plain list or kanban columns. */
-	listView: Record<string, 'list' | 'kanban'>
+	/** Layout per list key: plain list, kanban columns or timeline. */
+	listView: Record<string, 'list' | 'kanban' | 'timeline'>
+	timelineScale: TimelineScale
 	collapsed: Record<string, boolean>
 	matrixLists: number[]
 	matrixShowDone: boolean
@@ -71,6 +73,7 @@ const defaults: Prefs = {
 	listSort: {},
 	listShowCompleted: {},
 	listView: {},
+	timelineScale: 'week',
 	collapsed: {},
 	matrixLists: [],
 	matrixShowDone: false,
