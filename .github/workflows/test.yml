@@ -209,6 +209,12 @@ jobs:
         test:
           - feature
           - web
+        # ParadeDB's bm25 indexes make every fixture reload slow, so paradedb/web is
+        # the longest job by far. PRs still get paradedb/feature (search queries) and
+        # postgres/web (HTTP layer); the full matrix runs on main and the merge queue.
+        exclude:
+          - db: ${{ github.event_name == 'pull_request' && 'paradedb' || 'none' }}
+            test: web
     services:
       db-mariadb:
         image: ${{ matrix.db == 'mariadb' && 'mariadb:12@sha256:5b6a1eac15b85b981a61afb89aea2a22bf76b5f58809d05f0bcc13ab6ec44cb8' || '' }}
