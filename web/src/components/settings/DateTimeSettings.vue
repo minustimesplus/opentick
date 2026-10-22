@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, ref} from 'vue'
 import SettingSelect from './SettingSelect.vue'
 import SettingToggle from './SettingToggle.vue'
 import {prefs, type AltCalendar, type DateFormat} from '@/lib/prefs'
@@ -7,6 +7,9 @@ import {t} from '@/lib/i18n'
 import {fmtNumericDate, fmtTime} from '@/lib/dates'
 
 const thirteen = new Date(2000, 0, 1, 13, 0)
+
+// Not wired up yet: tasks have no per-task time zone.
+const timeZone = ref(false)
 
 const timeFormats = computed(() => [
 	{value: false, label: `${t('hour24')} (${fmtTime(thirteen, false)})`},
@@ -61,6 +64,11 @@ const calendars = computed<{value: AltCalendar, label: string}[]>(() => [
 			<span>{{ t('showWeekNumbers') }}</span>
 			<SettingToggle v-model="prefs.showWeekNumbers" />
 		</div>
+		<div class="row">
+			<span>{{ t('timeZone') }}</span>
+			<SettingToggle v-model="timeZone" />
+		</div>
+		<div class="s-desc">{{ t('timeZoneDesc') }}</div>
 	</div>
 </template>
 
