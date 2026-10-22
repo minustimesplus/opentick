@@ -44,6 +44,14 @@ export interface Prefs {
 	matrixShowDone: boolean
 	/** Client last picked in the MCP setup guide. */
 	mcpClient: string
+	/** Focus timer lengths in minutes; a long break follows every focusLongBreakEvery pomos. */
+	focusPomoMinutes: number
+	focusShortBreakMinutes: number
+	focusLongBreakMinutes: number
+	focusLongBreakEvery: number
+	/** Start the break right after a pomo ends, and the next pomo after a break. */
+	focusAutoStartBreak: boolean
+	focusAutoStartPomo: boolean
 }
 
 const KEY = 'tt.prefs'
@@ -78,6 +86,12 @@ const defaults: Prefs = {
 	matrixLists: [],
 	matrixShowDone: false,
 	mcpClient: '',
+	focusPomoMinutes: 25,
+	focusShortBreakMinutes: 5,
+	focusLongBreakMinutes: 15,
+	focusLongBreakEvery: 4,
+	focusAutoStartBreak: true,
+	focusAutoStartPomo: false,
 }
 
 // Before color series, `theme` was 'dark' | 'light' | 'system'.

@@ -62,6 +62,17 @@ export const CountdownIcon = createLucideIcon('rail-countdown', [
 	['path', {...solid, key: 'lower', d: 'M12 12.6l1.4.6c2.1 1.2 3.6 2.7 3.6 4.7v.4H7v-.4c0-2 1.5-3.5 3.6-4.7z'}],
 ])
 
+// A stopwatch: a disc with a hand cut out, under a crown button.
+export const FocusIcon = createLucideIcon('rail-focus', [
+	['path', {...solid, key: 'crown', d: 'M10 1.5h4a1 1 0 0 1 0 2h-4a1 1 0 0 1 0-2z'}],
+	['path', {
+		...solid,
+		key: 'face',
+		d: 'M12 4.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17z'
+			+ 'M11.1 8.2v5.2l3.4 2.1a.9.9 0 0 0 .95-1.5l-2.55-1.6V8.2a.9.9 0 0 0-1.8 0z',
+	}],
+])
+
 export const SearchIcon = createLucideIcon('rail-search', [
 	['circle', {cx: '11', cy: '11', r: '7', 'stroke-width': '2.4', key: 'lens'}],
 	['path', {d: 'm16.2 16.2 4.3 4.3', 'stroke-width': '2.6', key: 'handle'}],
