@@ -3276,3 +3276,61 @@ func (err ErrHabitCheckinInFuture) HTTPError() web.HTTPError {
 		Message:  "You cannot check in for a future day.",
 	}
 }
+
+// =============================
+// Countdown errors
+// =============================
+
+// ErrCountdownDoesNotExist represents an error where a countdown does not exist.
+type ErrCountdownDoesNotExist struct {
+	ID int64
+}
+
+// IsErrCountdownDoesNotExist checks if an error is ErrCountdownDoesNotExist.
+func IsErrCountdownDoesNotExist(err error) bool {
+	_, ok := err.(ErrCountdownDoesNotExist)
+	return ok
+}
+
+func (err ErrCountdownDoesNotExist) Error() string {
+	return fmt.Sprintf("Countdown does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeCountdownDoesNotExist holds the unique world-error code of this error
+const ErrCodeCountdownDoesNotExist = 22001
+
+// HTTPError holds the http error description
+func (err ErrCountdownDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeCountdownDoesNotExist,
+		Message:  "This countdown does not exist.",
+	}
+}
+
+// ErrCountdownInvalidType represents an error where a countdown has an unknown type.
+type ErrCountdownInvalidType struct {
+	Type string
+}
+
+// IsErrCountdownInvalidType checks if an error is ErrCountdownInvalidType.
+func IsErrCountdownInvalidType(err error) bool {
+	_, ok := err.(ErrCountdownInvalidType)
+	return ok
+}
+
+func (err ErrCountdownInvalidType) Error() string {
+	return fmt.Sprintf("Countdown type is invalid [Type: %s]", err.Type)
+}
+
+// ErrCodeCountdownInvalidType holds the unique world-error code of this error
+const ErrCodeCountdownInvalidType = 22002
+
+// HTTPError holds the http error description
+func (err ErrCountdownInvalidType) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeCountdownInvalidType,
+		Message:  "The countdown type must be countdown, anniversary or birthday.",
+	}
+}

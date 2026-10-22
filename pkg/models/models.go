@@ -80,6 +80,7 @@ func GetTables() []interface{} {
 		&CalendarSubscription{},
 		&Habit{},
 		&HabitCheckin{},
+		&Countdown{},
 	}
 }
 

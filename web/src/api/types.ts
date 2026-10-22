@@ -162,6 +162,21 @@ export interface Habit {
 	updated?: string
 }
 
+export type CountdownType = 'countdown' | 'anniversary' | 'birthday'
+
+export interface Countdown {
+	id: number
+	title: string
+	/** Midnight UTC of the counted date; only its UTC calendar date matters. */
+	date: string
+	type: CountdownType
+	repeat_yearly: boolean
+	icon?: string
+	hex_color?: string
+	created?: string
+	updated?: string
+}
+
 export interface HabitStatsDay {
 	date: string
 	value: number

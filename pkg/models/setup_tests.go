@@ -75,6 +75,7 @@ func SetupTests() {
 		"calendar_subscriptions",
 		"habits",
 		"habit_checkins",
+		"countdowns",
 		"saved_filters",
 		"subscriptions",
 		"favorites",

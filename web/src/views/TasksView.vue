@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, ChartGantt, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
 import KanbanBoard from '@/components/KanbanBoard.vue'
+import TimelineView from '@/components/TimelineView.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
@@ -108,7 +109,7 @@ watch(savedFilter, async f => {
 }, {immediate: true})
 
 // ---- layout ----
-const layout = computed<'list' | 'kanban'>({
+const layout = computed<'list' | 'kanban' | 'timeline'>({
 	get: () => project.value ? prefs.listView[listKey.value] ?? 'list' : 'list',
 	set: v => { prefs.listView[listKey.value] = v },
 })
@@ -477,6 +478,14 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 				:show-completed="showCompleted"
 				@select="select"
 			/>
+			<TimelineView
+				v-else-if="layout === 'timeline' && project"
+				class="timeline"
+				:project="project"
+				:selected-id="selectedId"
+				:show-completed="showCompleted"
+				@select="select"
+			/>
 			<div v-else class="content">
 				<QuickAdd
 					v-if="view.kind !== 'completed' && view.kind !== 'filter' && view.kind !== 'archived' && !archived"
@@ -593,6 +602,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<div class="view-switch">
 						<button :class="{on: layout === 'list'}" :title="t('viewList')" @click="layout = 'list'; pop = null"><List :size="18" /></button>
 						<button :class="{on: layout === 'kanban'}" :title="t('viewKanban')" @click="layout = 'kanban'; pop = null"><Columns3 :size="18" /></button>
+						<button :class="{on: layout === 'timeline'}" :title="t('viewTimeline')" @click="layout = 'timeline'; pop = null"><ChartGantt :size="18" /></button>
 					</div>
 					<div class="menu-sep" />
 				</template>
@@ -720,7 +730,8 @@ h1 {
 	font-size: 15px;
 }
 
-.kanban {
+.kanban,
+.timeline {
 	flex: 1;
 	min-height: 0;
 }
