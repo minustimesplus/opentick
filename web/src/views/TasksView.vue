@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, ChartGantt, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
 import KanbanBoard from '@/components/KanbanBoard.vue'
+import TimelineView from '@/components/TimelineView.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
 import ListEditDialog from '@/components/ListEditDialog.vue'
 import FilterEditDialog from '@/components/FilterEditDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
+import TrashList from '@/components/TrashList.vue'
 import {filterIdOf} from '@/lib/filters'
 import type {Task} from '@/api/types'
 import {parentId, useData, type TaskPatch} from '@/stores/data'
@@ -68,11 +70,11 @@ function onSheetClick(e: MouseEvent) {
 	if ((e.target as HTMLElement).closest('.item')) sheetOpen.value = false
 }
 
-type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed' | 'archived'
+type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed' | 'archived' | 'trash'
 
 const view = computed(() => {
 	const k = listKey.value
-	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed' || k === 'archived') return {kind: k as Kind, id: 0}
+	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed' || k === 'archived' || k === 'trash') return {kind: k as Kind, id: 0}
 	if (k.startsWith('p')) return {kind: 'project' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('l')) return {kind: 'label' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('f')) return {kind: 'filter' as Kind, id: -Number(k.slice(1))}
@@ -94,6 +96,7 @@ const header = computed(() => {
 		case 'inbox': return {emoji: null, name: t('inbox')}
 		case 'completed': return {emoji: null, name: t('completed')}
 		case 'archived': return {emoji: null, name: t('archivedLists')}
+		case 'trash': return {emoji: null, name: t('trash')}
 		case 'label': return {emoji: null, name: label.value?.title ?? ''}
 		case 'filter': return {emoji: null, name: savedFilter.value?.title ?? ''}
 		default: return project.value ? splitEmoji(project.value.title) : {emoji: null, name: ''}
@@ -108,7 +111,7 @@ watch(savedFilter, async f => {
 }, {immediate: true})
 
 // ---- layout ----
-const layout = computed<'list' | 'kanban'>({
+const layout = computed<'list' | 'kanban' | 'timeline'>({
 	get: () => project.value ? prefs.listView[listKey.value] ?? 'list' : 'list',
 	set: v => { prefs.listView[listKey.value] = v },
 })
@@ -465,8 +468,8 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<component :is="shared ? Users : UserPlus" :size="18" />
 				</button>
 				<div class="spacer" />
-				<button v-if="layout === 'list' && view.kind !== 'archived'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
-				<button v-if="view.kind !== 'archived'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
+				<button v-if="layout === 'list' && view.kind !== 'archived' && view.kind !== 'trash'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
+				<button v-if="view.kind !== 'archived' && view.kind !== 'trash'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
 			</header>
 
 			<KanbanBoard
@@ -477,9 +480,17 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 				:show-completed="showCompleted"
 				@select="select"
 			/>
+			<TimelineView
+				v-else-if="layout === 'timeline' && project"
+				class="timeline"
+				:project="project"
+				:selected-id="selectedId"
+				:show-completed="showCompleted"
+				@select="select"
+			/>
 			<div v-else class="content">
 				<QuickAdd
-					v-if="view.kind !== 'completed' && view.kind !== 'filter' && view.kind !== 'archived' && !archived"
+					v-if="view.kind !== 'completed' && view.kind !== 'filter' && view.kind !== 'archived' && view.kind !== 'trash' && !archived"
 					:key="listKey"
 					class="qa"
 					:placeholder="placeholder"
@@ -492,7 +503,8 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<Archive :size="15" /> {{ t('listArchived') }}
 					<button class="btn" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
 				</div>
-				<div v-if="view.kind === 'archived'" class="archived-lists">
+				<TrashList v-if="view.kind === 'trash'" />
+				<div v-else-if="view.kind === 'archived'" class="archived-lists">
 					<div v-for="p in data.archivedProjects" :key="p.id" class="archived-row" @click="router.push(`/tasks/p${p.id}`)">
 						<span v-if="splitEmoji(p.title).emoji">{{ splitEmoji(p.title).emoji }}</span>
 						<Menu v-else :size="17" class="muted" />
@@ -593,6 +605,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<div class="view-switch">
 						<button :class="{on: layout === 'list'}" :title="t('viewList')" @click="layout = 'list'; pop = null"><List :size="18" /></button>
 						<button :class="{on: layout === 'kanban'}" :title="t('viewKanban')" @click="layout = 'kanban'; pop = null"><Columns3 :size="18" /></button>
+						<button :class="{on: layout === 'timeline'}" :title="t('viewTimeline')" @click="layout = 'timeline'; pop = null"><ChartGantt :size="18" /></button>
 					</div>
 					<div class="menu-sep" />
 				</template>
@@ -720,7 +733,8 @@ h1 {
 	font-size: 15px;
 }
 
-.kanban {
+.kanban,
+.timeline {
 	flex: 1;
 	min-height: 0;
 }

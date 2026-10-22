@@ -287,7 +287,7 @@ function onDragEnd() {
 						@dragend="onDragEnd"
 						@dragover.stop="onCardOver($event, col.bucket.id, i)"
 					>
-						<TaskCheckbox :done="task.done" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
+						<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 						<div class="card-main">
 							<div v-if="parentId(task) !== undefined" class="card-parent muted">{{ data.tasks.get(parentId(task)!)?.title ?? task.related_tasks?.parenttask?.[0]?.title }}</div>
 							<div class="card-title">{{ task.title }}</div>

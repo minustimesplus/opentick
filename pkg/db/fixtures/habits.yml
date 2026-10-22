@@ -1,0 +1,31 @@
+- id: 1
+  user_id: 1
+  title: Drink water
+  icon: "💧"
+  hex_color: 1973ff
+  frequency: daily
+  weekdays: 127
+  goal: 8
+  unit: glasses
+  archived: false
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00
+- id: 2
+  user_id: 1
+  title: Gym
+  frequency: weekdays
+  # Monday, Wednesday, Friday
+  weekdays: 42
+  goal: 1
+  archived: false
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00
+- id: 3
+  user_id: 2
+  title: Someone else's habit
+  frequency: daily
+  weekdays: 127
+  goal: 1
+  archived: false
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00

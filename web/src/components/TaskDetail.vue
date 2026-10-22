@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {CalendarDays, ChevronLeft, CircleUserRound, Copy, Flag, Inbox, ListTree, Menu, MessageSquare, MoreHorizontal, Paperclip, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
+import {Ban, CalendarDays, ChevronLeft, CircleUserRound, Copy, Flag, Inbox, ListTree, Menu, MessageSquare, MoreHorizontal, Paperclip, RotateCcw, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
@@ -176,7 +176,7 @@ async function remove() {
 	pop.value = null
 	emit('deleted')
 	await data.deleteTask(tk.id)
-	toast(`🗑 ${tk.title}`)
+	toast(t('movedToTrash', {name: tk.title}), {label: t('undo'), run: () => data.restoreTask(tk.id)})
 }
 
 async function duplicate() {
@@ -189,7 +189,7 @@ const meta = computed(() => {
 	if (!tk) return ''
 	if (tk.done) {
 		const d = parseDate(tk.done_at)
-		return d ? t('completedOn', {date: `${fmtDayMonth(d)} ${fmtTime(d)}`}) : ''
+		return d ? t(tk.wont_do ? 'wontDoOn' : 'completedOn', {date: `${fmtDayMonth(d)} ${fmtTime(d)}`}) : ''
 	}
 	const c = parseDate(tk.created)
 	return c ? `${t('created')} ${fmtDayMonth(c)}` : ''
@@ -199,7 +199,7 @@ const meta = computed(() => {
 <template>
 	<div v-if="task" class="detail">
 		<header class="head">
-			<TaskCheckbox :done="task.done" :priority="task.priority" :size="18" @toggle="data.toggleDone(task.id)" />
+			<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" :size="18" @toggle="data.toggleDone(task.id)" />
 			<div class="vsep" />
 			<button ref="dateEl" class="date-btn" :class="{set: !!schedule, overdue}" @click="pop = 'date'">
 				<CalendarDays :size="16" />
@@ -232,7 +232,7 @@ const meta = computed(() => {
 				ref="titleEl"
 				v-model="title"
 				class="title"
-				:class="{done: task.done}"
+				:class="{done: task.done, 'wont-do': task.done && task.wont_do}"
 				rows="1"
 				:placeholder="t('titlePlaceholder')"
 				@focus="titleFocused = true"
@@ -295,6 +295,10 @@ const meta = computed(() => {
 				<button v-if="parent" class="menu-item" @click="detach"><Unlink :size="16" /> {{ t('detachSubtask') }}</button>
 				<button class="menu-item" @click="pickFiles"><Paperclip :size="16" /> {{ t('uploadAttachment') }}</button>
 				<div class="menu-sep" />
+				<button class="menu-item" @click="data.toggleWontDo(task.id); pop = null">
+					<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
+					<template v-else><Ban :size="16" /> {{ t('wontDo') }}</template>
+				</button>
 				<button class="menu-item" @click="duplicate"><Copy :size="16" /> {{ t('duplicate') }}</button>
 				<button class="menu-item danger" @click="remove"><Trash2 :size="16" /> {{ t('delete') }}</button>
 			</div>
@@ -440,6 +444,11 @@ textarea {
 
 .title.done {
 	color: var(--text-3);
+}
+
+.title.wont-do {
+	color: var(--text-4);
+	text-decoration: line-through;
 }
 
 textarea::placeholder {

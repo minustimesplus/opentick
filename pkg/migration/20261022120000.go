@@ -17,42 +17,29 @@
 package migration
 
 import (
-	"time"
-
 	"src.techknowlogick.com/xormigrate"
 	"xorm.io/xorm"
 )
 
-type focusSessions20261022120000 struct {
-	ID        int64     `xorm:"bigint autoincr not null unique pk"`
-	UserID    int64     `xorm:"bigint not null INDEX"`
-	TaskID    int64     `xorm:"bigint null INDEX"`
-	Type      string    `xorm:"varchar(20) not null"`
-	StartTime time.Time `xorm:"not null INDEX"`
-	EndTime   time.Time `xorm:"not null"`
-	Duration  int64     `xorm:"bigint not null default 0"`
-	Note      string    `xorm:"text null"`
-	Created   time.Time `xorm:"created not null"`
-	Updated   time.Time `xorm:"updated not null"`
+type tasks20261022120000 struct {
+	RepeatRule string `xorm:"varchar(500) null 'repeat_rule'"`
 }
 
-func (focusSessions20261022120000) TableName() string {
-	return "focus_sessions"
+func (tasks20261022120000) TableName() string {
+	return "tasks"
 }
 
-func addFocusSessions20261022120000(tx *xorm.Engine) error {
-	return tx.Sync(focusSessions20261022120000{}) //nolint:forbidigo // brand-new table, nothing to drop
-}
-
-func dropFocusSessions20261022120000(tx *xorm.Engine) error {
-	return tx.DropTables(focusSessions20261022120000{})
+func addTaskRepeatRule20261022120000(tx *xorm.Engine) error {
+	return partialSync(tx, tasks20261022120000{})
 }
 
 func init() {
 	migrations = append(migrations, &xormigrate.Migration{
 		ID:          "20261022120000",
-		Description: "Add focus_sessions table for the pomodoro / focus timer",
-		Migrate:     addFocusSessions20261022120000,
-		Rollback:    dropFocusSessions20261022120000,
+		Description: "Add repeat_rule column to tasks",
+		Migrate:     addTaskRepeatRule20261022120000,
+		Rollback: func(tx *xorm.Engine) error {
+			return nil
+		},
 	})
 }

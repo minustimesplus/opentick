@@ -226,6 +226,10 @@ function dropProps(key: string) {
 				<Archive :size="17" class="ic" />
 				<span class="name">{{ t('archivedLists') }}</span>
 			</button>
+			<button class="item" :class="{active: current === 'trash'}" @click="go('trash')">
+				<Trash2 :size="17" class="ic" />
+				<span class="name">{{ t('trash') }}</span>
+			</button>
 		</div>
 
 		<Popover v-if="ctx" :anchor="{x: ctx.x, y: ctx.y}" @close="ctx = null">

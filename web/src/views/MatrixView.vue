@@ -171,7 +171,7 @@ function groupTitle(p: number) {
 								@click="openTaskDrawer(task.id)"
 								@contextmenu="openTaskMenu(task.id, $event)"
 							>
-								<TaskCheckbox :done="task.done" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
+								<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 								<span class="m-title">{{ task.title }}</span>
 								<span v-if="listLabel(task)" class="m-list">
 									<span v-if="listLabel(task)!.emoji">{{ listLabel(task)!.emoji }}</span>{{ listLabel(task)!.name }}
