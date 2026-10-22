@@ -34,6 +34,16 @@ export const CalendarIcon = createLucideIcon('rail-calendar', [
 	}],
 ])
 
+// A disc with a check mark cut out, ringed like a streak.
+export const HabitIcon = createLucideIcon('rail-habit', [
+	['path', {
+		...solid,
+		key: 'disc',
+		d: 'M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19z'
+			+ 'M7.6 11.9 10.6 14.9l5.8-5.8a.9.9 0 0 1 1.3 1.3l-7.1 7.1-4.3-4.3a.9.9 0 0 1 1.3-1.3z',
+	}],
+])
+
 export const SearchIcon = createLucideIcon('rail-search', [
 	['circle', {cx: '11', cy: '11', r: '7', 'stroke-width': '2.4', key: 'lens'}],
 	['path', {d: 'm16.2 16.2 4.3 4.3', 'stroke-width': '2.6', key: 'handle'}],

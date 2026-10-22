@@ -78,6 +78,8 @@ func GetTables() []interface{} {
 		&UserInviteLink{},
 		&UserInviteLinkTeam{},
 		&CalendarSubscription{},
+		&Habit{},
+		&HabitCheckin{},
 	}
 }
 

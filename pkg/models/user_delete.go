@@ -163,6 +163,10 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		}
 	}
 
+	if err = deleteHabitsOfUser(s, u.ID); err != nil {
+		return err
+	}
+
 	// Delete all related entities
 	relatedEntities := []struct {
 		column string

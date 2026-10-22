@@ -73,6 +73,8 @@ func SetupTests() {
 		"users_projects",
 		"buckets",
 		"calendar_subscriptions",
+		"habits",
+		"habit_checkins",
 		"saved_filters",
 		"subscriptions",
 		"favorites",
