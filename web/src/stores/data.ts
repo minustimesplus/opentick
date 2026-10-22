@@ -386,7 +386,7 @@ export const useData = defineStore('data', () => {
 		if (!t) return
 		const done = !t.done
 		const res = await updateTask(id, {done, wont_do: false, done_at: done ? new Date().toISOString() : null})
-		if (res && done && !res.done && res.repeat_after) {
+		if (res && done && !res.done && (res.repeat_rule || res.repeat_after || res.repeat_mode)) {
 			toast('↻ ' + res.title)
 		}
 	}
@@ -397,10 +397,13 @@ export const useData = defineStore('data', () => {
 		if (!t) return
 		const wontDo = !(t.done && t.wont_do)
 		const res = await updateTask(id, {done: wontDo, wont_do: wontDo, done_at: wontDo ? new Date().toISOString() : null})
-		if (res && wontDo && !res.done && res.repeat_after) {
+		if (res && wontDo && !res.done && (res.repeat_rule || res.repeat_after || res.repeat_mode)) {
 			toast('↻ ' + res.title)
 		}
 	}
+
+	/** Deletes still in flight, so an immediate undo restores after the task is trashed. */
+	const pendingDeletes = new Map<number, Promise<unknown>>()
 
 	async function deleteTask(id: number) {
 		const before = tasks.get(id)
@@ -408,14 +411,18 @@ export const useData = defineStore('data', () => {
 		if (parent !== undefined) setRelated(parent, 'subtask', l => l.filter(x => x.id !== id))
 		tasks.delete(id)
 		if (inflight) deletedDuringSync.add(id)
+		const request = api('DELETE', `/tasks/${id}`)
+		pendingDeletes.set(id, request.catch(() => undefined))
 		try {
-			await api('DELETE', `/tasks/${id}`)
+			await request
 		} catch (e) {
 			// Already deleted elsewhere: the goal is reached.
 			if (isNotFound(e)) return
 			deletedDuringSync.delete(id)
 			if (before) tasks.set(id, before)
 			toast(String((e as Error).message))
+		} finally {
+			pendingDeletes.delete(id)
 		}
 	}
 
@@ -431,6 +438,61 @@ export const useData = defineStore('data', () => {
 		} catch (e) {
 			toast(String((e as Error).message))
 			return null
+		}
+	}
+
+	// ---------- trash ----------
+
+	/** Deleted tasks, most recently deleted first; loaded on demand. */
+	const trash = ref<Task[]>([])
+
+	async function loadTrash() {
+		try {
+			trash.value = await fetchAll<Task>('/tasks/trash', {format: 'markdown'})
+		} catch (e) {
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function restoreTask(id: number) {
+		const before = trash.value
+		trash.value = trash.value.filter(t => t.id !== id)
+		await pendingDeletes.get(id)
+		try {
+			await api('POST', `/tasks/trash/${id}/restore`)
+			// The restore response has no labels, assignees or relations.
+			const restored = await api<Task>('GET', `/tasks/${id}`, {query: {format: 'markdown'}})
+			tasks.set(id, restored)
+			deletedDuringSync.delete(id)
+			if (inflight) createdDuringSync.add(id)
+			const parent = parentId(restored)
+			if (parent !== undefined) setRelated(parent, 'subtask', l => [...l.filter(x => x.id !== id), strip(restored)])
+		} catch (e) {
+			if (!isNotFound(e)) trash.value = before
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function deleteForever(id: number) {
+		const before = trash.value
+		trash.value = trash.value.filter(t => t.id !== id)
+		try {
+			await api('DELETE', `/tasks/trash/${id}`)
+		} catch (e) {
+			if (isNotFound(e)) return
+			trash.value = before
+			toast(String((e as Error).message))
+		}
+	}
+
+	async function emptyTrash() {
+		const before = trash.value
+		trash.value = []
+		try {
+			await api('POST', '/tasks/trash/empty')
+		} catch (e) {
+			trash.value = before
+			toast(String((e as Error).message))
 		}
 	}
 
@@ -756,7 +818,8 @@ export const useData = defineStore('data', () => {
 		members, loadMembers, isShared, assign, unassign,
 		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,
 		childIndex, subtasksOf, adoptTasks, createSubtask, setParent,
-		createTask, updateTask, toggleDone, toggleWontDo, deleteTask, duplicateTask, addLabel, removeLabel, addLabelByTitle, ensureLabel,
+		createTask, updateTask, toggleDone, toggleWontDo, deleteTask, duplicateTask,
+		trash, loadTrash, restoreTask, deleteForever, emptyTrash, addLabel, removeLabel, addLabelByTitle, ensureLabel,
 		archivedProjects, loadArchived, setArchived,
 		createProject, updateProject, deleteProject, saveFilter, deleteFilter, markNotificationsRead, loadNotifications,
 		uploadAvatar, removeAvatar,

@@ -34,6 +34,24 @@ export const CalendarIcon = createLucideIcon('rail-calendar', [
 	}],
 ])
 
+// A disc with a check mark cut out, ringed like a streak.
+export const HabitIcon = createLucideIcon('rail-habit', [
+	['path', {
+		...solid,
+		key: 'disc',
+		d: 'M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19z'
+			+ 'M7.6 11.9 10.6 14.9l5.8-5.8a.9.9 0 0 1 1.3 1.3l-7.1 7.1-4.3-4.3a.9.9 0 0 1 1.3-1.3z',
+	}],
+])
+
+// An hourglass: two solid bulbs meeting at the neck, between a top and a bottom bar.
+export const CountdownIcon = createLucideIcon('rail-countdown', [
+	['path', {...solid, key: 'top', d: 'M5.5 2.5h13a1.2 1.2 0 0 1 0 2.4h-13a1.2 1.2 0 0 1 0-2.4z'}],
+	['path', {...solid, key: 'bottom', d: 'M5.5 19.1h13a1.2 1.2 0 0 1 0 2.4h-13a1.2 1.2 0 0 1 0-2.4z'}],
+	['path', {...solid, key: 'upper', d: 'M7 6.3h10v1c0 2-1.5 3.5-3.6 4.7l-1.4.6-1.4-.6C8.5 10.8 7 9.3 7 7.3z'}],
+	['path', {...solid, key: 'lower', d: 'M12 12.6l1.4.6c2.1 1.2 3.6 2.7 3.6 4.7v.4H7v-.4c0-2 1.5-3.5 3.6-4.7z'}],
+])
+
 export const SearchIcon = createLucideIcon('rail-search', [
 	['circle', {cx: '11', cy: '11', r: '7', 'stroke-width': '2.4', key: 'lens'}],
 	['path', {d: 'm16.2 16.2 4.3 4.3', 'stroke-width': '2.6', key: 'handle'}],

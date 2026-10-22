@@ -453,3 +453,6 @@ jobs:
       - name: Typecheck and build
         working-directory: web
         run: npm run build
+      - name: Unit tests
+        working-directory: web
+        run: npm test

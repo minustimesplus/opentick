@@ -57,7 +57,7 @@ function onKey(e: KeyboardEvent) {
 	} else if (e.key === 'g') {
 		const next = (ev: KeyboardEvent) => {
 			window.removeEventListener('keydown', next, true)
-			const map: Record<string, string> = {t: '/tasks/today', w: '/tasks/week', i: '/tasks/inbox', m: '/matrix', c: '/calendar'}
+			const map: Record<string, string> = {t: '/tasks/today', w: '/tasks/week', i: '/tasks/inbox', m: '/matrix', c: '/calendar', h: '/habits', d: '/countdowns'}
 			if (map[ev.key]) {
 				ev.preventDefault()
 				router.push(map[ev.key])

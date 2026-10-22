@@ -67,6 +67,7 @@ type Todo struct {
 	Duration    time.Duration
 	RepeatAfter int64
 	RepeatMode  models.TaskRepeatMode
+	RepeatRule  string
 	Alarms      []Alarm
 
 	Created time.Time
@@ -153,6 +154,21 @@ func getRruleFromInterval(interval int64) (freq string, newInterval int64) {
 	}
 }
 
+// todoRrule is the RRULE value a task's repeat settings export as, or "" when it doesn't repeat.
+// "Repeat after completion" (repeat_mode 2) has no RRULE equivalent, so it exports as the plain rule.
+func todoRrule(repeatRule string, repeatAfter int64, repeatMode models.TaskRepeatMode, dueDate time.Time) string {
+	switch {
+	case repeatRule != "":
+		return repeatRule
+	case repeatMode == models.TaskRepeatModeMonth:
+		return "FREQ=MONTHLY;BYMONTHDAY=" + dueDate.Format("02") // Day of the month
+	case repeatAfter > 0:
+		freq, interval := getRruleFromInterval(repeatAfter)
+		return "FREQ=" + freq + ";INTERVAL=" + strconv.FormatInt(interval, 10)
+	}
+	return ""
+}
+
 // ParseTodos returns a caldav vcalendar string with todos.
 func ParseTodos(config *Config, todos []*Todo) (caldavtodos string) {
 	caldavtodos = `BEGIN:VCALENDAR
@@ -236,15 +252,9 @@ CREATED:` + makeCalDavTimeFromTimeStamp(t.Created)
 PRIORITY:` + strconv.Itoa(mapPriorityToCaldav(t.Priority))
 		}
 
-		if t.RepeatAfter > 0 || t.RepeatMode == models.TaskRepeatModeMonth {
-			if t.RepeatMode == models.TaskRepeatModeMonth {
-				caldavtodos += `
-RRULE:FREQ=MONTHLY;BYMONTHDAY=` + t.DueDate.Format("02") // Day of the month
-			} else {
-				freq, interval := getRruleFromInterval(t.RepeatAfter)
-				caldavtodos += `
-RRULE:FREQ=` + freq + `;INTERVAL=` + strconv.FormatInt(interval, 10)
-			}
+		if rrule := todoRrule(t.RepeatRule, t.RepeatAfter, t.RepeatMode, t.DueDate); rrule != "" {
+			caldavtodos += `
+RRULE:` + rrule
 		}
 
 		if len(t.Categories) > 0 {

@@ -58,7 +58,7 @@ function remove() {
 	if (!tk) return
 	close()
 	data.deleteTask(tk.id)
-	toast(`🗑 ${tk.title}`)
+	toast(t('movedToTrash', {name: tk.title}), {label: t('undo'), run: () => data.restoreTask(tk.id)})
 }
 
 const today = startOfDay(new Date())

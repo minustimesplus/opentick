@@ -18,77 +18,54 @@ package migration
 
 import (
 	"testing"
+	"time"
 
 	"code.vikunja.io/api/pkg/db"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"xorm.io/xorm"
-	"xorm.io/xorm/schemas"
 )
 
-type taskWontDoBefore20261022110000 struct {
-	ID        int64  `xorm:"bigint autoincr not null unique pk"`
-	Title     string `xorm:"TEXT not null"`
-	ProjectID int64  `xorm:"bigint INDEX not null index(project_done_due_date)"`
-	Done      bool   `xorm:"INDEX null index(project_done_due_date)"`
-}
-
-func (taskWontDoBefore20261022110000) TableName() string {
-	return "tasks"
-}
-
-func TestAddTaskWontDo20261022110000(t *testing.T) {
+func TestAddHabits20261022110000(t *testing.T) {
 	x, err := db.CreateTestEngine()
 	require.NoError(t, err)
+	require.NoError(t, dropHabits20261022110000(x))
 
-	table := taskWontDoBefore20261022110000{}
-	t.Cleanup(func() {
-		require.NoError(t, x.DropTables(table))
-	})
-	require.NoError(t, x.DropTables(table))
-	require.NoError(t, x.Sync2(table))
+	require.NoError(t, addHabits20261022110000(x))
+	// Re-running on existing tables must be harmless.
+	require.NoError(t, addHabits20261022110000(x))
 
-	_, err = x.Insert(&taskWontDoBefore20261022110000{ID: 1, Title: "done task", ProjectID: 1, Done: true})
+	habit := &habits20261022110000{UserID: 1, Title: "Read", Frequency: "daily", Weekdays: 127, Goal: 1}
+	_, err = x.Insert(habit)
 	require.NoError(t, err)
 
-	before := tasksTable20261022110000(t, x)
-	require.NotEmpty(t, before.Indexes)
-	require.NoError(t, addTaskWontDo20261022110000(x))
-	// Re-running on a migrated table must be harmless.
-	require.NoError(t, addTaskWontDo20261022110000(x))
-
-	after := tasksTable20261022110000(t, x)
-	require.NotNil(t, after.GetColumn("wont_do"))
-	for _, column := range before.ColumnsSeq() {
-		require.NotNilf(t, after.GetColumn(column), "migration dropped column %s", column)
-	}
-	for name, index := range before.Indexes {
-		preserved, found := after.Indexes[name]
-		require.Truef(t, found, "migration dropped index %s", name)
-		require.Equal(t, index.Type, preserved.Type)
-		require.Equal(t, index.Cols, preserved.Cols)
-	}
-
-	got := &struct {
-		Done   bool `xorm:"done"`
-		WontDo bool `xorm:"wont_do"`
-	}{}
-	found, err := x.Table("tasks").Where("id = ?", 1).Get(got)
+	day := time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)
+	_, err = x.Insert(&habitCheckins20261022110000{HabitID: habit.ID, Day: day, Value: 1})
 	require.NoError(t, err)
-	require.True(t, found)
-	require.True(t, got.Done)
-	require.False(t, got.WontDo, "existing done tasks stay completed, not won't do")
-}
+	_, err = x.Insert(&habitCheckins20261022110000{HabitID: habit.ID, Day: day, Value: 2})
+	require.Error(t, err, "a habit can only have one check-in per day")
+	_, err = x.Insert(&habitCheckins20261022110000{HabitID: habit.ID, Day: day.AddDate(0, 0, 1), Value: 2})
+	require.NoError(t, err)
 
-func tasksTable20261022110000(t *testing.T, x *xorm.Engine) *schemas.Table {
-	t.Helper()
 	tables, err := x.DBMetas()
 	require.NoError(t, err)
+	var userIndexed bool
 	for _, table := range tables {
-		if table.Name == "tasks" {
-			return table
+		if table.Name != "habits" {
+			continue
+		}
+		for _, index := range table.Indexes {
+			if len(index.Cols) == 1 && index.Cols[0] == "user_id" {
+				userIndexed = true
+			}
 		}
 	}
-	t.Fatal("tasks table not found")
-	return nil
+	assert.True(t, userIndexed, "user_id must be indexed: every list query filters on it")
+
+	require.NoError(t, dropHabits20261022110000(x))
+	for _, name := range []string{"habits", "habit_checkins"} {
+		exists, err := x.IsTableExist(name)
+		require.NoError(t, err)
+		assert.False(t, exists, name)
+	}
 }

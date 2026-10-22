@@ -17,29 +17,57 @@
 package migration
 
 import (
+	"time"
+
 	"src.techknowlogick.com/xormigrate"
 	"xorm.io/xorm"
 )
 
-type tasks20261022110000 struct {
-	WontDo bool `xorm:"bool not null default false 'wont_do'"`
+type habits20261022110000 struct {
+	ID        int64     `xorm:"bigint autoincr not null unique pk"`
+	UserID    int64     `xorm:"bigint not null index"`
+	Title     string    `xorm:"varchar(250) not null"`
+	Icon      string    `xorm:"varchar(50) null"`
+	HexColor  string    `xorm:"varchar(6) null"`
+	Frequency string    `xorm:"varchar(20) not null default 'daily'"`
+	Weekdays  int       `xorm:"int not null default 127"`
+	Goal      int       `xorm:"int not null default 1"`
+	Unit      string    `xorm:"varchar(50) null"`
+	Archived  bool      `xorm:"bool not null default false"`
+	Created   time.Time `xorm:"created not null"`
+	Updated   time.Time `xorm:"updated not null"`
 }
 
-func (tasks20261022110000) TableName() string {
-	return "tasks"
+func (habits20261022110000) TableName() string {
+	return "habits"
 }
 
-func addTaskWontDo20261022110000(tx *xorm.Engine) error {
-	return partialSync(tx, tasks20261022110000{})
+type habitCheckins20261022110000 struct {
+	ID      int64     `xorm:"bigint autoincr not null unique pk"`
+	HabitID int64     `xorm:"bigint not null unique(habit_day)"`
+	Day     time.Time `xorm:"datetime not null unique(habit_day)"`
+	Value   int       `xorm:"int not null"`
+	Created time.Time `xorm:"created not null"`
+	Updated time.Time `xorm:"updated not null"`
+}
+
+func (habitCheckins20261022110000) TableName() string {
+	return "habit_checkins"
+}
+
+func addHabits20261022110000(tx *xorm.Engine) error {
+	return tx.Sync(habits20261022110000{}, habitCheckins20261022110000{}) //nolint:forbidigo // brand-new tables, nothing to drop
+}
+
+func dropHabits20261022110000(tx *xorm.Engine) error {
+	return tx.DropTables(habitCheckins20261022110000{}, habits20261022110000{})
 }
 
 func init() {
 	migrations = append(migrations, &xormigrate.Migration{
 		ID:          "20261022110000",
-		Description: "Add wont_do column to tasks",
-		Migrate:     addTaskWontDo20261022110000,
-		Rollback: func(tx *xorm.Engine) error {
-			return nil
-		},
+		Description: "Add habits and habit check-ins",
+		Migrate:     addHabits20261022110000,
+		Rollback:    dropHabits20261022110000,
 	})
 }
