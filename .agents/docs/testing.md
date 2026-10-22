@@ -10,4 +10,4 @@
 
 ## Frontend
 
-- `web/` has no test suite. Type-check with `npm run typecheck` in `web/` and verify behaviour in the running app.
+- Unit tests for pure logic in `web/src/lib/` use Vitest: put them next to the code as `*.test.ts` and run `npm test` in `web/`. Components have no tests; type-check with `npm run typecheck` in `web/` and verify behaviour in the running app.
