@@ -237,12 +237,12 @@ func convertTickTickToVikunja(tasks []*tickTickTask) (result []*models.ProjectWi
 				EndDate:     t.DueDate.Time,
 				DueDate:     t.DueDate.Time,
 				// TickTick statuses: 0 open, 1 completed, 2 archived (completed), -1 won't do.
-				Done:        t.Status == "1" || t.Status == "2" || t.Status == "-1",
-				WontDo:      t.Status == "-1",
-				DoneAt:      t.CompletedTime.Time,
-				Position:    t.Order,
-				Priority:    int64(t.Priority),
-				Labels:      labels,
+				Done:     t.Status == "1" || t.Status == "2" || t.Status == "-1",
+				WontDo:   t.Status == "-1",
+				DoneAt:   t.CompletedTime.Time,
+				Position: t.Order,
+				Priority: int64(t.Priority),
+				Labels:   labels,
 			},
 		}
 
