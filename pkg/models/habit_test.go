@@ -339,7 +339,12 @@ func TestHabit_Checkins(t *testing.T) {
 		assert.Equal(t, 8, h.TodayValue)
 		assert.Equal(t, 4, h.CurrentStreak)
 		assert.True(t, h.Updated.After(time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)), "a check-in bumps the habit's updated timestamp")
-		db.AssertExists(t, "habit_checkins", map[string]any{"habit_id": 1, "value": 8, "id": 12}, false)
+		s2 := db.NewSession()
+		defer s2.Close()
+		checkins, err := (&Habit{ID: 1}).GetCheckins(s2, habitDay(t, "2026-10-08"), habitDay(t, "2026-10-08"))
+		require.NoError(t, err)
+		require.Len(t, checkins, 1)
+		assert.Equal(t, 8, checkins[0].Value)
 	})
 	t.Run("check in replaces the day's value", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
@@ -446,4 +451,27 @@ func TestHabit_Stats(t *testing.T) {
 		_, err := (&Habit{ID: 1}).GetStats(s, owner, "2026-10-07", "October")
 		assert.True(t, IsErrHabitInvalidDate(err))
 	})
+}
+
+func TestHabit_CheckinTwiceOnTheSameDay(t *testing.T) {
+	owner := &user.User{ID: 1}
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+
+	day := habitDay(t, "2026-10-08")
+	h := &Habit{ID: 1, Today: "2026-10-08"}
+	require.NoError(t, h.SetCheckin(s, owner, day, 3))
+	require.NoError(t, h.SetCheckin(s, owner, day, 5), "a second check-in must update the day, not insert a new row")
+	assert.Equal(t, 5, h.TodayValue)
+
+	checkins, err := h.GetCheckins(s, day, day)
+	require.NoError(t, err)
+	require.Len(t, checkins, 1)
+	assert.Equal(t, 5, checkins[0].Value)
+
+	require.NoError(t, h.DeleteCheckin(s, day))
+	checkins, err = h.GetCheckins(s, day, day)
+	require.NoError(t, err)
+	assert.Empty(t, checkins)
 }

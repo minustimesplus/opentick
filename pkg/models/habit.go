@@ -110,6 +110,17 @@ func ParseHabitDate(value string) (time.Time, error) {
 	return d, nil
 }
 
+// habitDayRange matches the check-ins from the first to the last day, both
+// inclusive. SQLite keeps the day as text whose exact form depends on the
+// writer (xorm omits the zone, a bound time.Time adds it), so days are matched
+// as half-open ranges of zone-less UTC strings instead of by equality.
+func habitDayRange(first, last time.Time) builder.Cond {
+	return builder.And(
+		builder.Gte{"day": first.UTC().Format(dbTimeFormat)},
+		builder.Lt{"day": last.UTC().AddDate(0, 0, 1).Format(dbTimeFormat)},
+	)
+}
+
 func habitDateKey(d time.Time) string {
 	return d.UTC().Format(habitDateFormat)
 }
@@ -326,7 +337,7 @@ func (h *Habit) GetCheckins(s *xorm.Session, from, to time.Time) ([]*HabitChecki
 	}
 	checkins := []*HabitCheckin{}
 	err := s.
-		Where("habit_id = ? AND day >= ? AND day <= ?", h.ID, from, to).
+		Where("habit_id = ?", h.ID).And(habitDayRange(from, to)).
 		OrderBy("day ASC").
 		Find(&checkins)
 	return checkins, err
@@ -343,7 +354,7 @@ func (h *Habit) SetCheckin(s *xorm.Session, a web.Auth, day time.Time, value int
 	value = min(value, MaxHabitGoal)
 
 	existing := &HabitCheckin{}
-	exists, err := s.Where("habit_id = ? AND day = ?", h.ID, day).Get(existing)
+	exists, err := s.Where("habit_id = ?", h.ID).And(habitDayRange(day, day)).Get(existing)
 	if err != nil {
 		return err
 	}
@@ -373,7 +384,7 @@ func (h *Habit) SetCheckin(s *xorm.Session, a web.Auth, day time.Time, value int
 // DeleteCheckin removes the check-in of day, if there is one. Callers must
 // have checked CanUpdate.
 func (h *Habit) DeleteCheckin(s *xorm.Session, day time.Time) error {
-	deleted, err := s.Where("habit_id = ? AND day = ?", h.ID, day).Delete(&HabitCheckin{})
+	deleted, err := s.Where("habit_id = ?", h.ID).And(habitDayRange(day, day)).Delete(&HabitCheckin{})
 	if err != nil || deleted == 0 {
 		return err
 	}

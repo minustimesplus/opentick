@@ -165,13 +165,13 @@ func TestHumaHabit_Checkins(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &h))
 		assert.Equal(t, 8, h.TodayValue)
 		assert.Equal(t, 4, h.CurrentStreak)
-		db.AssertExists(t, "habit_checkins", map[string]any{"habit_id": 1, "value": 8, "id": 12}, false)
+		assert.Equal(t, []int{8}, habitCheckinValues(t, 1, "2026-10-08"))
 	})
 	t.Run("Set - forbidden", func(t *testing.T) {
 		_, err := testHandler.serve(http.MethodPut, "/api/v2/habits/3/checkins/2026-10-08", `{"value":1}`)
 		require.Error(t, err)
 		assert.Equal(t, http.StatusForbidden, getHTTPErrorCode(err))
-		db.AssertMissing(t, "habit_checkins", map[string]any{"habit_id": 3, "id": 12})
+		assert.Empty(t, habitCheckinValues(t, 3, "2026-10-08"))
 	})
 	t.Run("Set - future day", func(t *testing.T) {
 		_, err := testHandler.serve(http.MethodPut, "/api/v2/habits/1/checkins/2999-01-01", `{"value":1}`)
@@ -190,6 +190,23 @@ func TestHumaHabit_Checkins(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, getHTTPErrorCode(err))
 		db.AssertExists(t, "habit_checkins", map[string]any{"id": 11}, false)
 	})
+}
+
+// habitCheckinValues returns the values checked in to a habit on a day. Rows
+// inserted by a test get database-specific ids, so tests look them up by day.
+func habitCheckinValues(t *testing.T, habitID int64, date string) []int {
+	t.Helper()
+	day, err := models.ParseHabitDate(date)
+	require.NoError(t, err)
+	s := db.NewSession()
+	defer s.Close()
+	checkins, err := (&models.Habit{ID: habitID}).GetCheckins(s, day, day)
+	require.NoError(t, err)
+	values := []int{}
+	for _, c := range checkins {
+		values = append(values, c.Value)
+	}
+	return values
 }
 
 func TestHumaHabit_Stats(t *testing.T) {
