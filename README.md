@@ -2,6 +2,10 @@
 
 > A clean, open source implementation of TickTick, built on [Vikunja](https://vikunja.io).
 
+[![Features implemented](https://img.shields.io/badge/TickTick_features-57%25-yellow)](FEATURES.md)
+
+See [FEATURES.md](FEATURES.md) for what is and isn't implemented yet.
+
 OpenTick pairs a TickTick-style web frontend (lists, calendar, Eisenhower matrix,
 subscribed ICS calendars) with the Vikunja Go API as its backend. You host it
 yourself, and your data stays with you.
