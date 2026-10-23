@@ -2,7 +2,7 @@
 
 > A clean, open source implementation of TickTick, built on [Vikunja](https://vikunja.io).
 
-[![Features implemented](https://img.shields.io/badge/TickTick_features-88%25-green)](FEATURES.md)
+[![Features implemented](https://img.shields.io/badge/TickTick_features-84%25-green)](FEATURES.md)
 
 See [FEATURES.md](FEATURES.md) for what is and isn't implemented yet.
 
