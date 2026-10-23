@@ -163,6 +163,10 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		}
 	}
 
+	if err = deleteHabitsOfUser(s, u.ID); err != nil {
+		return err
+	}
+
 	// Delete all related entities
 	relatedEntities := []struct {
 		column string
@@ -177,6 +181,8 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		{"owner_id", &APIToken{}},
 		{"created_by_id", &Webhook{}},
 		{"user_id", &CalendarSubscription{}},
+		{"user_id", &Countdown{}},
+		{"user_id", &FocusSession{}},
 	}
 
 	for _, entity := range relatedEntities {

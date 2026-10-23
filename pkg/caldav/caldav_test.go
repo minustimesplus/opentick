@@ -25,6 +25,7 @@ import (
 	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/user"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseTodos(t *testing.T) {
@@ -633,4 +634,36 @@ func TestEscapeICalText(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestWontDoRoundTripsAsCancelled(t *testing.T) {
+	cfg := &Config{Name: "test", ProdID: "Vikunja"}
+	ts := time.Unix(1543626724, 0).In(config.GetTimeZone())
+
+	t.Run("won't do serializes as cancelled", func(t *testing.T) {
+		out := ParseTodos(cfg, []*Todo{{Summary: "Todo", UID: "uid", Timestamp: ts, Done: true, WontDo: true}})
+		assert.Contains(t, out, "STATUS:CANCELLED")
+		assert.NotContains(t, out, "STATUS:COMPLETED")
+	})
+
+	t.Run("done stays completed", func(t *testing.T) {
+		out := ParseTodos(cfg, []*Todo{{Summary: "Todo", UID: "uid", Timestamp: ts, Done: true}})
+		assert.Contains(t, out, "STATUS:COMPLETED")
+	})
+
+	t.Run("cancelled parses as won't do", func(t *testing.T) {
+		task, props, err := ParseTaskFromVTODO(`BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//RandomProdID which is not random//EN
+BEGIN:VTODO
+UID:randomuid
+SUMMARY:Test
+STATUS:CANCELLED
+END:VTODO
+END:VCALENDAR`)
+		require.NoError(t, err)
+		assert.True(t, props.Done)
+		assert.True(t, task.Done)
+		assert.True(t, task.WontDo)
+	})
 }

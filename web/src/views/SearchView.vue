@@ -95,4 +95,14 @@ input {
 .empty-state {
 	height: 200px;
 }
+
+@media (max-width: 767px) {
+	.search-view {
+		padding: 12px 10px 0;
+	}
+
+	.bar {
+		margin-bottom: 8px;
+	}
+}
 </style>

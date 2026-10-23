@@ -11,6 +11,7 @@ import {level, priorityName, splitEmoji, type Level} from '@/lib/tasks'
 import {t, type MessageKey} from '@/lib/i18n'
 import {openTaskDrawer, openTaskMenu, ui} from '@/lib/ui'
 import {prefs} from '@/lib/prefs'
+import {isMobile} from '@/lib/viewport'
 
 const data = useData()
 
@@ -133,6 +134,7 @@ function groupTitle(p: number) {
 				:key="q.id"
 				class="quad"
 				:class="{drop: dropQ === q.id}"
+				:style="{'--q-order': q.id}"
 				@dragover="onDragOver($event, q)"
 				@dragleave="dropQ === q.id && (dropQ = null)"
 				@drop="onDrop($event, q)"
@@ -164,12 +166,12 @@ function groupTitle(p: number) {
 								:key="task.id"
 								class="m-row"
 								:class="{done: task.done}"
-								draggable="true"
+								:draggable="!isMobile"
 								@dragstart="onDragStart($event, task)"
 								@click="openTaskDrawer(task.id)"
 								@contextmenu="openTaskMenu(task.id, $event)"
 							>
-								<TaskCheckbox :done="task.done" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
+								<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 								<span class="m-title">{{ task.title }}</span>
 								<span v-if="listLabel(task)" class="m-list">
 									<span v-if="listLabel(task)!.emoji">{{ listLabel(task)!.emoji }}</span>{{ listLabel(task)!.name }}
@@ -288,6 +290,13 @@ h1 {
 	display: flex;
 }
 
+/* Touch screens can't hover, so the add button always shows. */
+@media (hover: none) {
+	.q-add {
+		display: flex;
+	}
+}
+
 .q-add:hover {
 	background: var(--bg-hover);
 	color: var(--text);
@@ -342,8 +351,10 @@ h1 {
 	background: var(--border);
 }
 
-.m-row:hover {
-	background: var(--bg-hover);
+@media (hover: hover) {
+	.m-row:hover {
+		background: var(--bg-hover);
+	}
 }
 
 .m-title {
@@ -404,6 +415,69 @@ h1 {
 
 	.quad {
 		min-height: 300px;
+	}
+}
+
+@media (max-width: 767px) {
+	.matrix-view {
+		padding: 0 10px 10px;
+	}
+
+	.head {
+		height: 56px;
+		padding: 0 4px 0 8px;
+	}
+
+	h1 {
+		font-size: 20px;
+	}
+
+	/* minmax(0, …) stops long titles from widening the column. */
+	.grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 10px;
+	}
+
+	/* Quadrants grow with their tasks; the grid scrolls as a whole. Stacked,
+	   they read I to IV instead of the 2x2 grid's urgent row first. */
+	.quad {
+		order: var(--q-order);
+		min-height: 0;
+		padding: 10px 6px 6px 10px;
+	}
+
+	.q-body {
+		flex: none;
+		overflow: visible;
+		padding-right: 0;
+	}
+
+	.q-add {
+		padding: 6px;
+	}
+
+	.g-head {
+		padding-left: 4px;
+	}
+
+	.m-row {
+		min-height: 48px;
+		padding: 0 8px 0 10px;
+		-webkit-touch-callout: none;
+		user-select: none;
+	}
+
+	.m-row::after {
+		left: 38px;
+		right: 8px;
+	}
+
+	.m-list {
+		max-width: 88px;
+	}
+
+	.q-empty {
+		padding: 8px 10px;
 	}
 }
 </style>

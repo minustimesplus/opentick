@@ -7,9 +7,14 @@ export const ui = reactive({
 	focusQuickAdd: 0,
 	/** Right-click task menu. */
 	ctx: null as {taskId: number, x: number, y: number} | null,
+	/** Task being dragged from a task row, so drop targets can react during dragover. */
+	dragTaskId: null as number | null,
 	/** Section shown in the settings dialog, null while it is closed. */
 	settings: null as SettingsSection | null,
 })
+
+/** Where a dragged task lands relative to a task row. */
+export type DropZone = 'before' | 'after' | 'inside'
 
 export type SettingsSection =
 	| 'account' | 'premium'

@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
+import {Archive, ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
 import DayIcon from './DayIcon.vue'
 import Popover from './Popover.vue'
 import ListEditDialog from './ListEditDialog.vue'
+import FilterEditDialog from './FilterEditDialog.vue'
+import {filterIdOf} from '@/lib/filters'
 import type {Project} from '@/api/types'
 import {useData} from '@/stores/data'
 import {hasColor, labelColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
-import {addDays, getSchedule, minutesOfDay, moveSchedule, schedulePatch, startOfDay, withMinutes} from '@/lib/dates'
+import {addDays, fmtWeekdayShort, getSchedule, minutesOfDay, moveSchedule, schedulePatch, startOfDay, withMinutes} from '@/lib/dates'
 
 const data = useData()
 const route = useRoute()
@@ -18,6 +20,8 @@ const router = useRouter()
 
 const current = computed(() => String(route.params.list ?? 'today'))
 const todayNum = new Date().getDate()
+// Two-letter weekday ("We"), like TickTick's Next 7 Days icon.
+const weekdayAbbr = computed(() => fmtWeekdayShort(new Date()).slice(0, 2))
 
 interface Node {
 	project: Project
@@ -49,6 +53,24 @@ async function removeList(p: Project) {
 	if (!confirm(t('deleteListConfirm', {name: p.title}))) return
 	await data.deleteProject(p.id)
 	if (current.value === `p${p.id}`) go('today')
+}
+
+async function archiveList(p: Project) {
+	ctx.value = null
+	await data.setArchived(p.id, true)
+	if (current.value === `p${p.id}`) go('today')
+}
+
+// ---- saved filters ----
+const filterCtx = ref<{filter: Project, x: number, y: number} | null>(null)
+/** Filter being edited; null for a new one, undefined while the dialog is closed. */
+const editingFilter = ref<Project | null | undefined>(undefined)
+
+async function removeFilter(f: Project) {
+	filterCtx.value = null
+	if (!confirm(t('deleteFilterConfirm', {name: f.title}))) return
+	await data.deleteFilter(filterIdOf(f.id))
+	if (current.value === `f${-f.id}`) go('today')
 }
 
 // ---- drop targets ----
@@ -93,17 +115,17 @@ function dropProps(key: string) {
 	<aside class="sidebar">
 		<div class="scroll">
 			<button class="item" :class="{active: current === 'today', drop: dropKey === 'today'}" v-bind="dropProps('today')" @click="go('today')">
-				<DayIcon :label="todayNum" class="ic" />
+				<DayIcon :label="todayNum" :size="17" class="ic smart" />
 				<span class="name">{{ t('today') }}</span>
 				<span class="count">{{ data.counts.today || '' }}</span>
 			</button>
 			<button class="item" :class="{active: current === 'week', drop: dropKey === 'week'}" v-bind="dropProps('week')" @click="go('week')">
-				<DayIcon label="7" class="ic" />
+				<DayIcon :label="weekdayAbbr" :size="17" class="ic smart" />
 				<span class="name">{{ t('next7') }}</span>
 				<span class="count">{{ data.counts.week || '' }}</span>
 			</button>
 			<button class="item" :class="{active: current === 'inbox', drop: dropKey === 'inbox'}" v-bind="dropProps('inbox')" @click="go('inbox')">
-				<Inbox :size="18" class="ic" />
+				<Inbox :size="17" :stroke-width="1.8" class="ic smart" />
 				<span class="name">{{ t('inbox') }}</span>
 				<span class="count">{{ data.counts.byProject.get(data.inboxId) || '' }}</span>
 			</button>
@@ -155,17 +177,24 @@ function dropProps(key: string) {
 				</template>
 			</template>
 
-			<template v-if="data.savedFilters.length">
-				<div class="section-head" @click="toggle('filters')">
-					<span>{{ t('filters') }}</span>
-					<component :is="prefs.collapsed.filters ? ChevronRight : ChevronDown" :size="14" class="chev" />
-				</div>
-				<template v-if="!prefs.collapsed.filters">
-					<button v-for="f in data.savedFilters" :key="f.id" class="item" :class="{active: current === `f${-f.id}`}" @click="go(`f${-f.id}`)">
-						<Filter :size="17" class="ic" />
-						<span class="name">{{ f.title }}</span>
-					</button>
-				</template>
+			<div class="section-head" @click="toggle('filters')">
+				<span>{{ t('filters') }}</span>
+				<button class="add" :title="t('addFilter')" @click.stop="editingFilter = null"><Plus :size="15" /></button>
+				<component :is="prefs.collapsed.filters ? ChevronRight : ChevronDown" :size="14" class="chev" />
+			</div>
+			<template v-if="!prefs.collapsed.filters">
+				<button
+					v-for="f in data.savedFilters"
+					:key="f.id"
+					class="item"
+					:class="{active: current === `f${-f.id}`}"
+					@click="go(`f${-f.id}`)"
+					@contextmenu.prevent="filterCtx = {filter: f, x: $event.clientX, y: $event.clientY}"
+				>
+					<Filter :size="17" class="ic" />
+					<span class="name">{{ f.title }}</span>
+				</button>
+				<div v-if="!data.savedFilters.length" class="hint">{{ t('filtersHint') }}</div>
 			</template>
 
 			<div class="section-head" @click="toggle('tags')">
@@ -193,14 +222,30 @@ function dropProps(key: string) {
 				<SquareCheckBig :size="17" class="ic" />
 				<span class="name">{{ t('completed') }}</span>
 			</button>
+			<button v-if="data.archivedProjects.length" class="item" :class="{active: current === 'archived'}" @click="go('archived')">
+				<Archive :size="17" class="ic" />
+				<span class="name">{{ t('archivedLists') }}</span>
+			</button>
+			<button class="item" :class="{active: current === 'trash'}" @click="go('trash')">
+				<Trash2 :size="17" class="ic" />
+				<span class="name">{{ t('trash') }}</span>
+			</button>
 		</div>
 
 		<Popover v-if="ctx" :anchor="{x: ctx.x, y: ctx.y}" @close="ctx = null">
 			<div class="menu">
 				<button class="menu-item" @click="editing = ctx!.project; ctx = null"><Pencil :size="15" /> {{ t('edit') }}</button>
+				<button class="menu-item" @click="archiveList(ctx!.project)"><Archive :size="15" /> {{ t('archive') }}</button>
 				<button class="menu-item danger" @click="removeList(ctx!.project)"><Trash2 :size="15" /> {{ t('delete') }}</button>
 			</div>
 		</Popover>
+		<Popover v-if="filterCtx" :anchor="{x: filterCtx.x, y: filterCtx.y}" @close="filterCtx = null">
+			<div class="menu">
+				<button class="menu-item" @click="editingFilter = filterCtx!.filter; filterCtx = null"><Pencil :size="15" /> {{ t('edit') }}</button>
+				<button class="menu-item danger" @click="removeFilter(filterCtx!.filter)"><Trash2 :size="15" /> {{ t('delete') }}</button>
+			</div>
+		</Popover>
+		<FilterEditDialog v-if="editingFilter !== undefined" :filter="editingFilter" @close="editingFilter = undefined" @saved="id => go(`f${id + 1}`)" />
 		<ListEditDialog v-if="editing !== undefined" :project="editing" @close="editing = undefined" @saved="id => go(`p${id}`)" />
 	</aside>
 </template>
@@ -247,6 +292,12 @@ function dropProps(key: string) {
 	outline-offset: -2px;
 }
 
+.hint {
+	padding: 4px 12px 8px;
+	font-size: 12px;
+	color: var(--text-3);
+}
+
 .item.child {
 	padding-left: 34px;
 }
@@ -257,6 +308,10 @@ function dropProps(key: string) {
 	width: 18px;
 	display: inline-flex;
 	justify-content: center;
+}
+
+.ic.smart {
+	color: var(--text);
 }
 
 .emoji {
@@ -314,6 +369,19 @@ function dropProps(key: string) {
 
 .section-head:hover .add {
 	display: flex;
+}
+
+/* Touch screens can't hover, so the add button always shows. */
+@media (hover: none) {
+	.section-head .add {
+		display: flex;
+	}
+}
+
+@media (max-width: 767px) {
+	.item {
+		height: 44px;
+	}
 }
 
 .chev {

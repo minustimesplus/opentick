@@ -22,6 +22,16 @@ export const MatrixIcon = createLucideIcon('rail-matrix', [
 	['path', {...solid, key: 'br', d: 'M12.8 12.8h4.1a4.1 4.1 0 0 1 4.1 4.1 4.1 4.1 0 0 1-4.1 4.1 4.1 4.1 0 0 1-4.1-4.1z'}],
 ])
 
+// Rounded tile with three rising bars cut out.
+export const StatsIcon = createLucideIcon('rail-stats', [
+	['path', {
+		...solid,
+		key: 'tile',
+		d: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z'
+			+ 'M7.2 12.6h2v4.6h-2z' + 'M11 9.6h2v7.6h-2z' + 'M14.8 6.8h2v10.4h-2z',
+	}],
+])
+
 const dot = (x: number, y: number) => `M${x - 1} ${y - 1}h2v2h-2z`
 
 export const CalendarIcon = createLucideIcon('rail-calendar', [
@@ -31,6 +41,35 @@ export const CalendarIcon = createLucideIcon('rail-calendar', [
 		key: 'body',
 		d: 'M3 8.6h18V17a3.5 3.5 0 0 1-3.5 3.5h-11A3.5 3.5 0 0 1 3 17z'
 			+ dot(8, 12.4) + dot(12, 12.4) + dot(16, 12.4) + dot(8, 16.4) + dot(12, 16.4),
+	}],
+])
+
+// A disc with a check mark cut out, ringed like a streak.
+export const HabitIcon = createLucideIcon('rail-habit', [
+	['path', {
+		...solid,
+		key: 'disc',
+		d: 'M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19z'
+			+ 'M7.6 11.9 10.6 14.9l5.8-5.8a.9.9 0 0 1 1.3 1.3l-7.1 7.1-4.3-4.3a.9.9 0 0 1 1.3-1.3z',
+	}],
+])
+
+// An hourglass: two solid bulbs meeting at the neck, between a top and a bottom bar.
+export const CountdownIcon = createLucideIcon('rail-countdown', [
+	['path', {...solid, key: 'top', d: 'M5.5 2.5h13a1.2 1.2 0 0 1 0 2.4h-13a1.2 1.2 0 0 1 0-2.4z'}],
+	['path', {...solid, key: 'bottom', d: 'M5.5 19.1h13a1.2 1.2 0 0 1 0 2.4h-13a1.2 1.2 0 0 1 0-2.4z'}],
+	['path', {...solid, key: 'upper', d: 'M7 6.3h10v1c0 2-1.5 3.5-3.6 4.7l-1.4.6-1.4-.6C8.5 10.8 7 9.3 7 7.3z'}],
+	['path', {...solid, key: 'lower', d: 'M12 12.6l1.4.6c2.1 1.2 3.6 2.7 3.6 4.7v.4H7v-.4c0-2 1.5-3.5 3.6-4.7z'}],
+])
+
+// A stopwatch: a disc with a hand cut out, under a crown button.
+export const FocusIcon = createLucideIcon('rail-focus', [
+	['path', {...solid, key: 'crown', d: 'M10 1.5h4a1 1 0 0 1 0 2h-4a1 1 0 0 1 0-2z'}],
+	['path', {
+		...solid,
+		key: 'face',
+		d: 'M12 4.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17z'
+			+ 'M11.1 8.2v5.2l3.4 2.1a.9.9 0 0 0 .95-1.5l-2.55-1.6V8.2a.9.9 0 0 0-1.8 0z',
 	}],
 ])
 

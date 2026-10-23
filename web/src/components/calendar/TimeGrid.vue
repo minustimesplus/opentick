@@ -11,6 +11,7 @@ import {
 import {projectColor} from '@/lib/tasks'
 import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
 import {prefs} from '@/lib/prefs'
+import {isMobile} from '@/lib/viewport'
 import {t} from '@/lib/i18n'
 import type {CalEvent} from '@/stores/calendars'
 import {allDayEventsFor, allDayFor, layoutDay, minOf, POINT_MINUTES, snap, totalHeight, yOf, type Scale, type TimedItem} from './layout'
@@ -19,7 +20,8 @@ const props = withDefaults(defineProps<{days: Date[], tasks: Task[], events?: Ca
 const emit = defineEmits<{openEvent: [CalEvent, MouseEvent]}>()
 const data = useData()
 
-const GUTTER = 72
+// Hour label column; narrower on phones so seven days still fit.
+const gutter = computed(() => isMobile.value ? 44 : 72)
 const NIGHT_H = 44
 const DAY_START = 6 * 60
 const DAY_END = 21 * 60
@@ -166,31 +168,36 @@ const dragging = ref(false)
 function pos(e: PointerEvent | DragEvent) {
 	const inner = innerEl.value!.getBoundingClientRect()
 	const body = bodyEl.value!.getBoundingClientRect()
-	const colW = (inner.width - GUTTER) / props.days.length
-	const dayIdx = Math.max(0, Math.min(props.days.length - 1, Math.floor((e.clientX - inner.left - GUTTER) / colW)))
+	const colW = (inner.width - gutter.value) / props.days.length
+	const dayIdx = Math.max(0, Math.min(props.days.length - 1, Math.floor((e.clientX - inner.left - gutter.value) / colW)))
 	const min = Math.max(0, Math.min(1440, minOf(e.clientY - inner.top, scale.value)))
 	return {dayIdx, min, inAllDay: e.clientY < body.top}
 }
 
+// A touch that turns into a scroll ends with pointercancel, not pointerup.
 function attach() {
 	window.addEventListener('pointermove', onMove)
 	window.addEventListener('pointerup', onUp)
+	window.addEventListener('pointercancel', cancel)
 	window.addEventListener('keydown', onEsc)
 }
 
 function detach() {
 	window.removeEventListener('pointermove', onMove)
 	window.removeEventListener('pointerup', onUp)
+	window.removeEventListener('pointercancel', cancel)
 	window.removeEventListener('keydown', onEsc)
 }
 
+function cancel() {
+	drag = null
+	preview.value = null
+	dragging.value = false
+	detach()
+}
+
 function onEsc(e: KeyboardEvent) {
-	if (e.key === 'Escape') {
-		drag = null
-		preview.value = null
-		dragging.value = false
-		detach()
-	}
+	if (e.key === 'Escape') cancel()
 }
 
 function startOnItem(e: PointerEvent, it: TimedItem, dayIdx: number, kind: 'move' | 'resize') {
@@ -385,7 +392,7 @@ function onAllDayDrop(e: DragEvent, idx: number) {
 }
 
 const nowY = computed(() => yOf(minutesOfDay(now.value), scale.value))
-const gridCols = computed(() => ({gridTemplateColumns: `${GUTTER}px repeat(${props.days.length}, minmax(0, 1fr))`}))
+const gridCols = computed(() => ({gridTemplateColumns: `${gutter.value}px repeat(${props.days.length}, minmax(0, 1fr))`}))
 const today0 = computed(() => startOfDay(now.value))
 </script>
 
@@ -429,7 +436,7 @@ const today0 = computed(() => startOfDay(now.value))
 							@pointerdown="startOnAllDay($event, entry.task!, i)"
 							@contextmenu="openTaskMenu(entry.task!.id, $event)"
 						>
-							<TaskCheckbox :done="entry.task.done" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
+							<TaskCheckbox :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
 							<span class="ad-title">{{ entry.task.title }}</span>
 						</div>
 					</template>
@@ -491,7 +498,7 @@ const today0 = computed(() => startOfDay(now.value))
 							@contextmenu="openTaskMenu(it.task!.id, $event)"
 						>
 							<div class="ev-top">
-								<TaskCheckbox :done="it.task.done" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
+								<TaskCheckbox :done="it.task.done" :wont-do="it.task.wont_do" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
 								<span class="ev-title">{{ it.task.title }}</span>
 							</div>
 							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
@@ -848,5 +855,31 @@ const today0 = computed(() => startOfDay(now.value))
 	margin-top: 8px;
 	font-size: 12px;
 	color: var(--accent);
+}
+
+@media (max-width: 767px) {
+	.hour-label {
+		right: 6px;
+		font-size: 11px;
+	}
+
+	.col-head {
+		padding: 0 2px 4px;
+	}
+
+	.wd {
+		padding: 6px 0 8px;
+		font-size: 12px;
+	}
+
+	.dn {
+		justify-content: center;
+		padding-left: 0;
+		font-size: 15px;
+	}
+
+	.dn .alt {
+		display: none;
+	}
 }
 </style>

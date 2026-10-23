@@ -53,10 +53,10 @@ const dates = computed(() => opts([
 const dateModes = computed(() => opts([['date', 'date'], ['duration', 'duration']]))
 const durations = computed(() => [10, 15, 30, 45, 60, 90, 120, 150, 180, 1440].map(min => ({value: min, label: durationLabel(min)})))
 const timedReminders = computed(() => opts([
-	['none', 'none'], ['onTime', 'reminderOnTime'], ['5m', 'reminder5m'], ['30m', 'reminder30m'], ['1h', 'reminder1h'], ['1d', 'reminder1d'], ['end', 'reminderAtEnd'],
+	['none', 'none'], ['onTime', 'remOnTime'], ['5m', 'remBefore5m'], ['30m', 'remBefore30m'], ['1h', 'remBefore1h'], ['1d', 'remBefore1d'], ['end', 'reminderAtEnd'],
 ]))
 const allDayReminders = computed(() => opts([
-	['none', 'none'], ['0d', 'reminderOnDay'], ['1d', 'reminder1dAt9'], ['2d', 'reminder2dAt9'], ['3d', 'reminder3dAt9'], ['1w', 'reminder1wAt9'],
+	['none', 'none'], ['0d', 'remDay9'], ['1d', 'remDayBefore9'], ['2d', 'reminder2dAt9'], ['3d', 'reminder3dAt9'], ['1w', 'reminder1wAt9'],
 ]))
 const priorities = computed(() => opts([['none', 'none'], ['low', 'low'], ['medium', 'medium'], ['high', 'high']]))
 const tags = computed(() => opts([['none', 'none']]))

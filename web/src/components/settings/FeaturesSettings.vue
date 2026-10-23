@@ -26,7 +26,7 @@ const enabled = reactive<Record<Preview, boolean>>({
 </script>
 
 <template>
-	<h2 class="s-title">{{ t('features') }}</h2>
+	<h2 class="s-title flush">{{ t('features') }}</h2>
 
 	<div class="grid">
 		<div v-for="f in features" :key="f.key" class="feature">
@@ -73,10 +73,6 @@ const enabled = reactive<Record<Preview, boolean>>({
 </template>
 
 <style scoped>
-.s-title {
-	margin-left: 0;
-}
-
 .grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));

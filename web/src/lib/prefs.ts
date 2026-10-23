@@ -1,5 +1,7 @@
 import {reactive, watch} from 'vue'
 import type {ThemeColor} from './theme'
+import type {TimelineScale} from './timeline'
+import {isMobile} from './viewport'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
@@ -32,13 +34,24 @@ export interface Prefs {
 	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
 	sidebarWidth: number
 	detailWidth: number
-	listSort: Record<string, 'date' | 'priority' | 'title' | 'created'>
+	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
+	/** Layout per list key: plain list, kanban columns or timeline. */
+	listView: Record<string, 'list' | 'kanban' | 'timeline'>
+	timelineScale: TimelineScale
 	collapsed: Record<string, boolean>
 	matrixLists: number[]
 	matrixShowDone: boolean
 	/** Client last picked in the MCP setup guide. */
 	mcpClient: string
+	/** Focus timer lengths in minutes; a long break follows every focusLongBreakEvery pomos. */
+	focusPomoMinutes: number
+	focusShortBreakMinutes: number
+	focusLongBreakMinutes: number
+	focusLongBreakEvery: number
+	/** Start the break right after a pomo ends, and the next pomo after a break. */
+	focusAutoStartBreak: boolean
+	focusAutoStartPomo: boolean
 }
 
 const KEY = 'tt.prefs'
@@ -54,7 +67,8 @@ const defaults: Prefs = {
 	altCalendar: 'none',
 	showWeekNumbers: false,
 	defaultListId: null,
-	calendarMode: 'week',
+	// Seven columns are too narrow to read on a phone.
+	calendarMode: isMobile.value ? 'day' : 'week',
 	calendarHidden: [],
 	calendarHiddenSubs: [],
 	calendarShowCompleted: true,
@@ -66,10 +80,18 @@ const defaults: Prefs = {
 	detailWidth: 420,
 	listSort: {},
 	listShowCompleted: {},
+	listView: {},
+	timelineScale: 'week',
 	collapsed: {},
 	matrixLists: [],
 	matrixShowDone: false,
 	mcpClient: '',
+	focusPomoMinutes: 25,
+	focusShortBreakMinutes: 5,
+	focusLongBreakMinutes: 15,
+	focusLongBreakEvery: 4,
+	focusAutoStartBreak: true,
+	focusAutoStartPomo: false,
 }
 
 // Before color series, `theme` was 'dark' | 'light' | 'system'.

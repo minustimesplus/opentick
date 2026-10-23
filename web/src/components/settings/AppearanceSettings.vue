@@ -55,7 +55,7 @@ async function remove() {
 
 <template>
 	<div class="tabs">
-		<button :class="{active: tab === 'theme'}" @click="tab = 'theme'">{{ t('themeTab') }}</button>
+		<button :class="{active: tab === 'theme'}" @click="tab = 'theme'">{{ t('theme') }}</button>
 		<button :class="{active: tab === 'display'}" @click="tab = 'display'">{{ t('displayTab') }}</button>
 	</div>
 

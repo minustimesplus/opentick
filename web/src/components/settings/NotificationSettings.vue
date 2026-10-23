@@ -18,7 +18,7 @@ const state = reactive({
 })
 
 const times = computed(() => [
-	{value: '', label: t('never')},
+	{value: '', label: t('repEndNever')},
 	...Array.from({length: 24}, (_, h) => {
 		const value = `${String(h).padStart(2, '0')}:00`
 		return {value, label: value}

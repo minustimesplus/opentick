@@ -671,5 +671,10 @@ h1 {
 		margin-top: 2vh;
 		padding: 32px 22px;
 	}
+
+	/* iOS Safari zooms into fields with text under 16px. */
+	.field {
+		font-size: 16px;
+	}
 }
 </style>

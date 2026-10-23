@@ -5,11 +5,11 @@ import {t, type MessageKey} from '@/lib/i18n'
 type Shortcut = [MessageKey, string | null, boolean?]
 
 const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
-	{title: 'scGeneral', items: [
+	{title: 'general', items: [
 		['save', 'Ctrl+S'],
 		['sync', '.', true],
 		['cancel', 'Esc'],
-		['scUndo', 'Ctrl+Z'],
+		['undo', 'Ctrl+Z'],
 		['scRedo', 'Ctrl+Shift+Z'],
 		['scPrint', 'Ctrl+P', true],
 		['scCommandMenu', 'Ctrl+K', true],

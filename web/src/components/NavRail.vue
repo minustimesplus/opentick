@@ -5,13 +5,16 @@ import {CircleArrowDown, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
+import {useFocus} from '@/stores/focus'
 import {t} from '@/lib/i18n'
-import {BellIcon, CalendarIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, StatsIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
+import {isMobile} from '@/lib/viewport'
 
 const data = useData()
+const focus = useFocus()
 const route = useRoute()
 
 const avatarEl = ref<HTMLElement | null>(null)
@@ -23,6 +26,10 @@ const items = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
+	{key: 'statistics', icon: StatsIcon, to: '/statistics', active: route.path.startsWith('/statistics'), title: t('statistics')},
+	{key: 'habits', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
+	{key: 'focus', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
+	{key: 'countdowns', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ])
 
@@ -77,6 +84,9 @@ function sync() {
 	data.loadAll().catch(() => {})
 }
 
+// On phones the rail is a tab bar at the bottom, so menus open upwards.
+const placement = computed(() => isMobile.value ? 'top-start' : 'right-start')
+
 const shortcuts = [
 	['N', 'addTask'],
 	['/', 'search'],
@@ -85,6 +95,9 @@ const shortcuts = [
 	['G I', 'inbox'],
 	['G M', 'matrix'],
 	['G C', 'week'],
+	['G H', 'habits'],
+	['G F', 'focus'],
+	['G D', 'countdowns'],
 ] as const
 </script>
 
@@ -93,6 +106,7 @@ const shortcuts = [
 		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'"><UserAvatar :size="30" /></button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
 			<component :is="i.icon" :size="24" />
+			<span v-if="i.key === 'focus' && focus.state.running" class="dot running" :class="{break: focus.state.phase === 'break'}" />
 		</RouterLink>
 		<div class="spacer" />
 		<button
@@ -111,11 +125,11 @@ const shortcuts = [
 			<BellIcon :size="22" />
 			<span v-if="unread" class="dot" />
 		</button>
-		<button ref="helpEl" class="rail-btn" :title="t('shortcuts')" @click="menu = 'help'">
+		<button ref="helpEl" class="rail-btn help-btn" :title="t('shortcuts')" @click="menu = 'help'">
 			<HelpIcon :size="22" />
 		</button>
 
-		<Popover v-if="menu === 'avatar'" :anchor="avatarEl" placement="right-start" @close="menu = null">
+		<Popover v-if="menu === 'avatar'" :anchor="avatarEl" :placement="placement" @close="menu = null">
 			<div class="menu">
 				<div class="menu-label">{{ data.user?.name || data.user?.username }}</div>
 				<button class="menu-item" @click="menu = null; openSettings()"><Settings :size="16" /> {{ t('settings') }}</button>
@@ -124,7 +138,7 @@ const shortcuts = [
 			</div>
 		</Popover>
 
-		<Popover v-if="menu === 'bell'" :anchor="bellEl" placement="right-start" @close="menu = null">
+		<Popover v-if="menu === 'bell'" :anchor="bellEl" :placement="placement" @close="menu = null">
 			<div class="menu notif">
 				<div class="notif-head">
 					<span>{{ t('notifications') }}</span>
@@ -138,7 +152,7 @@ const shortcuts = [
 			</div>
 		</Popover>
 
-		<Popover v-if="menu === 'help'" :anchor="helpEl" placement="right-start" @close="menu = null">
+		<Popover v-if="menu === 'help'" :anchor="helpEl" :placement="placement" @close="menu = null">
 			<div class="menu help">
 				<div class="menu-label">{{ t('shortcuts') }}</div>
 				<div v-for="[k, label] in shortcuts" :key="k" class="kbd-row">
@@ -217,6 +231,14 @@ const shortcuts = [
 	background: var(--danger);
 }
 
+.dot.running {
+	background: var(--accent);
+}
+
+.dot.running.break {
+	background: #2fb36f;
+}
+
 .spinning {
 	animation: spin 0.6s linear infinite;
 }
@@ -228,7 +250,7 @@ const shortcuts = [
 }
 
 .notif {
-	width: 320px;
+	width: min(320px, calc(100vw - 16px));
 	max-height: 420px;
 	overflow: auto;
 }
@@ -280,5 +302,40 @@ kbd {
 
 .link {
 	color: var(--accent);
+}
+
+/* Phones: a tab bar under the main panel. The avatar moves to the end, and
+   keyboard shortcuts have no use on a touch screen. */
+@media (max-width: 767px) {
+	.rail,
+	:global(html.desktop .rail) {
+		flex-direction: row;
+		justify-content: space-around;
+		gap: 0;
+		width: auto;
+		height: calc(54px + env(safe-area-inset-bottom));
+		padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+	}
+
+	.rail-btn {
+		width: 44px;
+		height: 44px;
+	}
+
+	.dot {
+		top: 9px;
+		right: 9px;
+	}
+
+	.avatar {
+		order: 1;
+		margin: 0;
+		padding: 7px;
+	}
+
+	.spacer,
+	.help-btn {
+		display: none;
+	}
 }
 </style>
