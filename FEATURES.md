@@ -81,11 +81,12 @@ Legend: ✅ implemented · ❌ not implemented
 | Phone layout for the web app | ✅ |
 | Docker image | ✅ |
 | Hosted deployment (Heroku, Neon, S3) | ✅ |
-| Linux desktop app (.deb, AppImage) with auto update | ✅ |
-| macOS / Windows desktop app | ❌ |
+| Linux desktop app (.deb, AppImage; x64 and arm64) with auto update | ✅ |
+| macOS desktop app (.dmg; Intel and Apple Silicon, unsigned) | ✅ |
+| Windows desktop app (.exe installer, unsigned) | ✅ |
 | Mobile apps | ❌ |
 | Browser extension | ❌ |
 
 ## Totals
 
-**49 of 57 features implemented (86%).** Recount and update the badge in the README when this file changes.
+**51 of 58 features implemented (88%).** Recount and update the badge in the README when this file changes.
