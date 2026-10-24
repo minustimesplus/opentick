@@ -111,9 +111,42 @@ const columns = computed(() => props.days.map(day => ({
 	],
 })))
 
-const allDayExpanded = ref(false)
+// The all-day strip has a fixed height the user sets by dragging its bottom
+// border; a day with more entries than fit shows "+N more" in the last row.
+const AD_ROW = 24
+const AD_MIN = AD_ROW
 const maxAllDay = computed(() => Math.max(0, ...columns.value.map(c => c.allDay.length)))
-const ALLDAY_VISIBLE = 2
+const adMax = () => Math.max(AD_ROW * 3, Math.round(window.innerHeight * 0.5))
+const adHeight = computed(() => Math.min(adMax(), Math.max(AD_MIN, prefs.calendarAllDayHeight)))
+const adRows = computed(() => Math.max(1, Math.floor(adHeight.value / AD_ROW)))
+
+function adVisible<T>(entries: T[]): T[] {
+	return entries.length <= adRows.value ? entries : entries.slice(0, adRows.value - 1)
+}
+
+function expandAllDay() {
+	prefs.calendarAllDayHeight = Math.min(adMax(), maxAllDay.value * AD_ROW)
+}
+
+function startAllDayResize(e: PointerEvent) {
+	if (e.button !== 0) return
+	e.preventDefault()
+	const startY = e.clientY
+	const startH = adHeight.value
+	const move = (ev: PointerEvent) => {
+		prefs.calendarAllDayHeight = Math.min(adMax(), Math.max(AD_MIN, startH + ev.clientY - startY))
+	}
+	const up = () => {
+		window.removeEventListener('pointermove', move)
+		window.removeEventListener('pointerup', up)
+		window.removeEventListener('pointercancel', up)
+		document.body.classList.remove('row-resizing')
+	}
+	document.body.classList.add('row-resizing')
+	window.addEventListener('pointermove', move)
+	window.addEventListener('pointerup', up)
+	window.addEventListener('pointercancel', up)
+}
 
 function color(task: Task) {
 	return projectColor(data.project(task.project_id))
@@ -417,8 +450,8 @@ const today0 = computed(() => startOfDay(now.value))
 					<span :class="{today: col.today, past: col.day < today0}">{{ col.day.getDate() }}</span>
 					<small v-if="prefs.altCalendar !== 'none'" class="alt">{{ altDayLabel(col.day) }}</small>
 				</div>
-				<div class="ad-list">
-					<template v-for="entry in (allDayExpanded ? col.allDay : col.allDay.slice(0, maxAllDay > ALLDAY_VISIBLE + 1 ? ALLDAY_VISIBLE : ALLDAY_VISIBLE + 1))" :key="entry.key">
+				<div class="ad-list" :style="{height: adHeight + 'px'}">
+					<template v-for="entry in adVisible(col.allDay)" :key="entry.key">
 						<div
 							v-if="entry.event"
 							class="ad-chip ext"
@@ -441,13 +474,13 @@ const today0 = computed(() => startOfDay(now.value))
 						</div>
 					</template>
 					<button
-						v-if="!allDayExpanded && maxAllDay > ALLDAY_VISIBLE + 1 && col.allDay.length > ALLDAY_VISIBLE"
+						v-if="col.allDay.length > adRows"
 						class="ad-more"
-						@click.stop="allDayExpanded = true"
-					>{{ t('more', {n: col.allDay.length - ALLDAY_VISIBLE}) }}</button>
-					<button v-if="allDayExpanded && i === 0" class="ad-more" @click.stop="allDayExpanded = false">▲</button>
+						@click.stop="expandAllDay"
+					>{{ t('more', {n: col.allDay.length - (adRows - 1)}) }}</button>
 				</div>
 			</div>
+			<div class="ad-resizer" @pointerdown="startAllDayResize" />
 		</div>
 
 		<div ref="bodyEl" class="tg-body" @dragover="onDragOver" @dragleave="preview = drag ? preview : null" @drop="onDrop">
@@ -554,6 +587,7 @@ const today0 = computed(() => startOfDay(now.value))
 }
 
 .tg-head {
+	position: relative;
 	display: grid;
 	overflow-y: hidden;
 	border-bottom: 1px solid var(--border);
@@ -623,8 +657,25 @@ const today0 = computed(() => startOfDay(now.value))
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	min-height: 22px;
-	padding-bottom: 2px;
+	overflow: hidden;
+}
+
+/* Drag handle on the strip's bottom border; the head clips overflow, so the
+   hit area sits just above the line. */
+.ad-resizer {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 6px;
+	cursor: row-resize;
+	touch-action: none;
+	z-index: 2;
+}
+
+.ad-resizer:hover {
+	background: var(--accent);
+	opacity: 0.35;
 }
 
 .ad-chip,

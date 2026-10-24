@@ -30,6 +30,8 @@ export interface Prefs {
 	calendarShowWeekends: boolean
 	calendarSidebar: boolean
 	calendarExpandNight: boolean
+	/** Height (px) of the all-day strip in day/week view, set by dragging its bottom border. */
+	calendarAllDayHeight: number
 	tasksSidebar: boolean
 	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
 	sidebarWidth: number
@@ -75,6 +77,7 @@ const defaults: Prefs = {
 	calendarShowWeekends: true,
 	calendarSidebar: false,
 	calendarExpandNight: false,
+	calendarAllDayHeight: 72,
 	tasksSidebar: true,
 	sidebarWidth: 260,
 	detailWidth: 420,

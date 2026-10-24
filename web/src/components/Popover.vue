@@ -54,7 +54,9 @@ async function position() {
 	style.value = {left: `${Math.round(x)}px`, top: `${Math.round(y)}px`}
 }
 
-function onDown(e: MouseEvent) {
+// Pointer events, not mouse events: views that preventDefault() on pointerdown
+// (the calendar grids, for drag-to-create) suppress the follow-up mousedown.
+function onDown(e: PointerEvent) {
 	const target = e.target as Node
 	if (el.value?.contains(target)) return
 	if (props.anchor instanceof HTMLElement && props.anchor.contains(target)) return
@@ -77,7 +79,7 @@ let ro: ResizeObserver | null = null
 
 onMounted(() => {
 	position()
-	setTimeout(() => document.addEventListener('mousedown', onDown, true), 0)
+	setTimeout(() => document.addEventListener('pointerdown', onDown, true), 0)
 	document.addEventListener('keydown', onKey, true)
 	window.addEventListener('resize', position)
 	if (el.value) {
@@ -87,7 +89,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-	document.removeEventListener('mousedown', onDown, true)
+	document.removeEventListener('pointerdown', onDown, true)
 	document.removeEventListener('keydown', onKey, true)
 	window.removeEventListener('resize', position)
 	ro?.disconnect()

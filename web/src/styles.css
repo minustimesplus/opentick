@@ -290,6 +290,11 @@ body.col-resizing {
 	user-select: none;
 }
 
+body.row-resizing {
+	cursor: row-resize;
+	user-select: none;
+}
+
 /* Phones (breakpoint shared with lib/viewport.ts). */
 @media (max-width: 767px) {
 	html {
