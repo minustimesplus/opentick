@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: |
           npm ci
-          WEB_OUT_DIR=../web-desktop/app npm run build
+          APP_VERSION="$VERSION" WEB_OUT_DIR=../web-desktop/app npm run build
 
       - name: Build desktop packages
         working-directory: web-desktop

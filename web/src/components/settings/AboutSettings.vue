@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import {type Component} from 'vue'
-import {Apple, CircleQuestionMark, Ellipsis, Instagram, MessageCircle, Smartphone, Twitter, Youtube} from 'lucide-vue-next'
+import {Apple, CircleQuestionMark, Ellipsis, ExternalLink, Instagram, MessageCircle, Smartphone, Twitter, Youtube} from 'lucide-vue-next'
 import {t, type MessageKey} from '@/lib/i18n'
+
+const version = __APP_VERSION__
+const commit = __APP_COMMIT__
+
+// Release versions have an anchor on the changelog page; dev builds land on the top.
+const changelogUrl = 'https://minustimesplus.github.io/opentick/'
+	+ (/^\d+\.\d+\.\d+$/.test(version) ? `#v${version}` : '')
 
 const community: {icon: Component, label?: MessageKey, name?: string}[] = [
 	{icon: CircleQuestionMark, label: 'helpCenter'},
@@ -45,6 +52,16 @@ const apps: {icon: Component, label?: MessageKey, name?: string}[] = [
 				<span>{{ item.label ? t(item.label) : item.name }}</span>
 			</button>
 		</div>
+
+		<h2>{{ t('version') }}</h2>
+		<p class="version">
+			OpenTick {{ version || t('devBuild') }}
+			<span v-if="commit && !version.endsWith(commit)" class="commit">{{ commit }}</span>
+		</p>
+		<a class="s-link changelog" :href="changelogUrl" target="_blank" rel="noopener noreferrer">
+			{{ t('changelog') }}
+			<ExternalLink :size="12" />
+		</a>
 	</div>
 </template>
 
@@ -92,6 +109,25 @@ p .s-link {
 	border: 1px solid var(--border);
 	color: var(--text-4);
 	font-size: 10px;
+}
+
+.version {
+	margin-bottom: 8px;
+	color: var(--text);
+}
+
+.commit {
+	margin-left: 6px;
+	font-family: ui-monospace, monospace;
+	font-size: 12px;
+	color: var(--text-4);
+}
+
+.changelog {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	text-decoration: none;
 }
 
 .tile span {
