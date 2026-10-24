@@ -3,6 +3,7 @@ name: Desktop release
 # Builds the web/ frontend into the Electron shell in web-desktop/ for Linux
 # (x64 + arm64), Windows and macOS, then publishes one GitHub release with all
 # packages and the latest*.yml feeds for electron-updater on every push to main.
+# The server image for the same version goes to ghcr.io/<owner>/opentick.
 #
 # Standard GitHub-hosted runners (including macOS, Windows and Linux arm64)
 # are free for public repositories.
@@ -83,8 +84,47 @@ jobs:
             web-desktop/dist/*.blockmap
             web-desktop/dist/latest*.yml
 
+  # Publishes the server image for the same version, so a desktop release never
+  # exists without a matching server. Self-hosted updaters only install images
+  # whose keyless cosign signature comes from this workflow on main.
+  server-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      # The Dockerfile cross-compiles on the build platform, so arm64 needs no emulation.
+      - name: Build and push
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          docker buildx create --use
+          docker buildx build . \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg RELEASE_VERSION="$VERSION" \
+            --tag "$image:$VERSION" \
+            --tag "$image:latest" \
+            --push \
+            --metadata-file meta.json
+
+      - name: Sign
+        run: |
+          digest=$(jq -r '."containerimage.digest"' meta.json)
+          cosign sign --yes "$IMAGE@$digest"
+
   release:
-    needs: build
+    needs: [build, server-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

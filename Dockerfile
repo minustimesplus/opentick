@@ -33,12 +33,14 @@ RUN mkdir -p /tmp && chmod 1777 /tmp
 # The actual image
 FROM scratch
 
-LABEL org.opencontainers.image.authors='maintainers@vikunja.io'
-LABEL org.opencontainers.image.url='https://vikunja.io'
-LABEL org.opencontainers.image.documentation='https://vikunja.io/docs'
-LABEL org.opencontainers.image.source='https://code.vikunja.io/vikunja'
+ARG RELEASE_VERSION
+
+# GHCR links the package to the repository named in image.source.
+LABEL org.opencontainers.image.url='https://github.com/minustimesplus/opentick'
+LABEL org.opencontainers.image.source='https://github.com/minustimesplus/opentick'
 LABEL org.opencontainers.image.licenses='AGPLv3'
-LABEL org.opencontainers.image.title='Vikunja'
+LABEL org.opencontainers.image.title='OpenTick'
+LABEL org.opencontainers.image.version=$RELEASE_VERSION
 
 WORKDIR /app/vikunja
 ENTRYPOINT [ "/app/vikunja/vikunja" ]
