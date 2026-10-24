@@ -6,7 +6,9 @@ WORKDIR /build
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
-RUN npm run build
+# The hosted deploy passes the short commit; shown in Settings → About.
+ARG RELEASE_VERSION
+RUN APP_COMMIT=$RELEASE_VERSION npm run build
 
 FROM --platform=$BUILDPLATFORM ghcr.io/techknowlogick/xgo:go-1.27.x@sha256:8cc742b41f043a4fd45d2f63f1fcd12cb27949342df09efb5561f2aadfbe6da3 AS apibuilder
 
