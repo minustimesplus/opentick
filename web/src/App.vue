@@ -12,6 +12,7 @@ import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
+import {routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
 import {applyTheme} from './lib/theme'
 import {background, clearBackground, loadBackground} from './lib/background'
@@ -31,6 +32,11 @@ watch(() => data.authed, authed => {
 	if (authed) loadBackground()
 	else clearBackground()
 }, {immediate: true})
+
+// Leave a view as soon as its feature is turned off.
+watch(() => routeAllowed(route), allowed => {
+	if (!allowed) router.replace('/tasks/today')
+})
 
 // Like TickTick, the background shows behind the task list and the matrix,
 // but not the calendar, whose grid needs a calm surface.
@@ -58,7 +64,7 @@ function onKey(e: KeyboardEvent) {
 		const next = (ev: KeyboardEvent) => {
 			window.removeEventListener('keydown', next, true)
 			const map: Record<string, string> = {t: '/tasks/today', w: '/tasks/week', i: '/tasks/inbox', m: '/matrix', c: '/calendar', h: '/habits', f: '/focus', d: '/countdowns'}
-			if (map[ev.key]) {
+			if (map[ev.key] && routeAllowed(router.resolve(map[ev.key]))) {
 				ev.preventDefault()
 				router.push(map[ev.key])
 			}

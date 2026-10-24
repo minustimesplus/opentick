@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import {reactive} from 'vue'
 import SettingToggle from './SettingToggle.vue'
 import {t, type MessageKey} from '@/lib/i18n'
+import {prefs, type Feature} from '@/lib/prefs'
 
-type Preview = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'ai'
-
-const features: {key: Preview, title: MessageKey, desc: MessageKey, tint: string}[] = [
+const features: {key: Feature, title: MessageKey, desc: MessageKey, tint: string}[] = [
 	{key: 'calendar', title: 'featCalendar', desc: 'featCalendarDesc', tint: '#7d95f7'},
 	{key: 'matrix', title: 'matrix', desc: 'featMatrixDesc', tint: '#7fb2f2'},
 	{key: 'habit', title: 'featHabit', desc: 'featHabitDesc', tint: '#9fdd9c'},
@@ -13,16 +11,6 @@ const features: {key: Preview, title: MessageKey, desc: MessageKey, tint: string
 	{key: 'countdown', title: 'featCountdown', desc: 'featCountdownDesc', tint: '#8fa6f6'},
 	{key: 'ai', title: 'featAi', desc: 'featAiDesc', tint: '#8ab4f4'},
 ]
-
-// Not wired up yet: the switches only flip locally.
-const enabled = reactive<Record<Preview, boolean>>({
-	calendar: true,
-	matrix: true,
-	habit: false,
-	pomo: false,
-	countdown: false,
-	ai: true,
-})
 </script>
 
 <template>
@@ -32,7 +20,7 @@ const enabled = reactive<Record<Preview, boolean>>({
 		<div v-for="f in features" :key="f.key" class="feature">
 			<div class="head">
 				<span class="name">{{ t(f.title) }}</span>
-				<SettingToggle v-model="enabled[f.key]" />
+				<SettingToggle v-model="prefs.features[f.key]" />
 			</div>
 			<div class="desc">{{ t(f.desc) }}</div>
 			<div class="preview" :style="{'--tint': f.tint}">

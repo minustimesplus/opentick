@@ -19,6 +19,7 @@ import SmartListSettings from './SmartListSettings.vue'
 import './settings.css'
 import {t, type MessageKey} from '@/lib/i18n'
 import {ui, type SettingsSection} from '@/lib/ui'
+import {featureOn} from '@/lib/features'
 
 interface NavItem {
 	key: SettingsSection
@@ -26,7 +27,7 @@ interface NavItem {
 	label: MessageKey
 }
 
-const groups: NavItem[][] = [
+const allGroups: NavItem[][] = [
 	[
 		{key: 'account', icon: CircleUserRound, label: 'account'},
 		{key: 'premium', icon: Crown, label: 'premium'},
@@ -49,6 +50,8 @@ const groups: NavItem[][] = [
 		{key: 'about', icon: Info, label: 'about'},
 	],
 ]
+
+const groups = computed(() => allGroups.map(g => g.filter(i => i.key !== 'aiFeatures' || featureOn('ai'))))
 
 const panels: Partial<Record<SettingsSection, Component>> = {
 	account: AccountSettings,

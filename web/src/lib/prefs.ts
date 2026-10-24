@@ -3,6 +3,9 @@ import type {ThemeColor} from './theme'
 import type {TimelineScale} from './timeline'
 import {isMobile} from './viewport'
 
+/** Optional features from Settings > Features. Turning one off only hides it; its data stays. */
+export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'ai'
+
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
 
@@ -54,6 +57,7 @@ export interface Prefs {
 	/** Start the break right after a pomo ends, and the next pomo after a break. */
 	focusAutoStartBreak: boolean
 	focusAutoStartPomo: boolean
+	features: Record<Feature, boolean>
 }
 
 const KEY = 'tt.prefs'
@@ -95,6 +99,7 @@ const defaults: Prefs = {
 	focusLongBreakEvery: 4,
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
+	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, ai: true},
 }
 
 // Before color series, `theme` was 'dark' | 'light' | 'system'.
@@ -112,11 +117,15 @@ function migrate(stored: Prefs & {theme?: string}): Prefs {
 function load(): Prefs {
 	try {
 		const raw = localStorage.getItem(KEY)
-		if (raw) return migrate({...defaults, ...JSON.parse(raw)})
+		if (raw) {
+			const stored = JSON.parse(raw)
+			// Features added later default to on for existing users.
+			return migrate({...defaults, ...stored, features: {...defaults.features, ...stored.features}})
+		}
 	} catch {
 		// storage unavailable or corrupt
 	}
-	return {...defaults}
+	return {...defaults, features: {...defaults.features}}
 }
 
 export const prefs = reactive<Prefs>(load())
