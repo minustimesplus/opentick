@@ -5,7 +5,7 @@ import AvatarCropDialog from './AvatarCropDialog.vue'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
-import {buildCsvBackup, downloadBlob, NoTitleColumnError, startCsvImport, waitForCsvImport} from '@/lib/backup'
+import {buildCsvBackup, downloadBlob, NoTitleColumnError, startCsvImport, waitForImport} from '@/lib/backup'
 
 const data = useData()
 
@@ -67,9 +67,9 @@ async function onImportPicked() {
 	if (!file) return
 	importing.value = true
 	try {
-		await startCsvImport(file)
+		const migrator = await startCsvImport(file)
 		toast(t('backupImportStarted'))
-		const status = await waitForCsvImport()
+		const status = await waitForImport(migrator)
 		if (!status) {
 			toast(t('backupImportPending'))
 		} else if (status.error_kind) {

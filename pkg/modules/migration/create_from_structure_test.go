@@ -270,6 +270,52 @@ func TestInsertFromStructure(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), count, "second import must reuse the existing 'Mealie' label")
 	})
+	t.Run("imports into an existing project", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+
+		structure := []*models.ProjectWithTasksAndBuckets{
+			{
+				Project:             models.Project{Title: "Inbox"},
+				ImportIntoProjectID: 1,
+				Buckets:             []*models.Bucket{{ID: 1, Title: "Ignored"}},
+				Tasks: []*models.TaskWithComments{
+					{Task: models.Task{Title: "Imported into existing", BucketID: 1}},
+				},
+			},
+		}
+		require.NoError(t, InsertFromStructure(structure, u))
+
+		db.AssertExists(t, "tasks", map[string]interface{}{
+			"title":      "Imported into existing",
+			"project_id": 1,
+		}, false)
+		db.AssertMissing(t, "projects", map[string]interface{}{"title": "Inbox"})
+		db.AssertMissing(t, "buckets", map[string]interface{}{"title": "Ignored"})
+	})
+	t.Run("creates a new project when it can't write to the existing one", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+
+		// Project 2 belongs to user 3 and isn't shared with user 1.
+		structure := []*models.ProjectWithTasksAndBuckets{
+			{
+				Project:             models.Project{Title: "Inbox"},
+				ImportIntoProjectID: 2,
+				Tasks: []*models.TaskWithComments{
+					{Task: models.Task{Title: "Not into a foreign project"}},
+				},
+			},
+		}
+		require.NoError(t, InsertFromStructure(structure, u))
+
+		db.AssertExists(t, "projects", map[string]interface{}{
+			"title":    "Inbox",
+			"owner_id": u.ID,
+		}, false)
+		db.AssertMissing(t, "tasks", map[string]interface{}{
+			"title":      "Not into a foreign project",
+			"project_id": 2,
+		})
+	})
 	t.Run("does not merge into another user's label", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
 

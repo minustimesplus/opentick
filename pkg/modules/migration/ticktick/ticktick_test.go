@@ -38,134 +38,116 @@ import (
 )
 
 func TestConvertTicktickTasksToVikunja(t *testing.T) {
-	t1, err := time.Parse(time.RFC3339Nano, "2022-11-18T03:00:00.4770000Z")
+	berlin, err := time.LoadLocation("Europe/Berlin")
 	require.NoError(t, err)
-	time1 := tickTickTime{Time: t1}
-	t2, err := time.Parse(time.RFC3339Nano, "2022-12-18T03:00:00.4770000Z")
-	require.NoError(t, err)
-	time2 := tickTickTime{Time: t2}
-	t3, err := time.Parse(time.RFC3339Nano, "2022-12-10T03:00:00.4770000Z")
-	require.NoError(t, err)
-	time3 := tickTickTime{Time: t3}
-	duration, err := time.ParseDuration("24h")
-	require.NoError(t, err)
+	at := func(s string) tickTickTime {
+		parsed, err := time.Parse("2006-01-02T15:04:05-0700", s)
+		require.NoError(t, err)
+		return tickTickTime{Time: parsed}
+	}
 
 	tickTickTasks := []*tickTickTask{
 		{
 			TaskID:      1,
-			ParentID:    0,
 			ProjectName: "Project 1",
-			Title:       "Test task 1",
+			Title:       "Timed with duration",
 			Tags:        []string{"label1", "label2"},
-			Content:     "Lorem Ipsum Dolor sit amet",
-			StartDate:   time1,
-			DueDate:     time2,
-			Reminder:    duration,
-			Repeat:      "FREQ=WEEKLY;INTERVAL=1;UNTIL=20190117T210000Z",
+			Content:     "line one\rline two\r\r",
+			StartDate:   at("2026-11-12T13:30:00+0000"),
+			DueDate:     at("2026-11-12T15:30:00+0000"),
+			Reminders:   []time.Duration{-10 * time.Minute, 0},
+			Repeat:      "FREQ=WEEKLY;INTERVAL=1;BYDAY=WE",
+			Priority:    5,
 			Status:      "0",
+			IsAllDay:    "false",
 			Order:       -1099511627776,
 		},
 		{
 			TaskID:        2,
 			ParentID:      1,
 			ProjectName:   "Project 1",
-			Title:         "Test task 2",
-			Status:        "1",
-			CompletedTime: time3,
-			Order:         -1099511626,
+			Title:         "Subtask",
+			Status:        "2",
+			CompletedTime: at("2026-10-16T11:51:08+0000"),
+			Priority:      3,
 		},
 		{
 			TaskID:      3,
-			ParentID:    0,
 			ProjectName: "Project 1",
-			Title:       "Test task 3",
-			Tags:        []string{"label1", "label2", "other label"},
-			StartDate:   time1,
-			DueDate:     time2,
-			Reminder:    duration,
-			Status:      "0",
-			Order:       -109951627776,
+			Title:       "All-day",
+			StartDate:   at("2026-10-08T22:00:00+0000"),
+			DueDate:     at("2026-10-08T22:00:00+0000"),
+			Reminders:   []time.Duration{9 * time.Hour},
+			Timezone:    "Europe/Paris",
+			IsAllDay:    "true",
+			Priority:    1,
 		},
 		{
-			TaskID:        4,
-			ParentID:      0,
-			ProjectName:   "Project 1",
-			Title:         "Test task 4 - archived",
-			Status:        "2",
-			CompletedTime: time3,
-			Order:         -109951627777,
-		},
-		{
-			TaskID:      5,
-			ParentID:    0,
+			TaskID:      4,
+			FolderName:  "Folder",
 			ProjectName: "Project 2",
-			Title:       "Test task 5",
-			Status:      "0",
-			Order:       -109951627778,
+			Title:       "Multi-day all-day",
+			StartDate:   at("2025-07-06T23:00:00+0000"),
+			DueDate:     at("2025-07-11T23:00:00+0000"),
+			Timezone:    "Europe/London",
+			IsAllDay:    "true",
+			ColumnName:  "Doing",
+			ColumnOrder: 5,
 		},
 	}
 
-	vikunjaTasks := convertTickTickToVikunja(tickTickTasks)
+	projects := convertTickTickToVikunja(tickTickTasks, berlin)
 
-	assert.Len(t, vikunjaTasks, 3)
+	require.Len(t, projects, 3)
+	project1, folder, project2 := projects[0], projects[1], projects[2]
+	assert.Equal(t, "Project 1", project1.Title)
+	assert.Nil(t, project1.ParentProjectID, "lists outside a folder are top-level")
+	assert.Equal(t, "Folder", folder.Title)
+	assert.Equal(t, "Project 2", project2.Title)
+	require.NotNil(t, project2.ParentProjectID)
+	assert.Equal(t, folder.ID, *project2.ParentProjectID)
+	require.Len(t, project1.Tasks, 3)
 
-	assert.Equal(t, vikunjaTasks[0].ID, *vikunjaTasks[1].ParentProjectID)
-	assert.Equal(t, vikunjaTasks[0].ID, *vikunjaTasks[2].ParentProjectID)
+	timed := project1.Tasks[0]
+	assert.Equal(t, "line one\nline two", timed.Description)
+	assert.Equal(t, tickTickTasks[0].StartDate.Time, timed.DueDate)
+	assert.Equal(t, tickTickTasks[0].StartDate.Time, timed.StartDate)
+	assert.Equal(t, tickTickTasks[0].DueDate.Time, timed.EndDate)
+	assert.Equal(t, []*models.Label{{Title: "label1"}, {Title: "label2"}}, timed.Labels)
+	require.Len(t, timed.Reminders, 2)
+	assert.Equal(t, models.ReminderRelationDueDate, timed.Reminders[0].RelativeTo)
+	assert.Equal(t, int64(-600), timed.Reminders[0].RelativePeriod)
+	assert.Equal(t, int64(0), timed.Reminders[1].RelativePeriod)
+	assert.Equal(t, "FREQ=WEEKLY;BYDAY=WE", timed.RepeatRule)
+	assert.Equal(t, int64(3), timed.Priority, "TickTick high (5) is high")
+	assert.Equal(t, tickTickTasks[0].Order, timed.Position)
+	assert.False(t, timed.Done)
 
-	assert.Len(t, vikunjaTasks[1].Tasks, 4)
-	assert.Equal(t, vikunjaTasks[1].Title, tickTickTasks[0].ProjectName)
-
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].Title, tickTickTasks[0].Title)
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].Description, tickTickTasks[0].Content)
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].StartDate, tickTickTasks[0].StartDate.Time)
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].EndDate, tickTickTasks[0].DueDate.Time)
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].DueDate, tickTickTasks[0].DueDate.Time)
-	assert.Equal(t, []*models.Label{
-		{Title: "label1"},
-		{Title: "label2"},
-	}, vikunjaTasks[1].Tasks[0].Labels)
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].Reminders[0].RelativeTo, models.ReminderRelation("due_date"))
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].Reminders[0].RelativePeriod, int64(-24*3600))
-	assert.Equal(t, vikunjaTasks[1].Tasks[0].Position, tickTickTasks[0].Order)
-	assert.False(t, vikunjaTasks[1].Tasks[0].Done)
-
-	assert.Equal(t, vikunjaTasks[1].Tasks[1].Title, tickTickTasks[1].Title)
-	assert.Equal(t, vikunjaTasks[1].Tasks[1].Position, tickTickTasks[1].Order)
-	assert.True(t, vikunjaTasks[1].Tasks[1].Done)
-	assert.Equal(t, vikunjaTasks[1].Tasks[1].DoneAt, tickTickTasks[1].CompletedTime.Time)
+	sub := project1.Tasks[1]
+	assert.True(t, sub.Done)
+	assert.Equal(t, tickTickTasks[1].CompletedTime.Time, sub.DoneAt)
+	assert.Equal(t, int64(2), sub.Priority, "TickTick medium (3) is medium")
 	assert.Equal(t, models.RelatedTaskMap{
-		models.RelationKindParenttask: []*models.Task{
-			{
-				ID: int64(tickTickTasks[1].ParentID),
-			},
-		},
-	}, vikunjaTasks[1].Tasks[1].RelatedTasks)
+		models.RelationKindParenttask: []*models.Task{{ID: 1}},
+	}, sub.RelatedTasks)
 
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].Title, tickTickTasks[2].Title)
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].Description, tickTickTasks[2].Content)
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].StartDate, tickTickTasks[2].StartDate.Time)
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].EndDate, tickTickTasks[2].DueDate.Time)
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].DueDate, tickTickTasks[2].DueDate.Time)
-	assert.Equal(t, []*models.Label{
-		{Title: "label1"},
-		{Title: "label2"},
-		{Title: "other label"},
-	}, vikunjaTasks[1].Tasks[2].Labels)
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].Reminders[0].RelativeTo, models.ReminderRelation("due_date"))
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].Reminders[0].RelativePeriod, int64(-24*3600))
-	assert.Equal(t, vikunjaTasks[1].Tasks[2].Position, tickTickTasks[2].Order)
-	assert.False(t, vikunjaTasks[1].Tasks[2].Done)
+	allDay := project1.Tasks[2]
+	assert.Equal(t, time.Date(2026, 10, 9, 23, 59, 59, 0, berlin), allDay.DueDate)
+	assert.True(t, allDay.StartDate.IsZero())
+	assert.True(t, allDay.EndDate.IsZero())
+	require.Len(t, allDay.Reminders, 1)
+	// 09:00 on the day, relative to the 23:59:59 due date.
+	assert.Equal(t, int64(-(14*3600 + 59*60 + 59)), allDay.Reminders[0].RelativePeriod)
+	assert.Equal(t, int64(1), allDay.Priority)
 
-	assert.Equal(t, vikunjaTasks[1].Tasks[3].Title, tickTickTasks[3].Title)
-	assert.Equal(t, vikunjaTasks[1].Tasks[3].Position, tickTickTasks[3].Order)
-	assert.True(t, vikunjaTasks[1].Tasks[3].Done)
-	assert.Equal(t, vikunjaTasks[1].Tasks[3].DoneAt, tickTickTasks[3].CompletedTime.Time)
-
-	assert.Len(t, vikunjaTasks[2].Tasks, 1)
-	assert.Equal(t, vikunjaTasks[2].Title, tickTickTasks[4].ProjectName)
-
-	assert.Equal(t, vikunjaTasks[2].Tasks[0].Title, tickTickTasks[4].Title)
-	assert.Equal(t, vikunjaTasks[2].Tasks[0].Position, tickTickTasks[4].Order)
+	require.Len(t, project2.Tasks, 1)
+	multi := project2.Tasks[0]
+	assert.Equal(t, time.Date(2025, 7, 7, 0, 0, 0, 0, berlin), multi.StartDate)
+	assert.Equal(t, time.Date(2025, 7, 11, 23, 59, 59, 0, berlin), multi.EndDate)
+	assert.Equal(t, time.Date(2025, 7, 7, 23, 59, 59, 0, berlin), multi.DueDate)
+	require.Len(t, project2.Buckets, 1)
+	assert.Equal(t, "Doing", project2.Buckets[0].Title)
+	assert.Equal(t, project2.Buckets[0].ID, multi.BucketID)
 }
 
 func TestConvertTicktickTasksChildBeforeParent(t *testing.T) {
@@ -191,7 +173,7 @@ func TestConvertTicktickTasksChildBeforeParent(t *testing.T) {
 		},
 	}
 
-	vikunjaTasks := convertTickTickToVikunja(tickTickTasks)
+	vikunjaTasks := convertTickTickToVikunja(tickTickTasks, time.UTC)
 
 	// Find the project with tasks
 	var projectTasks []*models.TaskWithComments
@@ -223,7 +205,7 @@ func TestConvertTicktickWontDoTask(t *testing.T) {
 		{TaskID: 2, ProjectName: "Project 1", Title: "Completed", Status: "1"},
 	}
 
-	vikunjaTasks := convertTickTickToVikunja(tickTickTasks)
+	vikunjaTasks := convertTickTickToVikunja(tickTickTasks, time.UTC)
 
 	var projectTasks []*models.TaskWithComments
 	for _, p := range vikunjaTasks {
@@ -272,7 +254,7 @@ func TestConvertTicktickTasksDeeplyNested(t *testing.T) {
 		},
 	}
 
-	vikunjaTasks := convertTickTickToVikunja(tickTickTasks)
+	vikunjaTasks := convertTickTickToVikunja(tickTickTasks, time.UTC)
 
 	var projectTasks []*models.TaskWithComments
 	for _, p := range vikunjaTasks {
@@ -334,7 +316,7 @@ func TestSortParentsBeforeChildrenWithCycle(t *testing.T) {
 			}
 			assert.ElementsMatch(t, tt.expectedTitles, titles, "every input task must be returned exactly once")
 
-			vikunjaTasks := convertTickTickToVikunja(tt.tasks)
+			vikunjaTasks := convertTickTickToVikunja(tt.tasks, time.UTC)
 			convertedTitles := []string{}
 			for _, project := range vikunjaTasks {
 				for _, task := range project.Tasks {
@@ -500,7 +482,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -516,7 +498,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -532,7 +514,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -548,7 +530,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -564,7 +546,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -580,7 +562,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -596,7 +578,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -612,7 +594,7 @@ func TestEmptyLabelHandling(t *testing.T) {
 		}
 		task.Tags = strings.Split(task.TagsList, ", ")
 
-		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task})
+		vikunjaTasks := convertTickTickToVikunja([]*tickTickTask{task}, time.UTC)
 		projectWithTasks := findProjectWithTasks(t, vikunjaTasks)
 		vikunjaTask := projectWithTasks.Tasks[0]
 
@@ -625,9 +607,8 @@ func TestEmptyLabelHandling(t *testing.T) {
 func findProjectWithTasks(t *testing.T, vikunjaTasks []*models.ProjectWithTasksAndBuckets) *models.ProjectWithTasksAndBuckets {
 	t.Helper()
 
-	// The function creates a parent project and child projects
-	// We expect 2 projects: parent "Migrated from TickTick" and child "Test Project"
-	require.Len(t, vikunjaTasks, 2)
+	// Lists outside a folder become top-level projects.
+	require.Len(t, vikunjaTasks, 1)
 
 	// Find the project with tasks (should be the child project)
 	for _, project := range vikunjaTasks {
@@ -749,7 +730,7 @@ func TestSpaceSeparatedDatesCSV(t *testing.T) {
 	for _, task := range tasks {
 		task.Tags = strings.Split(task.TagsList, ", ")
 	}
-	vikunjaTasks := convertTickTickToVikunja(tasks)
+	vikunjaTasks := convertTickTickToVikunja(tasks, time.UTC)
 	require.Greater(t, len(vikunjaTasks), 0)
 }
 
@@ -865,7 +846,7 @@ func TestEmptyLabelHandlingWithRealCSV(t *testing.T) {
 		}
 
 		// Convert to Vikunja format
-		vikunjaTasks := convertTickTickToVikunja(tasks)
+		vikunjaTasks := convertTickTickToVikunja(tasks, time.UTC)
 
 		// Check all tasks for empty labels
 		totalLabels := 0
@@ -945,7 +926,7 @@ func TestNonNumericNumberColumns(t *testing.T) {
 	for _, task := range tasks {
 		task.Tags = strings.Split(task.TagsList, ", ")
 	}
-	vikunjaTasks := convertTickTickToVikunja(tasks)
+	vikunjaTasks := convertTickTickToVikunja(tasks, time.UTC)
 	require.Greater(t, len(vikunjaTasks), 0)
 
 	var priority int64
@@ -972,7 +953,7 @@ func TestMultipleTasksWithMalformedIDsAreNotDropped(t *testing.T) {
 	sorted := sortParentsBeforeChildren(tasks)
 	require.Len(t, sorted, 3, "no task with a zero ID should be dropped")
 
-	vikunjaTasks := convertTickTickToVikunja(tasks)
+	vikunjaTasks := convertTickTickToVikunja(tasks, time.UTC)
 	titles := []string{}
 	for _, project := range vikunjaTasks {
 		for _, task := range project.Tasks {
@@ -1035,4 +1016,42 @@ func TestTickTickRowLimit(t *testing.T) {
 		require.Len(t, tasks, 1)
 		assert.Equal(t, "this task repeats", tasks[0].Title)
 	})
+}
+
+// TestParseTickTickV7Backup reads a backup in the format TickTick 7.2 writes:
+// metadata lines before the header, carriage returns as line breaks inside the
+// content, newline-separated reminders and unquoted empty kanban columns.
+func TestParseTickTickV7Backup(t *testing.T) {
+	file, err := os.Open("testdata_ticktick_v7.csv")
+	require.NoError(t, err)
+	defer file.Close()
+	stat, err := file.Stat()
+	require.NoError(t, err)
+
+	tasks, err := parseTickTickCSV(file, stat.Size())
+	require.NoError(t, err)
+	require.Len(t, tasks, 3)
+
+	assert.Equal(t, "Plan offsite", tasks[0].Title)
+	assert.Equal(t, []time.Duration{-time.Hour, -10 * time.Minute}, tasks[0].Reminders)
+	assert.Equal(t, tickTickNumber(1), tasks[1].ParentID)
+	assert.Equal(t, "Ideas", tasks[2].ColumnName)
+	assert.Equal(t, []string{"travel", "fun"}, tasks[2].Tags)
+
+	projects := convertTickTickToVikunja(tasks, time.UTC)
+	require.Len(t, projects, 3)
+	assert.Equal(t, "Work", projects[0].Title)
+	assert.Equal(t, "Personal", projects[1].Title)
+	assert.Equal(t, "Trips", projects[2].Title)
+
+	offsite := projects[0].Tasks[0]
+	assert.Equal(t, "agenda\n- [ ] venue\n- [ ] food", offsite.Description)
+	assert.Equal(t, "FREQ=WEEKLY;BYDAY=TH", offsite.RepeatRule)
+	assert.Equal(t, int64(3), offsite.Priority)
+
+	holiday := projects[2].Tasks[0]
+	assert.True(t, holiday.Done)
+	assert.True(t, holiday.WontDo)
+	assert.Equal(t, time.Date(2025, 7, 7, 0, 0, 0, 0, time.UTC), holiday.StartDate)
+	assert.Equal(t, time.Date(2025, 7, 11, 23, 59, 59, 0, time.UTC), holiday.EndDate)
 }
