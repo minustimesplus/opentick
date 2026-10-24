@@ -13,6 +13,7 @@ import FeaturesSettings from './FeaturesSettings.vue'
 import IntegrationSettings from './IntegrationSettings.vue'
 import MoreSettings from './MoreSettings.vue'
 import NotificationSettings from './NotificationSettings.vue'
+import PremiumSettings from './PremiumSettings.vue'
 import ShortcutSettings from './ShortcutSettings.vue'
 import SmartListSettings from './SmartListSettings.vue'
 import './settings.css'
@@ -49,9 +50,9 @@ const groups: NavItem[][] = [
 	],
 ]
 
-// Premium has no panel and renders an empty page.
 const panels: Partial<Record<SettingsSection, Component>> = {
 	account: AccountSettings,
+	premium: PremiumSettings,
 	features: FeaturesSettings,
 	smartList: SmartListSettings,
 	notifications: NotificationSettings,
