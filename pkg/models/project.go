@@ -109,6 +109,9 @@ type ProjectWithTasksAndBuckets struct {
 	TaskBuckets      []*TaskBucket   `xorm:"-" json:"task_buckets"`
 	Positions        []*TaskPosition `xorm:"-" json:"positions"`
 	BackgroundFileID int64           `xorm:"null" json:"background_file_id"`
+	// Only used for migration: add the tasks to this existing project instead
+	// of creating a new one. Its views and buckets are left as they are.
+	ImportIntoProjectID int64 `xorm:"-" json:"-"`
 }
 
 // TableName returns a better name for the projects table

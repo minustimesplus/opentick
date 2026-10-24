@@ -227,6 +227,27 @@ func createProject(s *xorm.Session, project *models.ProjectWithTasksAndBuckets, 
 	return
 }
 
+// existingImportTarget returns the project a migration wants its tasks added to,
+// or nil when a new project should be created. A target the user can't write to
+// falls back to a new project.
+func existingImportTarget(s *xorm.Session, project *models.ProjectWithTasksAndBuckets, user *user.User) (*models.Project, error) {
+	if project.ImportIntoProjectID == 0 {
+		return nil, nil
+	}
+	existing, err := models.GetProjectSimpleByID(s, project.ImportIntoProjectID)
+	if models.IsErrProjectDoesNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	canWrite, err := existing.CanWrite(s, user)
+	if err != nil || !canWrite || existing.IsArchived {
+		return nil, err
+	}
+	return existing, nil
+}
+
 func createProjectWithEverything(s *xorm.Session, project *models.ProjectWithTasksAndBuckets, archivedProjects *[]int64, labels map[string]*models.Label, user *user.User, provider FileProvider, createdFiles *[]int64) (err error) {
 	// The tasks and bucket slices are going to be reset during the creation of the project, so we rescue it here
 	// to be able to still loop over them aftere the project was created.
@@ -243,15 +264,31 @@ func createProjectWithEverything(s *xorm.Session, project *models.ProjectWithTas
 		project.IsArchived = false
 	}
 
-	project.ID = 0
-	project.Project.BackgroundFileID = 0
-	err = models.CreateProject(s, &project.Project, user, false, false)
-	if err != nil && models.IsErrProjectIdentifierIsNotUnique(err) {
-		project.Identifier = ""
-		err = models.CreateProject(s, &project.Project, user, false, false)
-	}
+	existing, err := existingImportTarget(s, project, user)
 	if err != nil {
-		return
+		return err
+	}
+	if existing != nil {
+		project.Project = *existing
+		// The existing project keeps its own buckets and views.
+		originalBuckets = nil
+		oldViews = nil
+		originalBackgroundInformation = nil
+		wasArchived = false
+		for _, t := range tasks {
+			t.BucketID = 0
+		}
+	} else {
+		project.ID = 0
+		project.Project.BackgroundFileID = 0
+		err = models.CreateProject(s, &project.Project, user, false, false)
+		if err != nil && models.IsErrProjectIdentifierIsNotUnique(err) {
+			project.Identifier = ""
+			err = models.CreateProject(s, &project.Project, user, false, false)
+		}
+		if err != nil {
+			return
+		}
 	}
 
 	if wasArchived {
@@ -275,7 +312,7 @@ func createProjectWithEverything(s *xorm.Session, project *models.ProjectWithTas
 		}
 
 		log.Debugf("[creating structure] Created a background file for project %d", project.ID)
-	} else if provider != nil {
+	} else if provider != nil && existing == nil {
 		backgroundFile, _, perr := provider.OpenBackground(project)
 		if perr != nil {
 			return perr
@@ -382,7 +419,7 @@ func createProjectWithEverything(s *xorm.Session, project *models.ProjectWithTas
 			}
 		}
 	} else {
-		if len(project.Views) == 0 {
+		if len(project.Views) == 0 && existing == nil {
 			err = models.CreateDefaultViewsForProject(s, &project.Project, user, true, true)
 			if err != nil {
 				return
@@ -648,7 +685,7 @@ func createProjectWithEverything(s *xorm.Session, project *models.ProjectWithTas
 
 	// All tasks brought their own bucket with them, therefore the newly created default buckets are just extra space.
 	// Delete all default-created buckets ("To-Do", "Doing", "Done") that were auto-generated.
-	if !needsDefaultBucket {
+	if !needsDefaultBucket && existing == nil {
 		b := &models.Bucket{ProjectID: project.ID}
 
 		for _, view := range project.Views {

@@ -22,12 +22,12 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"code.vikunja.io/api/pkg/config"
+	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/models"
 	"code.vikunja.io/api/pkg/modules/migration"
 	"code.vikunja.io/api/pkg/user"
@@ -49,6 +49,7 @@ type tickTickTask struct {
 	FolderName        string           `csv:"Folder Name"`
 	ProjectName       string           `csv:"List Name"`
 	Title             string           `csv:"Title"`
+	Kind              string           `csv:"Kind"`
 	TagsList          string           `csv:"Tags"`
 	Tags              []string         `csv:"-"`
 	Content           string           `csv:"Content"`
@@ -57,13 +58,17 @@ type tickTickTask struct {
 	StartDate         tickTickTime     `csv:"Start Date"`
 	DueDate           tickTickTime     `csv:"Due Date"`
 	ReminderDuration  string           `csv:"Reminder"`
-	Reminder          time.Duration    `csv:"-"`
+	Reminders         []time.Duration  `csv:"-"`
 	Repeat            string           `csv:"Repeat"`
 	Priority          tickTickPriority `csv:"Priority"`
 	Status            string           `csv:"Status"`
 	CreatedTime       tickTickTime     `csv:"Created Time"`
 	CompletedTime     tickTickTime     `csv:"Completed Time"`
 	Order             float64          `csv:"Order"`
+	Timezone          string           `csv:"Timezone"`
+	IsAllDay          string           `csv:"Is All Day"`
+	ColumnName        string           `csv:"Column Name"`
+	ColumnOrder       tickTickNumber   `csv:"Column Order"`
 	TaskID            tickTickNumber   `csv:"taskId"`
 	ParentID          tickTickNumber   `csv:"parentId"`
 }
@@ -187,34 +192,141 @@ func sortParentsBeforeChildren(tasks []*tickTickTask) []*tickTickTask {
 	return result
 }
 
-func convertTickTickToVikunja(tasks []*tickTickTask) (result []*models.ProjectWithTasksAndBuckets) {
+// tickTickPriorityToVikunja maps TickTick's priorities (0 none, 1 low, 3 medium,
+// 5 high) onto the levels the frontend shows (0 none, 1 low, 2 medium, 3 high).
+func tickTickPriorityToVikunja(p tickTickPriority) int64 {
+	switch {
+	case p <= 0:
+		return 0
+	case p < 3:
+		return 1
+	case p < 5:
+		return 2
+	default:
+		return 3
+	}
+}
+
+// tickTickDay returns the calendar day an all-day TickTick date stands for.
+// TickTick stores all-day dates as local midnight in the task's time zone;
+// rounding to the nearest midnight tolerates a zone column that is off by a
+// few hours (DST, a moved device).
+func tickTickDay(t time.Time, tz *time.Location) time.Time {
+	local := t.In(tz).Add(12 * time.Hour)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func onDay(day time.Time, hour, minute, sec int, loc *time.Location) time.Time {
+	return time.Date(day.Year(), day.Month(), day.Day(), hour, minute, sec, 0, loc)
+}
+
+// applyTickTickSchedule converts TickTick's start/due dates into the frontend's
+// scheduling model: an all-day task is due at 23:59:59 local time, a multi-day
+// all-day task spans start 00:00 to end 23:59:59, and a timed task with a
+// duration has due = start. Reminders are relative to TickTick's anchor (the
+// start, or local midnight for all-day tasks) and are re-anchored on due_date.
+func applyTickTickSchedule(task *models.Task, t *tickTickTask, userLoc *time.Location) {
+	start, due := t.StartDate.Time, t.DueDate.Time
+	if start.IsZero() {
+		start = due
+	}
+	if due.IsZero() {
+		due = start
+	}
+	if start.IsZero() {
+		return
+	}
+
+	// TickTick reminders are measured from this point.
+	var anchor time.Time
+	if t.IsAllDay == "true" {
+		taskLoc := userLoc
+		if l, err := time.LoadLocation(t.Timezone); err == nil && t.Timezone != "" {
+			taskLoc = l
+		}
+		first := tickTickDay(start, taskLoc)
+		// The due date of a multi-day all-day task is the day after its last one.
+		last := tickTickDay(due, taskLoc).AddDate(0, 0, -1)
+		task.DueDate = onDay(first, 23, 59, 59, userLoc)
+		if last.After(first) {
+			task.StartDate = onDay(first, 0, 0, 0, userLoc)
+			task.EndDate = onDay(last, 23, 59, 59, userLoc)
+		}
+		anchor = onDay(first, 0, 0, 0, userLoc)
+	} else {
+		task.DueDate = start
+		if due.After(start) {
+			task.StartDate = start
+			task.EndDate = due
+		}
+		anchor = start
+	}
+
+	for _, offset := range t.Reminders {
+		task.Reminders = append(task.Reminders, &models.TaskReminder{
+			RelativeTo:     models.ReminderRelationDueDate,
+			RelativePeriod: int64(anchor.Add(offset).Sub(task.DueDate).Seconds()),
+		})
+	}
+
+	if rule, err := models.NormalizeTaskRepeatRule(t.Repeat); err == nil {
+		task.RepeatRule = rule
+	}
+}
+
+// normalizeTickTickContent turns TickTick's carriage-return line breaks into newlines.
+func normalizeTickTickContent(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return strings.TrimRight(s, "\n")
+}
+
+// convertTickTickToVikunja maps TickTick lists to projects, folders to parent
+// projects and kanban columns to buckets. userLoc is the zone all-day dates are
+// placed in, so they land on the same calendar day in the user's app.
+func convertTickTickToVikunja(tasks []*tickTickTask, userLoc *time.Location) (result []*models.ProjectWithTasksAndBuckets) {
 	// Sort tasks so that parent tasks always come before their children.
 	// Without this, create_from_structure.go would try to create a
 	// placeholder for a not-yet-seen parent, which fails because the
 	// placeholder has no title.  (go-vikunja/vikunja#2487)
 	tasks = sortParentsBeforeChildren(tasks)
 
-	var pseudoParentID int64 = 1
-	result = []*models.ProjectWithTasksAndBuckets{
-		{
-			Project: models.Project{
-				ID:    pseudoParentID,
-				Title: "Migrated from TickTick",
-			},
-		},
+	var nextID int64
+	newID := func() int64 {
+		nextID++
+		return nextID
 	}
 
+	folders := make(map[string]*models.ProjectWithTasksAndBuckets)
 	projects := make(map[string]*models.ProjectWithTasksAndBuckets)
-	for index, t := range tasks {
-		_, has := projects[t.ProjectName]
+	buckets := make(map[*models.ProjectWithTasksAndBuckets]map[string]*models.Bucket)
+	for _, t := range tasks {
+		key := t.FolderName + "\x00" + t.ProjectName
+		project, has := projects[key]
 		if !has {
-			projects[t.ProjectName] = &models.ProjectWithTasksAndBuckets{
+			project = &models.ProjectWithTasksAndBuckets{
 				Project: models.Project{
-					ID:              int64(index+1) + pseudoParentID,
-					ParentProjectID: &pseudoParentID,
-					Title:           t.ProjectName,
+					ID:    newID(),
+					Title: t.ProjectName,
 				},
 			}
+			if t.FolderName != "" {
+				folder, has := folders[t.FolderName]
+				if !has {
+					folder = &models.ProjectWithTasksAndBuckets{
+						Project: models.Project{
+							ID:    newID(),
+							Title: t.FolderName,
+						},
+					}
+					folders[t.FolderName] = folder
+					result = append(result, folder)
+				}
+				project.ParentProjectID = models.Ptr(folder.ID)
+			}
+			projects[key] = project
+			buckets[project] = make(map[string]*models.Bucket)
+			result = append(result, project)
 		}
 
 		labels := make([]*models.Label, 0, len(t.Tags))
@@ -232,27 +344,30 @@ func convertTickTickToVikunja(tasks []*tickTickTask) (result []*models.ProjectWi
 			Task: models.Task{
 				ID:          int64(t.TaskID),
 				Title:       t.Title,
-				Description: t.Content,
-				StartDate:   t.StartDate.Time,
-				EndDate:     t.DueDate.Time,
-				DueDate:     t.DueDate.Time,
+				Description: normalizeTickTickContent(t.Content),
 				// TickTick statuses: 0 open, 1 completed, 2 archived (completed), -1 won't do.
 				Done:     t.Status == "1" || t.Status == "2" || t.Status == "-1",
 				WontDo:   t.Status == "-1",
 				DoneAt:   t.CompletedTime.Time,
 				Position: t.Order,
-				Priority: int64(t.Priority),
+				Priority: tickTickPriorityToVikunja(t.Priority),
 				Labels:   labels,
 			},
 		}
+		applyTickTickSchedule(&task.Task, t, userLoc)
 
-		if !t.DueDate.IsZero() && t.Reminder > 0 {
-			task.Reminders = []*models.TaskReminder{
-				{
-					RelativeTo:     models.ReminderRelationDueDate,
-					RelativePeriod: int64((t.Reminder * -1).Seconds()),
-				},
+		if t.ColumnName != "" {
+			bucket, has := buckets[project][t.ColumnName]
+			if !has {
+				bucket = &models.Bucket{
+					ID:       int64(len(project.Buckets) + 1),
+					Title:    t.ColumnName,
+					Position: float64(t.ColumnOrder),
+				}
+				buckets[project][t.ColumnName] = bucket
+				project.Buckets = append(project.Buckets, bucket)
 			}
+			task.BucketID = bucket.ID
 		}
 
 		if t.ParentID != 0 {
@@ -261,16 +376,8 @@ func convertTickTickToVikunja(tasks []*tickTickTask) (result []*models.ProjectWi
 			}
 		}
 
-		projects[t.ProjectName].Tasks = append(projects[t.ProjectName].Tasks, task)
+		project.Tasks = append(project.Tasks, task)
 	}
-
-	for _, l := range projects {
-		result = append(result, l)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Title < result[j].Title
-	})
 
 	return
 }
@@ -405,6 +512,79 @@ func linesToSkipBeforeHeader(file io.ReaderAt, size int64) (int, error) {
 	return lines, nil
 }
 
+// defaultProjectID loads the user's default project; the user passed to a
+// migration comes from a serialized event, which leaves it out.
+func defaultProjectID(userID int64) (int64, error) {
+	s := db.NewSession()
+	defer s.Close()
+	u, err := user.GetUserByID(s, userID)
+	if err != nil {
+		return 0, err
+	}
+	return u.DefaultProjectID, nil
+}
+
+// parseTickTickCSV reads the tasks of a TickTick backup, skipping the metadata
+// lines TickTick writes before the header.
+func parseTickTickCSV(file io.ReaderAt, size int64) ([]*tickTickTask, error) {
+	fr := io.NewSectionReader(file, 0, size)
+
+	// Check if the file is a valid CSV
+	buf := make([]byte, 1024)
+	n, err := fr.Read(buf)
+	if errors.Is(err, io.EOF) || n == 0 {
+		return nil, &migration.ErrFileIsEmpty{}
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Reset the reader position to start
+	if _, err = fr.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+
+	if !isValidCSV(string(buf[:n])) {
+		return nil, &migration.ErrNotACSVFile{}
+	}
+
+	skip, err := linesToSkipBeforeHeader(file, size)
+	if err != nil {
+		return nil, err
+	}
+	decode, err := newLineSkipDecoder(fr, skip)
+	if err != nil {
+		return nil, err
+	}
+
+	allTasks := []*tickTickTask{}
+	if err := gocsv.UnmarshalDecoder(decode, &allTasks); err != nil {
+		return nil, err
+	}
+
+	// Also check if no tasks were found after decoding
+	if len(allTasks) == 0 {
+		return nil, &migration.ErrFileIsEmpty{}
+	}
+
+	for _, task := range allTasks {
+		if task.IsChecklistString == "Y" {
+			task.IsChecklist = true
+		}
+
+		// Several reminders come newline-separated, e.g. "PT0S\n-PT1440M".
+		for _, r := range strings.Fields(task.ReminderDuration) {
+			if strings.Contains(r, "P") {
+				task.Reminders = append(task.Reminders, utils.ParseISO8601Duration(r))
+			}
+		}
+
+		task.Tags = strings.Split(task.TagsList, ", ")
+	}
+
+	return allTasks, nil
+}
+
 // Migrate takes a ticktick export, parses it and imports everything in it into Vikunja.
 // @Summary Import all projects, tasks etc. from a TickTick backup export
 // @Description Imports all projects, tasks, notes, reminders, subtasks and files from a TickTick backup export into Vikunja.
@@ -421,60 +601,27 @@ func (m *Migrator) Migrate(user *user.User, file io.ReaderAt, size int64) error 
 		return &migration.ErrFileIsEmpty{}
 	}
 
-	fr := io.NewSectionReader(file, 0, size)
-
-	// Check if the file is a valid CSV
-	buf := make([]byte, 1024)
-	n, err := fr.Read(buf)
-	if errors.Is(err, io.EOF) || n == 0 {
-		return &migration.ErrFileIsEmpty{}
-	}
+	allTasks, err := parseTickTickCSV(file, size)
 	if err != nil {
 		return err
 	}
 
-	// Reset the reader position to start
-	if _, err = fr.Seek(0, io.SeekStart); err != nil {
-		return err
+	userLoc := config.GetTimeZone()
+	if l, err := time.LoadLocation(user.Timezone); err == nil && user.Timezone != "" {
+		userLoc = l
 	}
+	vikunjaTasks := convertTickTickToVikunja(allTasks, userLoc)
 
-	if !isValidCSV(string(buf[:n])) {
-		return &migration.ErrNotACSVFile{}
-	}
-
-	skip, err := linesToSkipBeforeHeader(file, size)
+	inboxID, err := defaultProjectID(user.ID)
 	if err != nil {
 		return err
 	}
-	decode, err := newLineSkipDecoder(fr, skip)
-	if err != nil {
-		return err
-	}
-
-	allTasks := []*tickTickTask{}
-	if err := gocsv.UnmarshalDecoder(decode, &allTasks); err != nil {
-		return err
-	}
-
-	// Also check if no tasks were found after decoding
-	if len(allTasks) == 0 {
-		return &migration.ErrFileIsEmpty{}
-	}
-
-	for _, task := range allTasks {
-		if task.IsChecklistString == "Y" {
-			task.IsChecklist = true
+	for _, p := range vikunjaTasks {
+		// TickTick's Inbox goes into the user's own Inbox instead of a second one.
+		if p.Title == "Inbox" && p.ParentProjectID == nil {
+			p.ImportIntoProjectID = inboxID
 		}
-
-		reminder := utils.ParseISO8601Duration(task.ReminderDuration)
-		if reminder > 0 {
-			task.Reminder = reminder
-		}
-
-		task.Tags = strings.Split(task.TagsList, ", ")
 	}
-
-	vikunjaTasks := convertTickTickToVikunja(allTasks)
 
 	return migration.InsertFromStructure(vikunjaTasks, user)
 }
