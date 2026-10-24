@@ -5,13 +5,13 @@ import SettingCheckbox from './SettingCheckbox.vue'
 import SettingSelect from './SettingSelect.vue'
 import SettingToggle from './SettingToggle.vue'
 import {useData} from '@/stores/data'
+import {prefs} from '@/lib/prefs'
 import {t, type MessageKey} from '@/lib/i18n'
 
 const data = useData()
 
 // Not wired up yet: none of these change how tasks are added.
 const state = reactive({
-	language: 'en',
 	dateRecognition: true,
 	removeDateText: true,
 	tagRecognition: true,
@@ -32,20 +32,11 @@ const state = reactive({
 
 const opts = (keys: [string, MessageKey][]) => keys.map(([value, key]) => ({value, label: t(key)}))
 
-const languages = [
-	{value: 'de', label: 'Deutsch'},
-	{value: 'en', label: 'English'},
-	{value: 'es', label: 'Español'},
-	{value: 'fr', label: 'Français'},
-	{value: 'it', label: 'Italiano'},
-	{value: 'nl', label: 'Nederlands'},
-	{value: 'pl', label: 'Polski'},
-	{value: 'pt', label: 'Português (Brasil)'},
-	{value: 'ru', label: 'Русский'},
-	{value: 'zh', label: '简体中文'},
-	{value: 'ja', label: '日本語'},
-	{value: 'ko', label: '한국어'},
-]
+const languages = computed(() => [
+	{value: 'auto' as const, label: t('languageAuto')},
+	{value: 'en' as const, label: 'English'},
+	{value: 'fr' as const, label: 'Français'},
+])
 
 const dates = computed(() => opts([
 	['none', 'none'], ['today', 'today'], ['tomorrow', 'tomorrow'], ['dayAfter', 'dayAfterTomorrow'], ['nextWeek', 'nextWeek'],
@@ -80,96 +71,96 @@ function durationLabel(min: number) {
 	<div class="s-card">
 		<div class="s-row">
 			<span>{{ t('language') }}</span>
-			<SettingSelect v-model="state.language" :options="languages" />
+			<SettingSelect v-model="prefs.language" :options="languages" />
 		</div>
 	</div>
 
-	<h2 class="s-title">{{ t('smartRecognition') }}</h2>
-	<div class="s-card">
+	<h2 class="s-title">{{ t('smartRecognition') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('dateRecognition') }}</span>
-			<SettingToggle v-model="state.dateRecognition" />
+			<SettingToggle v-model="state.dateRecognition" disabled />
 		</div>
 		<div class="s-desc">{{ t('dateRecognitionDesc') }}</div>
 		<label class="s-check">
-			<SettingCheckbox v-model="state.removeDateText" />
+			<SettingCheckbox v-model="state.removeDateText" disabled />
 			{{ t('removeDateText') }}
 		</label>
 		<div class="s-row">
 			<span>{{ t('tagRecognition') }}</span>
-			<SettingToggle v-model="state.tagRecognition" />
+			<SettingToggle v-model="state.tagRecognition" disabled />
 		</div>
 		<div class="s-desc">{{ t('tagRecognitionDesc') }}</div>
 		<label class="s-check">
-			<SettingCheckbox v-model="state.removeTagText" />
+			<SettingCheckbox v-model="state.removeTagText" disabled />
 			{{ t('removeTagText') }}
 		</label>
 		<div class="s-row">
 			<span>{{ t('urlParsing') }}</span>
-			<SettingToggle v-model="state.urlParsing" />
+			<SettingToggle v-model="state.urlParsing" disabled />
 		</div>
 		<div class="s-desc">{{ t('urlParsingDesc') }}</div>
 	</div>
 
-	<h2 class="s-title">{{ t('taskDefault') }} <CircleQuestionMark :size="13" /></h2>
-	<div class="s-card">
+	<h2 class="s-title">{{ t('taskDefault') }} <CircleQuestionMark :size="13" /> <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('defaultDate') }}</span>
-			<SettingSelect v-model="state.defaultDate" :options="dates" />
+			<SettingSelect v-model="state.defaultDate" :options="dates" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('defaultDateMode') }}</span>
-			<SettingSelect v-model="state.dateMode" :options="dateModes" />
+			<SettingSelect v-model="state.dateMode" :options="dateModes" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('defaultDuration') }}</span>
-			<SettingSelect v-model="state.duration" :options="durations" />
+			<SettingSelect v-model="state.duration" :options="durations" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('defaultReminderTimed') }}</span>
-			<SettingSelect v-model="state.reminderTimed" :options="timedReminders" />
+			<SettingSelect v-model="state.reminderTimed" :options="timedReminders" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('defaultReminderAllDay') }}</span>
-			<SettingSelect v-model="state.reminderAllDay" :options="allDayReminders" />
+			<SettingSelect v-model="state.reminderAllDay" :options="allDayReminders" disabled />
 		</div>
 	</div>
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('defaultPriority') }}</span>
-			<SettingSelect v-model="state.priority" :options="priorities" />
+			<SettingSelect v-model="state.priority" :options="priorities" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('defaultTag') }}</span>
-			<SettingSelect v-model="state.tag" :options="tags" />
+			<SettingSelect v-model="state.tag" :options="tags" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('defaultListSetting') }}</span>
-			<SettingSelect v-model="state.list" :options="lists" />
+			<SettingSelect v-model="state.list" :options="lists" disabled />
 		</div>
 	</div>
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('defaultAddTo') }}</span>
-			<SettingSelect v-model="state.addTo" :options="positions" />
+			<SettingSelect v-model="state.addTo" :options="positions" disabled />
 		</div>
 		<div class="s-row">
 			<span>{{ t('overdueShowsAt') }}</span>
-			<SettingSelect v-model="state.overdue" :options="positions" />
+			<SettingSelect v-model="state.overdue" :options="positions" disabled />
 		</div>
 	</div>
-	<button class="s-link reset">{{ t('resetDefault') }}</button>
+	<button class="s-link reset soon" disabled>{{ t('resetDefault') }}</button>
 
-	<h2 class="s-title">{{ t('miniCalendar') }} <CircleQuestionMark :size="13" /></h2>
-	<div class="s-card">
+	<h2 class="s-title">{{ t('miniCalendar') }} <CircleQuestionMark :size="13" /> <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('showMiniCalendar') }}</span>
-			<SettingToggle v-model="state.miniCalendar" />
+			<SettingToggle v-model="state.miniCalendar" disabled />
 		</div>
 	</div>
 
-	<h2 class="s-title template-title">{{ t('taskTemplate') }} <ChevronDown :size="13" /></h2>
-	<div class="templates">
+	<h2 class="s-title template-title">{{ t('taskTemplate') }} <ChevronDown :size="13" /> <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="templates soon">
 		<div class="template">
 			<div class="template-name">{{ t('tplBeforeWork') }}</div>
 			<div v-for="key in (['tplReflect', 'tplEmails', 'tplToday', 'tplTop3'] as const)" :key="key" class="template-item">

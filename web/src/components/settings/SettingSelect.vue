@@ -5,6 +5,7 @@ import Popover from '../Popover.vue'
 
 const props = defineProps<{
 	options: {value: T, label: string}[]
+	disabled?: boolean
 }>()
 
 const model = defineModel<T>({required: true})
@@ -20,7 +21,7 @@ function pick(value: T) {
 </script>
 
 <template>
-	<button ref="btn" class="value" :class="{open}" @click="open = !open">
+	<button ref="btn" class="value" :class="{open}" :disabled="disabled" @click="open = !open">
 		<span>{{ current }}</span>
 		<ChevronsUpDown :size="11" :stroke-width="2" />
 	</button>

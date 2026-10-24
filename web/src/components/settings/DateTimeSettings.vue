@@ -64,11 +64,11 @@ const calendars = computed<{value: AltCalendar, label: string}[]>(() => [
 			<span>{{ t('showWeekNumbers') }}</span>
 			<SettingToggle v-model="prefs.showWeekNumbers" />
 		</div>
-		<div class="row">
-			<span>{{ t('timeZone') }}</span>
-			<SettingToggle v-model="timeZone" />
+		<div class="row soon">
+			<span class="s-label">{{ t('timeZone') }} <span class="s-soon">{{ t('comingSoon') }}</span></span>
+			<SettingToggle v-model="timeZone" disabled />
 		</div>
-		<div class="s-desc">{{ t('timeZoneDesc') }}</div>
+		<div class="s-desc soon">{{ t('timeZoneDesc') }}</div>
 	</div>
 </template>
 

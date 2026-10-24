@@ -55,9 +55,9 @@ const sections: {title: MessageKey, items: Service[]}[] = [
 
 <template>
 	<template v-for="section in sections" :key="section.title">
-		<h2 class="s-title">{{ t(section.title) }}</h2>
-		<div class="tiles">
-			<button v-for="(item, i) in section.items" :key="i" class="tile">
+		<h2 class="s-title">{{ t(section.title) }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+		<div class="tiles soon">
+			<button v-for="(item, i) in section.items" :key="i" class="tile" disabled>
 				<span class="logo" :style="{background: item.color}">{{ item.mark }}</span>
 				<span class="text">
 					<span class="name">
@@ -73,7 +73,7 @@ const sections: {title: MessageKey, items: Service[]}[] = [
 	<h2 class="s-title">{{ t('integrationsAuthorized') }}</h2>
 	<div class="s-card authorized">
 		<p>{{ t('integrationsAuthorizedDesc') }}</p>
-		<button class="s-link learn">{{ t('learnMore') }} <ChevronRight :size="12" /></button>
+		<button class="s-link learn soon" disabled>{{ t('learnMore') }} <ChevronRight :size="12" /></button>
 	</div>
 </template>
 
@@ -95,7 +95,7 @@ const sections: {title: MessageKey, items: Service[]}[] = [
 	text-align: left;
 }
 
-.tile:hover {
+.tile:hover:not(:disabled) {
 	background: var(--bg-active);
 }
 

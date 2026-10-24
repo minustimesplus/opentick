@@ -19,9 +19,9 @@ const counts = [
 </script>
 
 <template>
-	<h2 class="s-title group">{{ t('sidebarCount') }}</h2>
-	<div class="options">
-		<button v-for="o in counts" :key="o.value" class="option" @click="state.count = o.value">
+	<h2 class="s-title group">{{ t('sidebarCount') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="options soon">
+		<button v-for="o in counts" :key="o.value" class="option" disabled @click="state.count = o.value">
 			<span class="card" :class="{active: state.count === o.value}">
 				<span class="line"><DayIcon :label="new Date().getDate()" :size="11" />{{ t('today') }}<em>{{ o.today }}</em></span>
 				<span class="line"><Inbox :size="11" />{{ t('inbox') }}<em>{{ o.inbox }}</em></span>
@@ -31,9 +31,9 @@ const counts = [
 		</button>
 	</div>
 
-	<h2 class="s-title group">{{ t('listColor') }} <CircleQuestionMark :size="13" /></h2>
-	<div class="options">
-		<button v-for="on in [true, false]" :key="String(on)" class="option" @click="state.listColor = on">
+	<h2 class="s-title group">{{ t('listColor') }} <CircleQuestionMark :size="13" /> <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="options soon">
+		<button v-for="on in [true, false]" :key="String(on)" class="option" disabled @click="state.listColor = on">
 			<span class="card" :class="{active: state.listColor === on, colored: on}">
 				<span class="line"><i class="box" />{{ t('taskTitle') }}</span>
 				<span class="line"><i class="box" />{{ t('taskTitle') }}</span>
@@ -43,9 +43,9 @@ const counts = [
 		</button>
 	</div>
 
-	<h2 class="s-title group">{{ t('completedStyle') }}</h2>
-	<div class="options">
-		<button v-for="strike in [false, true]" :key="String(strike)" class="option" @click="state.strike = strike">
+	<h2 class="s-title group">{{ t('completedStyle') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
+	<div class="options soon">
+		<button v-for="strike in [false, true]" :key="String(strike)" class="option" disabled @click="state.strike = strike">
 			<span class="card done" :class="{active: state.strike === strike, strike}">
 				<span class="line"><i class="box checked" /><span class="title">{{ t('taskTitle') }}</span></span>
 				<span class="line"><i class="box checked" /><span class="title">{{ t('taskTitle') }}</span></span>

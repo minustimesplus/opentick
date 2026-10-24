@@ -24,6 +24,8 @@ interface NavItem {
 	key: SettingsSection
 	icon: Component
 	label: MessageKey
+	/** Nothing in the section works yet. */
+	soon?: boolean
 }
 
 const groups: NavItem[][] = [
@@ -33,16 +35,16 @@ const groups: NavItem[][] = [
 	],
 	[
 		{key: 'features', icon: LayoutGrid, label: 'features'},
-		{key: 'smartList', icon: Funnel, label: 'smartList'},
-		{key: 'notifications', icon: Bell, label: 'notifications'},
+		{key: 'smartList', icon: Funnel, label: 'smartList', soon: true},
+		{key: 'notifications', icon: Bell, label: 'notifications', soon: true},
 		{key: 'dateTime', icon: Clock, label: 'dateTime'},
 		{key: 'appearance', icon: PaintRoller, label: 'appearance'},
 		{key: 'aiFeatures', icon: Sparkles, label: 'aiFeatures'},
 		{key: 'more', icon: Server, label: 'moreSettings'},
 	],
 	[
-		{key: 'integrations', icon: Import, label: 'integrations'},
-		{key: 'collaborate', icon: Users, label: 'collaborate'},
+		{key: 'integrations', icon: Import, label: 'integrations', soon: true},
+		{key: 'collaborate', icon: Users, label: 'collaborate', soon: true},
 		{key: 'shortcuts', icon: Keyboard, label: 'shortcutsShort'},
 	],
 	[
@@ -102,6 +104,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 						>
 							<component :is="item.icon" :size="16" :stroke-width="1.7" />
 							<span>{{ t(item.label) }}</span>
+							<span v-if="item.soon" class="s-soon" :title="t('comingSoon')">{{ t('soon') }}</span>
 						</button>
 					</div>
 				</aside>
@@ -191,6 +194,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .nav-item.active {
 	background: var(--bg-active);
+}
+
+.nav-item > span:not(.s-soon) {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.nav-item .s-soon {
+	margin-left: auto;
 }
 
 .content {

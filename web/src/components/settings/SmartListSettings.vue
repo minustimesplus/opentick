@@ -63,16 +63,16 @@ const options = computed(() => [
 </script>
 
 <template>
-	<h2 class="s-title">{{ t('smartList') }}</h2>
+	<h2 class="s-title">{{ t('smartList') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
 
 	<div v-for="(group, i) in groups" :key="i" class="s-card">
-		<div v-for="item in group" :key="item.key" class="s-row">
+		<div v-for="item in group" :key="item.key" class="s-row soon">
 			<span class="s-label">
 				<component :is="item.icon" v-if="item.icon" :size="15" :stroke-width="1.7" />
 				<DayIcon v-else :label="new Date().getDate()" :size="15" />
 				{{ t(item.label) }}
 			</span>
-			<SettingSelect v-model="visibility[item.key]" :options="options" />
+			<SettingSelect v-model="visibility[item.key]" :options="options" disabled />
 		</div>
 	</div>
 </template>
