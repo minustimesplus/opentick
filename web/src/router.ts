@@ -1,6 +1,7 @@
 import {createRouter, createWebHistory} from 'vue-router'
 import {openSettings} from './lib/ui'
 import {getToken} from './api/client'
+import {routeAllowed} from './lib/features'
 
 export const router = createRouter({
 	history: createWebHistory(),
@@ -24,3 +25,6 @@ export const router = createRouter({
 		{path: '/:pathMatch(.*)*', redirect: '/tasks/today'},
 	],
 })
+
+// Views of features turned off in Settings > Features are not reachable.
+router.beforeEach(to => routeAllowed(to) || '/tasks/today')

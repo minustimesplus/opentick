@@ -11,6 +11,8 @@ import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, M
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings} from '@/lib/ui'
+import {featureOn} from '@/lib/features'
+import type {Feature} from '@/lib/prefs'
 import {isMobile} from '@/lib/viewport'
 
 const data = useData()
@@ -24,14 +26,14 @@ const menu = ref<'avatar' | 'bell' | 'help' | null>(null)
 
 const items = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
-	{key: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
-	{key: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
+	{key: 'matrix', feature: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
+	{key: 'calendar', feature: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
 	{key: 'statistics', icon: StatsIcon, to: '/statistics', active: route.path.startsWith('/statistics'), title: t('statistics')},
-	{key: 'habits', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
-	{key: 'focus', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
-	{key: 'countdowns', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
+	{key: 'habits', feature: 'habit', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
+	{key: 'focus', feature: 'pomo', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
+	{key: 'countdowns', feature: 'countdown', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
-])
+].filter(i => !i.feature || featureOn(i.feature as Feature)))
 
 const unread = computed(() => data.notifications.filter(n => !n.read_at).length)
 
@@ -87,18 +89,19 @@ function sync() {
 // On phones the rail is a tab bar at the bottom, so menus open upwards.
 const placement = computed(() => isMobile.value ? 'top-start' : 'right-start')
 
-const shortcuts = [
+const allShortcuts: [string, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' | 'matrix' | 'week' | 'habits' | 'focus' | 'countdowns', Feature?][] = [
 	['N', 'addTask'],
 	['/', 'search'],
 	['G T', 'today'],
 	['G W', 'next7'],
 	['G I', 'inbox'],
-	['G M', 'matrix'],
-	['G C', 'week'],
-	['G H', 'habits'],
-	['G F', 'focus'],
-	['G D', 'countdowns'],
-] as const
+	['G M', 'matrix', 'matrix'],
+	['G C', 'week', 'calendar'],
+	['G H', 'habits', 'habit'],
+	['G F', 'focus', 'pomo'],
+	['G D', 'countdowns', 'countdown'],
+]
+const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature || featureOn(feature)))
 </script>
 
 <template>

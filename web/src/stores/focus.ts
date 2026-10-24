@@ -76,6 +76,7 @@ function chime() {
 }
 
 function notify(title: string, body: string) {
+	if (!prefs.features.pomo) return
 	chime()
 	if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
 	try {
@@ -127,6 +128,12 @@ export const useFocus = defineStore('focus', () => {
 	const display = computed(() => remaining.value === null
 		? fmtClock(Math.floor(elapsed.value / 1000))
 		: fmtClock(Math.ceil(remaining.value / 1000)))
+
+	// Turning the Pomo feature off holds a running timer where it is; it can
+	// be resumed once the feature is back on.
+	watch(() => prefs.features.pomo, on => {
+		if (!on) pause()
+	}, {immediate: true})
 
 	let interval: number | undefined
 	watch(() => state.phase !== 'idle', active => {
