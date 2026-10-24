@@ -92,3 +92,30 @@
 .settings .s-card > .s-check:last-child {
 	margin-bottom: 4px;
 }
+
+/* Options that are planned but not built yet: a "Coming soon" pill and
+   dimmed, disabled controls. */
+
+.settings .s-soon {
+	flex-shrink: 0;
+	padding: 0 6px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 16px;
+	white-space: nowrap;
+	color: var(--accent);
+	background: var(--accent-soft);
+}
+
+.settings .soon {
+	color: var(--text-3);
+	cursor: default;
+}
+
+.settings .soon :disabled,
+.settings :disabled.soon {
+	opacity: 0.5;
+	cursor: default;
+	text-decoration: none;
+}

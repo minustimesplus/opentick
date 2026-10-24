@@ -1,4 +1,6 @@
 <script setup lang="ts">
+defineProps<{disabled?: boolean}>()
+
 const model = defineModel<boolean>({required: true})
 </script>
 
@@ -8,6 +10,7 @@ const model = defineModel<boolean>({required: true})
 		:class="{on: model}"
 		role="switch"
 		:aria-checked="model"
+		:disabled="disabled"
 		@click="model = !model"
 	>
 		<span class="knob" />

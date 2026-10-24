@@ -27,39 +27,39 @@ const times = computed(() => [
 </script>
 
 <template>
-	<h2 class="s-title">{{ t('notifications') }}</h2>
+	<h2 class="s-title">{{ t('notifications') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
 
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('dailyNotifications') }}</span>
-			<SettingToggle v-model="state.daily" />
+			<SettingToggle v-model="state.daily" disabled />
 		</div>
 		<div class="s-desc">{{ t('dailyNotificationsDesc') }}</div>
 		<div class="s-row">
 			<span>{{ t('dailyAlertTime') }}</span>
-			<SettingSelect v-model="state.alertTime" :options="times" />
+			<SettingSelect v-model="state.alertTime" :options="times" disabled />
 		</div>
 	</div>
 
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('webReminder') }}</span>
-			<SettingToggle v-model="state.web" />
+			<SettingToggle v-model="state.web" disabled />
 		</div>
 	</div>
 
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span class="s-label">{{ t('constantReminder') }} <Crown :size="13" class="crown" /></span>
-			<SettingToggle v-model="state.constant" />
+			<SettingToggle v-model="state.constant" disabled />
 		</div>
 		<div class="s-desc">{{ t('constantReminderDesc') }}</div>
 	</div>
 
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('emailNotifications') }}</span>
-			<SettingToggle v-model="state.email" />
+			<SettingToggle v-model="state.email" disabled />
 		</div>
 		<div class="s-desc">{{ t('emailNotificationsDesc') }}</div>
 		<div class="s-row">

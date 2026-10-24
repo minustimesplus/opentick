@@ -23,24 +23,24 @@ const apps: {icon: Component, label?: MessageKey, name?: string}[] = [
 		<h2>{{ t('aboutWelcome') }}</h2>
 		<p>
 			{{ t('aboutHelpBefore') }}
-			<button class="s-link">{{ t('helpCenter') }}</button>
+			<button class="s-link soon" disabled :title="t('comingSoon')">{{ t('helpCenter') }}</button>
 			{{ t('aboutHelpAfter') }}
 			<br>
 			{{ t('aboutContactBefore') }}
-			<button class="s-link">{{ t('feedbackAndSuggestions') }}</button>
+			<button class="s-link soon" disabled :title="t('comingSoon')">{{ t('feedbackAndSuggestions') }}</button>
 			{{ t('aboutContactAfter') }}
 		</p>
-		<div class="tiles">
-			<button v-for="(item, i) in community" :key="i" class="tile">
+		<div class="tiles soon">
+			<button v-for="(item, i) in community" :key="i" class="tile" disabled :title="t('comingSoon')">
 				<component :is="item.icon" :size="20" :stroke-width="1.7" />
 				<span>{{ item.label ? t(item.label) : item.name }}</span>
 			</button>
 		</div>
 
-		<h2>{{ t('getApp') }}</h2>
+		<h2>{{ t('getApp') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
 		<p>{{ t('getAppDesc') }}</p>
-		<div class="tiles">
-			<button v-for="(item, i) in apps" :key="i" class="tile">
+		<div class="tiles soon">
+			<button v-for="(item, i) in apps" :key="i" class="tile" disabled :title="t('comingSoon')">
 				<component :is="item.icon" :size="20" :stroke-width="1.7" />
 				<span>{{ item.label ? t(item.label) : item.name }}</span>
 			</button>
@@ -98,7 +98,7 @@ p .s-link {
 	color: var(--text-3);
 }
 
-.tile:hover {
+.tile:hover:not(:disabled) {
 	background: var(--bg-hover);
 }
 </style>

@@ -4,6 +4,12 @@ import {t, type MessageKey} from '@/lib/i18n'
 /** Label, key combo (null: not set) and whether the user may rebind it. */
 type Shortcut = [MessageKey, string | null, boolean?]
 
+// Shortcuts the app handles today (App.vue, QuickAdd, Escape in dialogs); the rest are planned.
+const working = new Set<MessageKey>([
+	'cancel', 'addTask', 'scSetPriority', 'scSetTag', 'scMoveToList',
+	'scGoCalendar', 'scGoMatrix', 'scGoSearch', 'scGoToday', 'scGoNext7', 'scGoInbox',
+])
+
 const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 	{title: 'general', items: [
 		['save', 'Ctrl+S'],
@@ -16,7 +22,7 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 		['shortcutsShort', '?'],
 	]},
 	{title: 'scTask', items: [
-		['addTask', 'Tab+N / N', true],
+		['addTask', 'N', true],
 		['scAddBelow', 'Enter'],
 		['scAddSubtask', 'Shift+Enter'],
 		['scToggleGroups', null, true],
@@ -44,8 +50,8 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 		['scSetPriorityLevel', 'Alt+0/1/2/3'],
 	]},
 	{title: 'scNavigation', desc: 'scNavigationDesc', items: [
-		['scGoCalendar', null, true],
-		['scGoMatrix', null, true],
+		['scGoCalendar', 'G then C', true],
+		['scGoMatrix', 'G then M', true],
 		['scGoAi', null, true],
 		['scSplitView', null, true],
 		['scGoSearch', '/', true],
@@ -53,11 +59,11 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 		['scGoAll', 'G then A'],
 		['scGoToday', 'G then T'],
 		['scGoTomorrow', 'G then R'],
-		['scGoNext7', 'G then N'],
-		['scGoAssigned', 'G then M'],
+		['scGoNext7', 'G then W'],
+		['scGoAssigned', null],
 		['scGoInbox', 'G then I'],
-		['scGoCompleted', 'G then C'],
-		['scGoWontDo', 'G then W'],
+		['scGoCompleted', null],
+		['scGoWontDo', null],
 		['scGoSummary', 'G then B'],
 		['scGoTrash', 'G then G'],
 	]},
@@ -78,15 +84,19 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 		<h2 class="s-title">{{ t(section.title) }}</h2>
 		<p v-if="section.desc" class="section-desc">{{ t(section.desc) }}</p>
 		<div class="s-card">
-			<div v-for="[label, keys, custom] in section.items" :key="label" class="s-row">
-				<span>{{ t(label) }}</span>
-				<button class="key" :class="{custom}">{{ keys ?? t('scSetShortcut') }}</button>
+			<div v-for="[label, keys, custom] in section.items" :key="label" class="s-row" :class="{soon: !working.has(label)}">
+				<span class="s-label">
+					{{ t(label) }}
+					<span v-if="!working.has(label)" class="s-soon">{{ t('comingSoon') }}</span>
+				</span>
+				<!-- Rebinding is not built yet. -->
+				<button class="key" :class="{custom}" disabled :title="custom ? t('comingSoon') : undefined">{{ keys ?? t('scSetShortcut') }}</button>
 			</div>
 		</div>
 	</template>
 
 	<div class="footer">
-		<button class="btn reset">{{ t('resetDefault') }}</button>
+		<button class="btn reset soon" disabled>{{ t('resetDefault') }}</button>
 	</div>
 </template>
 
@@ -114,10 +124,9 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 
 .key.custom {
 	color: var(--text-2);
-	cursor: pointer;
 }
 
-.key.custom:hover {
+.key.custom:hover:not(:disabled) {
 	border-color: var(--accent);
 }
 

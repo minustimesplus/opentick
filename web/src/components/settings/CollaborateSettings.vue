@@ -14,31 +14,31 @@ const state = reactive({
 </script>
 
 <template>
-	<h2 class="s-title">{{ t('collaborate') }}</h2>
+	<h2 class="s-title">{{ t('collaborate') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
 
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('autoAcceptInvites') }}</span>
-			<SettingToggle v-model="state.autoAccept" />
+			<SettingToggle v-model="state.autoAccept" disabled />
 		</div>
 		<div class="s-desc">{{ t('autoAcceptInvitesDesc') }}</div>
 	</div>
 
-	<div class="s-card">
+	<div class="s-card soon">
 		<div class="s-row">
 			<span>{{ t('sharedListNotifications') }}</span>
 		</div>
 		<div class="s-desc">{{ t('sharedListNotificationsDesc') }}</div>
 		<label class="s-check">
-			<SettingCheckbox v-model="state.notifyComplete" />
+			<SettingCheckbox v-model="state.notifyComplete" disabled />
 			{{ t('notifyComplete') }}
 		</label>
 		<label class="s-check">
-			<SettingCheckbox v-model="state.notifyAdd" />
+			<SettingCheckbox v-model="state.notifyAdd" disabled />
 			{{ t('notifyAdd') }}
 		</label>
 		<label class="s-check">
-			<SettingCheckbox v-model="state.notifyDelete" />
+			<SettingCheckbox v-model="state.notifyDelete" disabled />
 			{{ t('notifyDelete') }}
 		</label>
 	</div>

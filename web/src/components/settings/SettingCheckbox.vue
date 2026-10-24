@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import {Check} from 'lucide-vue-next'
 
+defineProps<{disabled?: boolean}>()
+
 const model = defineModel<boolean>({required: true})
 </script>
 
 <template>
-	<button class="checkbox" :class="{on: model}" role="checkbox" :aria-checked="model" @click="model = !model">
+	<button class="checkbox" :class="{on: model}" role="checkbox" :aria-checked="model" :disabled="disabled" @click="model = !model">
 		<Check v-if="model" :size="10" :stroke-width="3.2" />
 	</button>
 </template>

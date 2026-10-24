@@ -56,15 +56,15 @@ async function remove() {
 <template>
 	<div class="tabs">
 		<button :class="{active: tab === 'theme'}" @click="tab = 'theme'">{{ t('theme') }}</button>
-		<button :class="{active: tab === 'display'}" @click="tab = 'display'">{{ t('displayTab') }}</button>
+		<button :class="{active: tab === 'display'}" @click="tab = 'display'">{{ t('displayTab') }} <span class="s-soon">{{ t('comingSoon') }}</span></button>
 	</div>
 
 	<AppearanceDisplay v-if="tab === 'display'" />
 	<template v-else>
 		<div class="card">
-			<div class="row">
-				<span>{{ t('interfaceStyle') }}</span>
-				<SettingSelect v-model="interfaceStyle" :options="[{value: 'flat', label: t('interfaceFlat')}]" />
+			<div class="row soon">
+				<span class="s-label">{{ t('interfaceStyle') }} <span class="s-soon">{{ t('comingSoon') }}</span></span>
+				<SettingSelect v-model="interfaceStyle" :options="[{value: 'flat', label: t('interfaceFlat')}]" disabled />
 			</div>
 			<div class="row">
 				<span>{{ t('followSystemDark') }}</span>
@@ -138,6 +138,9 @@ async function remove() {
 }
 
 .tabs button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	height: 26px;
 	padding: 0 16px;
 	border-radius: 6px;
