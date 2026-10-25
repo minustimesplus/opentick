@@ -109,6 +109,115 @@ function dropProps(key: string) {
 		onDrop: (e: DragEvent) => onDrop(e, key),
 	}
 }
+
+// ---- list reordering ----
+// Lists drag onto other list rows: the top/bottom edge of a row drops before/after it,
+// the middle of a top-level row drops into it as a folder. Folders are one level deep.
+type Zone = 'before' | 'after' | 'into'
+const POS_STEP = 2 ** 16
+const dragList = ref<Project | null>(null)
+const listDrop = ref<{id: number, zone: Zone} | null>(null)
+
+function hasChildren(p: Project) {
+	return tree.value.some(n => n.project.id === p.id && n.children.length > 0)
+}
+
+function isTopLevel(p: Project) {
+	return tree.value.some(n => n.project.id === p.id)
+}
+
+function dropZone(e: DragEvent, target: Project): Zone | null {
+	const dragged = dragList.value
+	if (!dragged || dragged.id === target.id) return null
+	const top = isTopLevel(target)
+	// A folder can't be nested into another folder.
+	if (!top && hasChildren(dragged)) return null
+	const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+	const frac = (e.clientY - rect.top) / rect.height
+	if (!top || hasChildren(dragged)) return frac < 0.5 ? 'before' : 'after'
+	return frac < 0.25 ? 'before' : frac > 0.75 ? 'after' : 'into'
+}
+
+function listDragProps(p: Project) {
+	const task = dropProps(`p${p.id}`)
+	return {
+		draggable: true,
+		onDragstart: (e: DragEvent) => {
+			dragList.value = p
+			e.dataTransfer?.setData('application/x-project-id', String(p.id))
+			if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+		},
+		onDragend: () => {
+			dragList.value = null
+			listDrop.value = null
+		},
+		onDragover: (e: DragEvent) => {
+			if (!e.dataTransfer?.types.includes('application/x-project-id')) return task.onDragover(e)
+			const zone = dropZone(e, p)
+			if (!zone) {
+				if (listDrop.value?.id === p.id) listDrop.value = null
+				return
+			}
+			e.preventDefault()
+			listDrop.value = {id: p.id, zone}
+		},
+		onDragleave: (e: DragEvent) => {
+			task.onDragleave()
+			if (listDrop.value?.id === p.id && !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Element | null)) listDrop.value = null
+		},
+		onDrop: (e: DragEvent) => {
+			const drop = listDrop.value
+			const dragged = dragList.value
+			listDrop.value = null
+			dragList.value = null
+			if (!e.dataTransfer?.types.includes('application/x-project-id')) return task.onDrop(e)
+			if (!drop || !dragged || drop.id !== p.id) return
+			e.preventDefault()
+			moveList(dragged, p, drop.zone)
+		},
+	}
+}
+
+function listDropClass(p: Project) {
+	const d = listDrop.value
+	return d?.id === p.id ? `drop-${d.zone}` : ''
+}
+
+function positionBetween(prev?: Project, next?: Project) {
+	const a = prev?.position ?? 0
+	const b = next?.position ?? 0
+	if (prev && next) return (a + b) / 2
+	if (prev) return a + POS_STEP
+	if (next) return b / 2
+	return POS_STEP
+}
+
+function moveList(dragged: Project, target: Project, zone: Zone) {
+	const targetNode = tree.value.find(n => n.project.id === target.id)
+	let parent: number
+	let siblings: Project[]
+	let prev: Project | undefined
+	let next: Project | undefined
+	// Dropping just below an open folder's header puts the list at the top of that folder.
+	const intoTop = zone === 'after' && !!targetNode?.children.length && !prefs.collapsed[`p${target.id}`] && !hasChildren(dragged)
+	if (zone === 'into' || intoTop) {
+		parent = target.id
+		siblings = (targetNode?.children ?? []).filter(c => c.id !== dragged.id)
+		if (intoTop) next = siblings[0]
+		else prev = siblings[siblings.length - 1]
+	} else {
+		parent = targetNode ? 0 : target.parent_project_id ?? 0
+		siblings = (targetNode ? tree.value.map(n => n.project) : tree.value.find(n => n.project.id === parent)?.children ?? [])
+			.filter(c => c.id !== dragged.id)
+		const idx = siblings.findIndex(c => c.id === target.id)
+		prev = zone === 'before' ? siblings[idx - 1] : target
+		next = zone === 'before' ? target : siblings[idx + 1]
+	}
+	const patch: Partial<Project> = {position: positionBetween(prev, next)}
+	if ((dragged.parent_project_id ?? 0) !== parent) patch.parent_project_id = parent
+	data.updateProject(dragged.id, patch)
+	if (parent && prefs.collapsed[`p${parent}`]) prefs.collapsed[`p${parent}`] = false
+}
 </script>
 
 <template>
@@ -141,8 +250,8 @@ function dropProps(key: string) {
 				<template v-for="node in tree" :key="node.project.id">
 					<button
 						class="item"
-						:class="{active: current === `p${node.project.id}`, drop: dropKey === `p${node.project.id}`}"
-						v-bind="dropProps(`p${node.project.id}`)"
+						:class="[{active: current === `p${node.project.id}`, drop: dropKey === `p${node.project.id}`}, listDropClass(node.project)]"
+						v-bind="listDragProps(node.project)"
 						@click="go(`p${node.project.id}`)"
 						@contextmenu.prevent="ctx = {project: node.project, x: $event.clientX, y: $event.clientY}"
 					>
@@ -162,8 +271,8 @@ function dropProps(key: string) {
 							v-for="c in node.children"
 							:key="c.id"
 							class="item child"
-							:class="{active: current === `p${c.id}`, drop: dropKey === `p${c.id}`}"
-							v-bind="dropProps(`p${c.id}`)"
+							:class="[{active: current === `p${c.id}`, drop: dropKey === `p${c.id}`}, listDropClass(c)]"
+							v-bind="listDragProps(c)"
 							@click="go(`p${c.id}`)"
 							@contextmenu.prevent="ctx = {project: c, x: $event.clientX, y: $event.clientY}"
 						>
@@ -290,6 +399,19 @@ function dropProps(key: string) {
 .item.drop {
 	outline: 2px solid var(--accent);
 	outline-offset: -2px;
+}
+
+.item.drop-into {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.item.drop-before {
+	box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.item.drop-after {
+	box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .hint {
