@@ -16,6 +16,8 @@ const APP_DIR = path.join(__dirname, 'app')
 // Fixed so the page origin (and with it localStorage) stays stable between launches.
 const PREFERRED_PORT = 45780
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000
+// Idle time (no bytes either way) before a proxied API request is given up.
+const UPSTREAM_TIMEOUT = 15 * 1000
 const REPO = {owner: 'minustimesplus', repo: 'vikunja-ticktick'}
 
 const MIME_TYPES = {
@@ -135,6 +137,9 @@ function proxyApi(req, res) {
 		res.writeHead(upstreamRes.statusCode || 502, resHeaders)
 		upstreamRes.pipe(res)
 	})
+	// Fail requests to an unreachable server instead of leaving the page
+	// waiting forever: the login screen needs /info to let the user switch servers.
+	upstream.setTimeout(UPSTREAM_TIMEOUT, () => upstream.destroy(new Error('timed out')))
 	upstream.on('error', err => {
 		if (!res.headersSent) {
 			res.writeHead(502, {'Content-Type': 'application/json'})
