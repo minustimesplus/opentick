@@ -29,7 +29,6 @@ export interface Prefs {
 	calendarHidden: number[]
 	/** Subscribed calendars hidden from the calendar view. */
 	calendarHiddenSubs: number[]
-	calendarShowCompleted: boolean
 	calendarShowWeekends: boolean
 	calendarSidebar: boolean
 	calendarExpandNight: boolean
@@ -77,7 +76,6 @@ const defaults: Prefs = {
 	calendarMode: isMobile.value ? 'day' : 'week',
 	calendarHidden: [],
 	calendarHiddenSubs: [],
-	calendarShowCompleted: true,
 	calendarShowWeekends: true,
 	calendarSidebar: false,
 	calendarExpandNight: false,
