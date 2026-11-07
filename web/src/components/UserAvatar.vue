@@ -10,7 +10,7 @@ const initial = computed(() => (data.user?.name || data.user?.username || '?').c
 </script>
 
 <template>
-	<span class="user-avatar" :style="{width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.47)}px`}">
+	<span class="user-avatar" :style="{width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.47)}px`, borderRadius: `${Math.round(size * 0.22)}px`}">
 		<img v-if="data.avatarUrl" :src="data.avatarUrl" alt="">
 		<template v-else>{{ initial }}</template>
 	</span>
@@ -23,7 +23,6 @@ const initial = computed(() => (data.user?.name || data.user?.username || '?').c
 	justify-content: center;
 	flex-shrink: 0;
 	overflow: hidden;
-	border-radius: 50%;
 	background: linear-gradient(135deg, #4772fa, #8b5cf6);
 	color: #fff;
 	font-weight: 600;
