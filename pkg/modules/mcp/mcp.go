@@ -28,6 +28,7 @@ import (
 
 	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/models"
+	"code.vikunja.io/api/pkg/modules/auth/oauth2server"
 	"code.vikunja.io/api/pkg/modules/humabridge"
 	apiv2 "code.vikunja.io/api/pkg/routes/api/v2"
 	"code.vikunja.io/api/pkg/version"
@@ -156,6 +157,9 @@ func (m *Module) handler(c *echo.Context) error {
 	}
 	tokenAny := c.Get("api_token")
 	if tokenAny == nil {
+		if challenge := oauth2server.WWWAuthenticateChallenge(); challenge != "" {
+			c.Response().Header().Set("WWW-Authenticate", challenge)
+		}
 		return echo.NewHTTPError(http.StatusUnauthorized, "MCP requires an API token")
 	}
 	token, ok := tokenAny.(*models.APIToken)

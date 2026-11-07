@@ -89,6 +89,8 @@ func SetupTests() {
 		"webhooks",
 		"totp",
 		"oauth_codes",
+		"oauth_clients",
+		"oauth_grants",
 		"notifications",
 	)
 	if err != nil {

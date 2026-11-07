@@ -18,6 +18,7 @@ package oauth2server
 
 import (
 	"net/http"
+	"strings"
 
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/models"
@@ -34,7 +35,19 @@ type AuthorizeRequest struct {
 	State               string `json:"state"`
 	CodeChallenge       string `json:"code_challenge"`
 	CodeChallengeMethod string `json:"code_challenge_method"`
+	// Permissions picks the access preset (typed, read_only or full) for dynamically registered clients; ignored for first-party clients.
+	Permissions string `json:"permissions,omitempty" enum:"typed,read_only,full" doc:"Access preset for dynamically registered clients. Defaults to typed."`
+	// Resource is the RFC 8707 resource indicator from the authorization request.
+	Resource string `json:"resource,omitempty"`
 }
+
+// PermissionsForPreset expands an access preset (typed, read_only, full) into
+// API token permissions including mcp:access. The routes package sets it once
+// the MCP module is built, since this package can't import that module.
+var PermissionsForPreset func(preset string) (models.APIPermissions, bool)
+
+// DefaultPermissionsPreset matches the default in the MCP settings UI.
+const DefaultPermissionsPreset = "typed"
 
 // AuthorizeResponse is returned on successful authorization code creation.
 type AuthorizeResponse struct {
@@ -91,11 +104,6 @@ func Authorize(req *AuthorizeRequest, userID int64) (*AuthorizeResponse, error) 
 		return nil, echo.NewHTTPError(http.StatusBadRequest, "response_type must be 'code'")
 	}
 
-	// Validate redirect_uri
-	if !ValidateRedirectURI(req.RedirectURI) {
-		return nil, &models.ErrOAuthInvalidRedirectURI{}
-	}
-
 	// Validate PKCE (required)
 	if req.CodeChallenge == "" || req.CodeChallengeMethod != "S256" {
 		return nil, &models.ErrOAuthMissingPKCE{}
@@ -104,13 +112,52 @@ func Authorize(req *AuthorizeRequest, userID int64) (*AuthorizeResponse, error) 
 	s := db.NewSession()
 	defer s.Close()
 
+	oauthCode := &models.OAuthCode{
+		ClientID:            req.ClientID,
+		RedirectURI:         req.RedirectURI,
+		CodeChallenge:       req.CodeChallenge,
+		CodeChallengeMethod: req.CodeChallengeMethod,
+		Resource:            req.Resource,
+	}
+
+	if strings.HasPrefix(req.ClientID, models.OAuthClientIDPrefix) {
+		// Dynamically registered clients may only use the redirect URIs they registered.
+		client, err := models.GetOAuthClient(s, req.ClientID)
+		if err != nil {
+			_ = s.Rollback()
+			return nil, err
+		}
+		if !client.AllowsRedirectURI(req.RedirectURI) {
+			_ = s.Rollback()
+			return nil, &models.ErrOAuthInvalidRedirectURI{}
+		}
+		preset := req.Permissions
+		if preset == "" {
+			preset = DefaultPermissionsPreset
+		}
+		if PermissionsForPreset == nil {
+			_ = s.Rollback()
+			return nil, echo.NewHTTPError(http.StatusServiceUnavailable, "MCP is not available")
+		}
+		permissions, ok := PermissionsForPreset(preset)
+		if !ok {
+			_ = s.Rollback()
+			return nil, echo.NewHTTPError(http.StatusBadRequest, "permissions must be one of typed, read_only, full")
+		}
+		oauthCode.Permissions = permissions
+	} else if !ValidateRedirectURI(req.RedirectURI) {
+		_ = s.Rollback()
+		return nil, &models.ErrOAuthInvalidRedirectURI{}
+	}
+
 	fullUser, err := user.GetUserByID(s, userID)
 	if err != nil {
 		_ = s.Rollback()
 		return nil, err
 	}
+	oauthCode.UserID = fullUser.ID
 
-	code, err := models.CreateOAuthCode(s, fullUser.ID, req.ClientID, req.RedirectURI, req.CodeChallenge, req.CodeChallengeMethod)
+	code, err := models.CreateOAuthCode(s, oauthCode)
 	if err != nil {
 		_ = s.Rollback()
 		return nil, err

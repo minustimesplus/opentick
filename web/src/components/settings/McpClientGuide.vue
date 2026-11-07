@@ -50,9 +50,8 @@ const steps = computed<Step[]>(() => {
 		return [
 			{text: 'mcpClaudeDesktopOpen'},
 			{text: 'mcpClaudeDesktopUrl', value: endpoint},
-			{text: 'mcpClaudeDesktopAuth'},
-			{text: 'mcpClaudeDesktopHeader', value: `Bearer ${token}`},
-			{text: 'mcpClaudeDesktopBeta'},
+			{text: 'mcpClaudeDesktopSignIn'},
+			{text: 'mcpClaudeDesktopPublic'},
 		]
 	case 'mistral':
 		return [
