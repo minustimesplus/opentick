@@ -6,6 +6,7 @@ import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
 import {signOutOfClerk} from '@/lib/clerk'
+import {DEMO, isLocal, setLocal} from '@/lib/localMode'
 
 const MERGE = 'application/merge-patch+json'
 /** How many done-task queries a sync re-runs; older ones are dropped. */
@@ -37,7 +38,9 @@ export function parentId(t: Task): number | undefined {
 }
 
 export const useData = defineStore('data', () => {
-	const authed = ref(!!getToken())
+	const authed = ref(!!getToken() || isLocal())
+	/** Running on the in-browser backend: no account, data stays in this browser. */
+	const local = ref(isLocal())
 	const user = shallowRef<CurrentUser | null>(null)
 	const projects = ref<Project[]>([])
 	/** Archived lists; loaded on demand, since syncs only fetch active ones. */
@@ -112,7 +115,24 @@ export const useData = defineStore('data', () => {
 		await login(username, password)
 	}
 
+	/** "Use without an account": switches to the in-browser backend. */
+	async function enterLocal() {
+		setLocal(true)
+		local.value = true
+		authed.value = true
+		await loadAll()
+	}
+
 	async function logout() {
+		if (local.value) {
+			// The local data stays, so coming back later picks up where it was.
+			if (DEMO) return
+			setLocal(false)
+			local.value = false
+			authed.value = false
+			reset()
+			return
+		}
 		// An unreachable server must not trap the user in their session (e.g.
 		// to switch to another server): give it a moment, then log out locally.
 		const giveUp = new Promise(resolve => setTimeout(resolve, LOGOUT_TIMEOUT))
@@ -880,7 +900,7 @@ export const useData = defineStore('data', () => {
 
 	return {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
-		login, loginWithClerk, register, logout, loadAll, loadDone, loadClosed, loadClosedBetween, loadDoneForProject, loadDoneInRange,
+		login, loginWithClerk, register, logout, enterLocal, local, loadAll, loadDone, loadClosed, loadClosedBetween, loadDoneForProject, loadDoneInRange,
 		closedNonEmpty, probeNonEmpty, isTomorrow, isAssignedToMe, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
 		members, loadMembers, isShared, assign, unassign,

@@ -22,6 +22,8 @@ const appVersion = process.env.APP_VERSION
 const appCommit = process.env.APP_COMMIT || git('rev-parse --short HEAD')
 
 export default defineConfig({
+	// The GitHub Pages demo lives under /<repo>/demo/ (see .github/workflows/changelog-pages.yml).
+	base: process.env.VITE_BASE ?? '/',
 	plugins: [vue()],
 	define: {
 		__APP_VERSION__: JSON.stringify(appVersion),

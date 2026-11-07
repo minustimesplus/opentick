@@ -4,7 +4,7 @@ import {getToken} from './api/client'
 import {routeAllowed} from './lib/features'
 
 export const router = createRouter({
-	history: createWebHistory(),
+	history: createWebHistory(import.meta.env.BASE_URL),
 	routes: [
 		{path: '/', redirect: '/tasks/today'},
 		{path: '/tasks', redirect: '/tasks/today'},

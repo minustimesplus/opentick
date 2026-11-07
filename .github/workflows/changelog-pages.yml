@@ -1,8 +1,9 @@
 name: Changelog pages
 
 # Rebuilds the changelog site (changelog/build.mjs) from the desktop-v* tags and
-# publishes it to GitHub Pages. Runs after each desktop release so the new tag is
-# included. Requires Settings → Pages → Source: "GitHub Actions" (until that was
+# publishes it to GitHub Pages, together with the web app demo under /demo/
+# (VITE_DEMO: no server, example data kept in the browser). Runs after each
+# desktop release so the new tag is included, and on web changes for the demo. Requires Settings → Pages → Source: "GitHub Actions" (until that was
 # enabled, every run failed in configure-pages with "Get Pages site failed").
 
 on:
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - changelog/**
+      - web/**
       - .github/workflows/changelog-pages.yml
   workflow_dispatch:
 
@@ -44,10 +46,29 @@ jobs:
         with:
           node-version: 24
 
+      - id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
       - name: Build changelog
         run: node changelog/build.mjs changelog/dist
 
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      # The demo runs entirely in the browser (web/src/api/local). Set the
+      # HOSTED_URL repository variable to show "Sign up" for the hosted instance.
+      - name: Build demo
+        working-directory: web
+        env:
+          VITE_DEMO: '1'
+          VITE_BASE: ${{ steps.pages.outputs.base_path }}/demo/
+          VITE_HOSTED_URL: ${{ vars.HOSTED_URL }}
+          WEB_OUT_DIR: ../changelog/dist/demo
+        run: |
+          npm ci
+          npx vite build
+          # Pages answers unknown paths with 404.html: deep links into the demo
+          # (e.g. /demo/tasks/today) load the app, anything else goes to the changelog.
+          root="${VITE_BASE%demo/}"
+          sed "s#<head>#<head><script>if(!location.pathname.startsWith('${VITE_BASE}'))location.replace('${root}')</script>#" \
+            ../changelog/dist/demo/index.html > ../changelog/dist/404.html
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

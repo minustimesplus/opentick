@@ -1,4 +1,8 @@
 // Thin fetch wrapper around the Vikunja /api/v2 REST API.
+// Without an account (and in the demo build) requests go to the in-browser
+// backend in ./local instead, which is only downloaded when used.
+
+import {isLocal} from '@/lib/localMode'
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api/v2'
 const TOKEN_KEY = 'tt.token'
@@ -107,6 +111,10 @@ function tokenExpiresSoon(): boolean {
 }
 
 export async function api<T = unknown>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
+	if (isLocal()) {
+		const {localApi} = await import('./local/backend')
+		return localApi<T>(method, path, opts)
+	}
 	// Access tokens are short-lived (10 min); renew them before they lapse.
 	if (opts.auth !== false && tokenExpiresSoon()) await tryRefresh()
 	let res = await send(method, path, opts)
