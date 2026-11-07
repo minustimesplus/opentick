@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import Popover from '@/components/Popover.vue'
+import EventIcon from './EventIcon.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {
@@ -459,6 +460,7 @@ const today0 = computed(() => startOfDay(now.value))
 							:title="entry.event.title"
 							@click.stop="emit('openEvent', entry.event!, $event)"
 						>
+							<EventIcon />
 							<span class="ad-title">{{ entry.event.title }}</span>
 						</div>
 						<div
@@ -519,7 +521,10 @@ const today0 = computed(() => startOfDay(now.value))
 							@pointerdown.stop
 							@click="emit('openEvent', it.event!, $event)"
 						>
-							<div class="ev-top"><span class="ev-title">{{ it.event.title }}</span></div>
+							<div class="ev-top">
+								<EventIcon />
+								<span class="ev-title">{{ it.event.title }}</span>
+							</div>
 							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
 						</div>
 						<div
@@ -858,16 +863,9 @@ const today0 = computed(() => startOfDay(now.value))
 
 .ev.ext,
 .ad-chip.ext {
-	/* Read-only calendar events: a lighter fill with a colored edge, so they
-	   read as context rather than as tasks to act on. */
-	--bgc: color-mix(in srgb, var(--c) 22%, var(--bg));
-	color: var(--text);
-	border-left: 3px solid var(--c);
+	/* Read-only calendar events share the task fill; the calendar icon in
+	   place of the checkbox marks them as context. */
 	cursor: pointer;
-}
-
-.ev.ext .ev-time {
-	padding-left: 0;
 }
 
 .resize {
