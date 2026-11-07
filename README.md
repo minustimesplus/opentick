@@ -11,6 +11,11 @@ boards, calendar, Eisenhower matrix, saved filters, shared lists with comments,
 attachments and assignees, subscribed ICS calendars) with the Vikunja Go API as
 its backend. You host it yourself, and your data stays with you.
 
+**[Try the demo](https://minustimesplus.github.io/opentick/demo/)**: it runs
+entirely in your browser with example tasks, no account or server needed. The
+app also offers "Use without an account" on its sign in screen, which keeps
+your tasks in that browser until you sign up or self-host.
+
 > [!NOTE]
 > OpenTick is developed with LLM-assisted coding tools in various parts of the codebase.
 

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ChartPie, CircleArrowDown, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
+import {ChartPie, CircleArrowDown, Cloud, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
+import LocalAccountDialog from './LocalAccountDialog.vue'
 import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {useFocus} from '@/stores/focus'
@@ -23,7 +24,7 @@ const router = useRouter()
 const avatarEl = ref<HTMLElement | null>(null)
 const bellEl = ref<HTMLElement | null>(null)
 const helpEl = ref<HTMLElement | null>(null)
-const menu = ref<'avatar' | 'bell' | 'help' | null>(null)
+const menu = ref<'avatar' | 'bell' | 'help' | 'local' | null>(null)
 
 const items = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
@@ -106,7 +107,15 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 
 <template>
 	<nav class="rail">
-		<button ref="avatarEl" class="avatar" :title="data.user?.username" @click="menu = 'avatar'"><UserAvatar :size="30" /></button>
+		<button
+			ref="avatarEl"
+			class="avatar"
+			:title="data.local ? t('localTitle') : data.user?.username"
+			@click="menu = data.local ? 'local' : 'avatar'"
+		>
+			<UserAvatar :size="30" />
+			<span v-if="data.local" class="local-badge"><Cloud :size="10" :stroke-width="2.6" /></span>
+		</button>
 		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
 			<component :is="i.icon" :size="24" />
 			<span v-if="i.key === 'focus' && focus.state.running" class="dot running" :class="{break: focus.state.phase === 'break'}" />
@@ -141,6 +150,8 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 				<button class="menu-item danger" @click="logout"><LogOut :size="16" /> {{ t('logout') }}</button>
 			</div>
 		</Popover>
+
+		<LocalAccountDialog v-if="menu === 'local'" @close="menu = null" />
 
 		<Popover v-if="menu === 'bell'" :anchor="bellEl" :placement="placement" @close="menu = null">
 			<div class="menu notif">
@@ -189,9 +200,26 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 }
 
 .avatar {
+	position: relative;
 	display: flex;
 	margin-bottom: 5px;
 	border-radius: 7px;
+}
+
+/* No account: a cloud on the avatar points at signing up or self-hosting. */
+.local-badge {
+	position: absolute;
+	right: -4px;
+	bottom: -4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: 2px solid var(--frame);
+	background: var(--accent);
+	color: #fff;
 }
 
 .rail-btn {

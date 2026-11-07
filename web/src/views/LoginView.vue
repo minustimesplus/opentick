@@ -260,6 +260,12 @@ function social(provider: string) {
 	})
 }
 
+// ---------- without an account ----------
+
+function useLocal() {
+	run(() => data.enterLocal())
+}
+
 // ---------- setup ----------
 
 function submit() {
@@ -419,6 +425,11 @@ onMounted(async () => {
 				<template v-if="mode === 'signup'">{{ t('haveAccount') }} <a href="#" @click.prevent="switchMode('signin')">{{ t('login') }}</a></template>
 				<template v-else>{{ t('noAccount') }} <a href="#" @click.prevent="switchMode('signup')">{{ t('register') }}</a></template>
 			</p>
+
+			<div v-if="step === 'form' && !booting" class="local-entry">
+				<button type="button" class="local-btn" :disabled="busy" @click="useLocal">{{ t('useWithoutAccount') }}</button>
+				<p class="local-hint">{{ t('useWithoutAccountHint') }}</p>
+			</div>
 		</main>
 	</div>
 </template>
@@ -677,5 +688,35 @@ h1 {
 	.field {
 		font-size: 16px;
 	}
+}
+.local-entry {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	margin-top: 18px;
+	text-align: center;
+}
+
+.local-btn {
+	padding: 8px 18px;
+	border: 1px solid var(--l-border);
+	border-radius: 8px;
+	background: var(--l-card);
+	color: var(--l-text);
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.local-btn:hover {
+	border-color: var(--l-accent);
+	color: var(--l-accent);
+}
+
+.local-hint {
+	margin: 0;
+	max-width: 320px;
+	font-size: 12px;
+	color: var(--l-muted);
 }
 </style>
