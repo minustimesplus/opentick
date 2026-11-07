@@ -36,7 +36,7 @@ const allGroups: NavItem[][] = [
 	],
 	[
 		{key: 'features', icon: LayoutGrid, label: 'features'},
-		{key: 'smartList', icon: Funnel, label: 'smartList', soon: true},
+		{key: 'smartList', icon: Funnel, label: 'smartList'},
 		{key: 'notifications', icon: Bell, label: 'notifications', soon: true},
 		{key: 'dateTime', icon: Clock, label: 'dateTime'},
 		{key: 'appearance', icon: PaintRoller, label: 'appearance'},

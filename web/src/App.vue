@@ -63,7 +63,10 @@ function onKey(e: KeyboardEvent) {
 	} else if (e.key === 'g') {
 		const next = (ev: KeyboardEvent) => {
 			window.removeEventListener('keydown', next, true)
-			const map: Record<string, string> = {t: '/tasks/today', w: '/tasks/week', i: '/tasks/inbox', m: '/matrix', c: '/calendar', h: '/habits', f: '/focus', d: '/countdowns'}
+			const map: Record<string, string> = {
+				a: '/tasks/all', t: '/tasks/today', r: '/tasks/tomorrow', w: '/tasks/week', i: '/tasks/inbox', b: '/tasks/summary', g: '/tasks/trash',
+				m: '/matrix', c: '/calendar', h: '/habits', f: '/focus', d: '/countdowns',
+			}
 			if (map[ev.key] && routeAllowed(router.resolve(map[ev.key]))) {
 				ev.preventDefault()
 				router.push(map[ev.key])

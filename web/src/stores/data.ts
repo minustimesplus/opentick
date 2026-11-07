@@ -1,6 +1,6 @@
 import {defineStore} from 'pinia'
-import {computed, reactive, ref, shallowRef} from 'vue'
-import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken} from '@/api/client'
+import {computed, reactive, ref, shallowRef, watch} from 'vue'
+import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken, type Paginated} from '@/api/client'
 import type {AppNotification, Attachment, CurrentUser, Label, Project, RelationKind, Task, User} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
@@ -212,6 +212,42 @@ export const useData = defineStore('data', () => {
 			fetchAll<Task>('/tasks', {filter: 'done = true', sort_by: ['done_at'], order_by: ['desc']}, pages))
 	}
 
+	/** Loads the most recently closed tasks of one kind: completed, or closed as won't do. */
+	function loadClosed(kind: 'completed' | 'wontDo', pages = 4) {
+		const filter = `done = true && wont_do = ${kind === 'wontDo'}`
+		return loadDoneQuery(kind, () =>
+			fetchAll<Task>('/tasks', {filter, sort_by: ['done_at'], order_by: ['desc']}, pages))
+	}
+
+	/** Loads tasks closed (completed or won't do) within [from, to), for the summary. */
+	function loadClosedBetween(from: Date, to: Date) {
+		const f = from.toISOString()
+		const e = to.toISOString()
+		return loadDoneQuery(`closed:${f}:${e}`, () => fetchAll<Task>('/tasks', {
+			filter: `done = true && done_at >= "${f}" && done_at < "${e}"`,
+			sort_by: ['done_at'],
+			order_by: ['asc'],
+		}, 10))
+	}
+
+	/**
+	 * Whether the Completed, Won't Do and Trash smart lists have anything in them,
+	 * for their "Show if not empty" setting. Done tasks aren't synced in full, so
+	 * this asks the server for one item each; null until known.
+	 */
+	const closedNonEmpty = reactive<Record<'completed' | 'wontDo' | 'trash', boolean | null>>({completed: null, wontDo: null, trash: null})
+
+	async function probeNonEmpty(kind: 'completed' | 'wontDo' | 'trash') {
+		const path = kind === 'trash' ? '/tasks/trash' : '/tasks'
+		const query = kind === 'trash' ? {} : {filter: `done = true && wont_do = ${kind === 'wontDo'}`}
+		try {
+			const res = await api<Paginated<Task>>('GET', path, {query: {...query, page: 1, per_page: 1}})
+			closedNonEmpty[kind] = (res?.total ?? res?.items?.length ?? 0) > 0
+		} catch {
+			// Keep the last known answer.
+		}
+	}
+
 	/** Loads done tasks scheduled within [from, to) for the calendar. */
 	function loadDoneInRange(from: Date, to: Date) {
 		const f = from.toISOString()
@@ -300,19 +336,37 @@ export const useData = defineStore('data', () => {
 		return dayDiff(s.date, now) < 7
 	}
 
+	/** Scheduled for tomorrow, or a multi-day task that is still running tomorrow. */
+	function isTomorrow(t: Task, now = new Date()) {
+		const s = getSchedule(t)
+		if (!s) return false
+		if (dayDiff(s.date, now) === 1) return true
+		const from = addDays(startOfDay(now), 1)
+		return s.end != null && s.start < addDays(from, 1) && s.end >= from
+	}
+
+	function isAssignedToMe(t: Task) {
+		const me = user.value?.id
+		return me !== undefined && !!t.assignees?.some(a => a.id === me)
+	}
+
 	const counts = computed(() => {
 		const now = new Date()
 		const byProject = new Map<number, number>()
 		const byLabel = new Map<number, number>()
 		let today = 0
+		let tomorrow = 0
 		let week = 0
+		let assigned = 0
 		for (const t of openTasks.value) {
 			byProject.set(t.project_id, (byProject.get(t.project_id) ?? 0) + 1)
 			t.labels?.forEach(l => byLabel.set(l.id, (byLabel.get(l.id) ?? 0) + 1))
 			if (isToday(t, now)) today++
+			if (isTomorrow(t, now)) tomorrow++
 			if (inNext7(t, now)) week++
+			if (isAssignedToMe(t)) assigned++
 		}
-		return {today, week, byProject, byLabel}
+		return {all: openTasks.value.length, today, tomorrow, week, assigned, byProject, byLabel}
 	})
 
 	function project(id: number) {
@@ -451,13 +505,21 @@ export const useData = defineStore('data', () => {
 	/** Deleted tasks, most recently deleted first; loaded on demand. */
 	const trash = ref<Task[]>([])
 
+	let trashLoaded = false
+
 	async function loadTrash() {
 		try {
 			trash.value = await fetchAll<Task>('/tasks/trash', {format: 'markdown'})
+			trashLoaded = true
 		} catch (e) {
 			toast(String((e as Error).message))
 		}
 	}
+
+	// Once the trash is loaded, restores and deletes keep "Show if not empty" current.
+	watch(trash, list => {
+		if (trashLoaded) closedNonEmpty.trash = list.length > 0
+	})
 
 	async function restoreTask(id: number) {
 		const before = trash.value
@@ -818,7 +880,8 @@ export const useData = defineStore('data', () => {
 
 	return {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
-		login, loginWithClerk, register, logout, loadAll, loadDone, loadDoneForProject, loadDoneInRange, loadSavedFilterTasks, searchRemote,
+		login, loginWithClerk, register, logout, loadAll, loadDone, loadClosed, loadClosedBetween, loadDoneForProject, loadDoneInRange,
+		closedNonEmpty, probeNonEmpty, isTomorrow, isAssignedToMe, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
 		members, loadMembers, isShared, assign, unassign,
 		positions, loadPositions, setPosition, patchLocal, uploadAttachments, deleteAttachment,

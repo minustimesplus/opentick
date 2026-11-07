@@ -7,7 +7,8 @@ type Shortcut = [MessageKey, string | null, boolean?]
 // Shortcuts the app handles today (App.vue, QuickAdd, Escape in dialogs); the rest are planned.
 const working = new Set<MessageKey>([
 	'cancel', 'addTask', 'scSetPriority', 'scSetTag', 'scMoveToList',
-	'scGoCalendar', 'scGoMatrix', 'scGoSearch', 'scGoToday', 'scGoNext7', 'scGoInbox',
+	'scGoCalendar', 'scGoMatrix', 'scGoSearch', 'scGoAll', 'scGoToday', 'scGoTomorrow', 'scGoNext7', 'scGoInbox',
+	'scGoSummary', 'scGoTrash',
 ])
 
 const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
