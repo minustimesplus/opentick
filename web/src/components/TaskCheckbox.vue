@@ -6,14 +6,13 @@ const props = withDefaults(defineProps<{done: boolean, wontDo?: boolean, priorit
 const emit = defineEmits<{toggle: []}>()
 
 const color = computed(() => props.onColor ? 'currentColor' : PRIORITY_COLORS[level(props.priority)])
-const fill = computed(() => !props.onColor && level(props.priority) > 0 ? `color-mix(in srgb, ${color.value} 14%, transparent)` : 'transparent')
 </script>
 
 <template>
 	<button
 		class="cb"
 		:class="{done, 'wont-do': done && wontDo}"
-		:style="{width: size + 'px', height: size + 'px', '--c': color, '--f': fill}"
+		:style="{width: size + 'px', height: size + 'px', '--c': color}"
 		role="checkbox"
 		:aria-checked="done"
 		@click.stop="emit('toggle')"
@@ -32,7 +31,7 @@ const fill = computed(() => !props.onColor && level(props.priority) > 0 ? `color
 	align-items: center;
 	justify-content: center;
 	border: 1.5px solid var(--c);
-	background: var(--f);
+	background: transparent;
 	border-radius: 3px;
 	color: #fff;
 	transition: background 0.12s;
