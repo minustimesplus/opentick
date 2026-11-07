@@ -68,7 +68,8 @@ async function tryRefresh(): Promise<boolean> {
 				if (!res.ok) return false
 				const data = await res.json() as {access_token?: string, token?: string}
 				const next = data.access_token ?? data.token
-				if (!next) return false
+				// Logged out while the refresh was in flight: stay logged out.
+				if (!next || !token) return false
 				setToken(next)
 				return true
 			} catch {

@@ -10,6 +10,8 @@ import {signOutOfClerk} from '@/lib/clerk'
 const MERGE = 'application/merge-patch+json'
 /** How many done-task queries a sync re-runs; older ones are dropped. */
 const MAX_DONE_QUERIES = 8
+/** How long logout waits on the server before signing out locally anyway. */
+const LOGOUT_TIMEOUT = 3000
 
 function isNotFound(e: unknown) {
 	return e instanceof ApiError && e.status === 404
@@ -111,15 +113,18 @@ export const useData = defineStore('data', () => {
 	}
 
 	async function logout() {
+		// An unreachable server must not trap the user in their session (e.g.
+		// to switch to another server): give it a moment, then log out locally.
+		const giveUp = new Promise(resolve => setTimeout(resolve, LOGOUT_TIMEOUT))
 		try {
-			await api('POST', '/user/logout')
+			await Promise.race([api('POST', '/user/logout'), giveUp])
 		} catch {
 			// token may already be invalid
 		}
 		setToken(null)
 		authed.value = false
 		reset()
-		await signOutOfClerk()
+		await Promise.race([signOutOfClerk(), giveUp])
 	}
 
 	// ---------- loading ----------

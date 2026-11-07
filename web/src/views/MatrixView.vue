@@ -241,10 +241,12 @@ h1 {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
-	background: var(--bg-panel);
+	/* Like TickTick: white cards set off by a hairline and a faint shadow. */
+	background: var(--bg-elev);
 	border-radius: 12px;
 	padding: 14px 10px 10px 14px;
-	border: 1.5px solid transparent;
+	border: 1px solid color-mix(in srgb, var(--border) 45%, var(--bg-elev));
+	box-shadow: 0 0 6px rgb(0 0 0 / 0.03);
 }
 
 .quad.drop {

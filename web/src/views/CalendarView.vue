@@ -76,7 +76,8 @@ const taskRange = computed(() => mode.value === 'month' && monthSpan.value ? mon
 
 const visibleTasks = computed<Task[]>(() => data.allTasks.filter(task => {
 	if (!data.projectMap.has(task.project_id) || hidden.value.has(task.project_id)) return false
-	if (task.done && !prefs.calendarShowCompleted) return false
+	// Completed tasks never show on the calendar; ticking one off removes it.
+	if (task.done) return false
 	const s = getSchedule(task)
 	if (!s) return false
 	const end = s.end ?? s.date
@@ -355,9 +356,6 @@ const addDefaults = computed(() => {
 		</Popover>
 		<Popover v-if="pop === 'more'" :anchor="moreEl" placement="bottom-end" @close="pop = null">
 			<div class="menu">
-				<button class="menu-item" @click="prefs.calendarShowCompleted = !prefs.calendarShowCompleted">
-					<Check :size="15" :style="{visibility: prefs.calendarShowCompleted ? 'visible' : 'hidden'}" /> {{ t('showCompleted') }}
-				</button>
 				<button class="menu-item" @click="prefs.calendarShowWeekends = !prefs.calendarShowWeekends">
 					<Check :size="15" :style="{visibility: prefs.calendarShowWeekends ? 'visible' : 'hidden'}" /> {{ t('showWeekends') }}
 				</button>
