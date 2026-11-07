@@ -195,11 +195,11 @@ h3 {
 	pointer-events: none;
 }
 
-/* Dims everything outside the circle the avatar is shown in. */
+/* Dims everything outside the rounded square the avatar is shown in. */
 .mask {
 	position: absolute;
 	inset: 0;
-	border-radius: 50%;
+	border-radius: 22%;
 	box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.5);
 	pointer-events: none;
 }

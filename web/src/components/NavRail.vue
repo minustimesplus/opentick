@@ -191,7 +191,7 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 .avatar {
 	display: flex;
 	margin-bottom: 5px;
-	border-radius: 50%;
+	border-radius: 7px;
 }
 
 .rail-btn {

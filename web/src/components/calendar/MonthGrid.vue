@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import Popover from '@/components/Popover.vue'
+import EventIcon from './EventIcon.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {
@@ -383,6 +384,7 @@ const creatingLabel = computed(() => {
 							@click="emit('openEvent', entry.event!, $event)"
 						>
 							<span v-if="chipTime(entry)" class="dot" />
+							<EventIcon v-else :size="12" />
 							<span class="title">{{ entry.event.title }}</span>
 							<span v-if="chipTime(entry)" class="time">{{ chipTime(entry) }}</span>
 						</div>
@@ -544,12 +546,6 @@ const creatingLabel = computed(() => {
 
 .chip.timed:hover {
 	background: var(--bg-hover);
-}
-
-.chip.ext:not(.timed) {
-	background: color-mix(in srgb, var(--c) 22%, var(--bg));
-	color: var(--text);
-	border-left: 3px solid var(--c);
 }
 
 .chip.done {
