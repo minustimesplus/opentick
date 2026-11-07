@@ -18,7 +18,7 @@ const PREFERRED_PORT = 45780
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000
 // Idle time (no bytes either way) before a proxied API request is given up.
 const UPSTREAM_TIMEOUT = 15 * 1000
-const REPO = {owner: 'minustimesplus', repo: 'vikunja-ticktick'}
+const REPO = {owner: 'minustimesplus', repo: 'opentick'}
 
 const MIME_TYPES = {
 	'.html': 'text/html; charset=utf-8',

@@ -11,7 +11,7 @@
     "name": "Jannik Fachat",
     "email": "yourveryowntrash@gmail.com"
   },
-  "homepage": "https://github.com/minustimesplus/vikunja-ticktick",
+  "homepage": "https://github.com/minustimesplus/opentick",
   "scripts": {
     "build:web": "cd ../web && npm ci && WEB_OUT_DIR=../web-desktop/app npm run build",
     "start": "electron .",
@@ -77,7 +77,7 @@
     "publish": {
       "provider": "github",
       "owner": "minustimesplus",
-      "repo": "vikunja-ticktick"
+      "repo": "opentick"
     }
   },
   "devDependencies": {
