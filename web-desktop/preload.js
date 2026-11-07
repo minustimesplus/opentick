@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('ttDesktop', {
 		ipcRenderer.on('update:ready', (_event, version) => callback(version))
 	},
 	installUpdate: () => ipcRenderer.invoke('update:install'),
+	checkForUpdates: () => ipcRenderer.invoke('update:check'),
 	setTheme: theme => ipcRenderer.send('theme:set', theme),
 	getWindowInfo: () => ipcRenderer.invoke('window:info'),
 	onMaximizedChange: callback => {

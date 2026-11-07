@@ -279,6 +279,22 @@ ipcMain.on('window:toggle-maximize', () => {
 })
 ipcMain.on('window:close', () => mainWindow?.close())
 
+// Manual check from Settings → About. An available update downloads in the
+// background (autoDownload) and announces itself via 'update:ready'.
+ipcMain.handle('update:check', async () => {
+	if (!app.isPackaged) return {status: 'unsupported'}
+	if (downloadedVersion) return {status: 'ready', version: downloadedVersion}
+	try {
+		const result = await autoUpdater.checkForUpdates()
+		if (!result) return {status: 'unsupported'}
+		return result.isUpdateAvailable
+			? {status: 'downloading', version: result.updateInfo.version}
+			: {status: 'latest', version: app.getVersion()}
+	} catch (err) {
+		return {status: 'error', message: err.message}
+	}
+})
+
 ipcMain.handle('update:install', () => {
 	if (!downloadedVersion) return
 	// isSilent=false, isForceRunAfter=true: restart into the new version.
