@@ -13,6 +13,7 @@ import ListEditDialog from '@/components/ListEditDialog.vue'
 import FilterEditDialog from '@/components/FilterEditDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import TrashList from '@/components/TrashList.vue'
+import SummaryView from '@/components/SummaryView.vue'
 import {filterIdOf} from '@/lib/filters'
 import type {Task} from '@/api/types'
 import {parentId, useData, type TaskPatch} from '@/stores/data'
@@ -70,11 +71,19 @@ function onSheetClick(e: MouseEvent) {
 	if ((e.target as HTMLElement).closest('.item')) sheetOpen.value = false
 }
 
-type Kind = 'today' | 'week' | 'inbox' | 'project' | 'label' | 'filter' | 'completed' | 'archived' | 'trash'
+type Kind = 'all' | 'today' | 'tomorrow' | 'week' | 'assigned' | 'inbox' | 'summary' | 'project' | 'label' | 'filter'
+	| 'completed' | 'wontdo' | 'archived' | 'trash'
+
+/** Smart lists addressed by name in /tasks/:list. */
+const NAMED = new Set<Kind>(['all', 'today', 'tomorrow', 'week', 'assigned', 'inbox', 'summary', 'completed', 'wontdo', 'archived', 'trash'])
+/** Views of closed tasks, grouped by the day they were closed. */
+const CLOSED = new Set<Kind>(['completed', 'wontdo'])
+/** Views without a list of open tasks to add to. */
+const READ_ONLY = new Set<Kind>(['completed', 'wontdo', 'filter', 'archived', 'trash', 'summary'])
 
 const view = computed(() => {
 	const k = listKey.value
-	if (k === 'today' || k === 'week' || k === 'inbox' || k === 'completed' || k === 'archived' || k === 'trash') return {kind: k as Kind, id: 0}
+	if (NAMED.has(k as Kind)) return {kind: k as Kind, id: 0}
 	if (k.startsWith('p')) return {kind: 'project' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('l')) return {kind: 'label' as Kind, id: Number(k.slice(1))}
 	if (k.startsWith('f')) return {kind: 'filter' as Kind, id: -Number(k.slice(1))}
@@ -91,10 +100,15 @@ const savedFilter = computed(() => view.value.kind === 'filter' ? data.project(v
 
 const header = computed(() => {
 	switch (view.value.kind) {
+		case 'all': return {emoji: null, name: t('all')}
 		case 'today': return {emoji: null, name: t('today')}
+		case 'tomorrow': return {emoji: null, name: t('tomorrow')}
 		case 'week': return {emoji: null, name: t('next7')}
+		case 'assigned': return {emoji: null, name: t('assignedToMe')}
 		case 'inbox': return {emoji: null, name: t('inbox')}
+		case 'summary': return {emoji: null, name: t('summary')}
 		case 'completed': return {emoji: null, name: t('completed')}
+		case 'wontdo': return {emoji: null, name: t('wontDo')}
 		case 'archived': return {emoji: null, name: t('archivedLists')}
 		case 'trash': return {emoji: null, name: t('trash')}
 		case 'label': return {emoji: null, name: label.value?.title ?? ''}
@@ -165,8 +179,11 @@ const showCompleted = computed({
 function matches(task: Task): boolean {
 	const v = view.value
 	switch (v.kind) {
+		case 'all': return true
 		case 'today': return data.isToday(task)
+		case 'tomorrow': return data.isTomorrow(task)
 		case 'week': return data.inNext7(task)
+		case 'assigned': return data.isAssignedToMe(task)
 		case 'inbox': return task.project_id === data.inboxId
 		case 'project': return task.project_id === v.id
 		case 'label': return !!task.labels?.some(l => l.id === v.id)
@@ -202,12 +219,21 @@ const doneTasks = computed(() => {
 			const d = parseDate(task.done_at)
 			return (s && dayDiff(s.date, now) === 0) || (d && dayDiff(d, now) === 0)
 		})
+	} else if (v.kind === 'tomorrow') {
+		list = list.filter(task => {
+			const s = getSchedule(task)
+			return s && dayDiff(s.date, now) === 1
+		})
 	} else if (v.kind === 'week') {
 		list = list.filter(task => {
 			const s = getSchedule(task)
 			return s && dayDiff(s.date, now) >= 0 && dayDiff(s.date, now) < 7
 		})
-	} else if (v.kind !== 'completed') {
+	} else if (v.kind === 'completed') {
+		list = list.filter(task => !task.wont_do)
+	} else if (v.kind === 'wontdo') {
+		list = list.filter(task => task.wont_do)
+	} else {
 		list = list.filter(matches)
 	}
 	return list.sort((a, b) => (parseDate(b.done_at)?.getTime() ?? 0) - (parseDate(a.done_at)?.getTime() ?? 0))
@@ -216,7 +242,7 @@ const doneTasks = computed(() => {
 const sections = computed<Section[]>(() => {
 	const v = view.value
 	const now = new Date()
-	if (v.kind === 'completed') {
+	if (CLOSED.has(v.kind)) {
 		const groups = new Map<string, Section>()
 		for (const task of doneTasks.value) {
 			const d = parseDate(task.done_at) ?? new Date(0)
@@ -247,10 +273,35 @@ const sections = computed<Section[]>(() => {
 		}
 		return out.filter(s => s.tasks.length || (v.kind === 'today' && s.key === 'today'))
 	}
+	// Like TickTick, All and Assigned to Me sorted by date fall into date sections.
+	if ((v.kind === 'all' || v.kind === 'assigned') && sortKey.value === 'date') return dateSections(openTasks.value, now)
 	return [{key: 'all', title: '', tasks: openTasks.value}]
 })
 
-const completedSection = computed(() => view.value.kind === 'completed' ? null : doneTasks.value)
+function dateSections(list: Task[], now: Date): Section[] {
+	const buckets: {key: string, title: string, test: (diff: number) => boolean}[] = [
+		{key: 'overdue', title: t('overdue'), test: d => d < 0},
+		{key: 'today', title: t('today'), test: d => d === 0},
+		{key: 'tomorrow', title: t('tomorrow'), test: d => d === 1},
+		{key: 'next7', title: t('next7'), test: d => d > 1 && d < 7},
+		{key: 'later', title: t('later'), test: d => d >= 7},
+	]
+	const out: Section[] = buckets.map(b => ({key: b.key, title: b.title, tasks: []}))
+	const noDate: Section = {key: 'nodate', title: t('noDate'), tasks: []}
+	for (const task of list) {
+		const s = getSchedule(task)
+		if (!s) {
+			noDate.tasks.push(task)
+			continue
+		}
+		// Overdue means past its due time, not just an earlier start.
+		const diff = isOverdue(task, now) ? Math.min(-1, dayDiff(s.date, now)) : Math.max(0, dayDiff(s.date, now))
+		out[buckets.findIndex(b => b.test(diff))].tasks.push(task)
+	}
+	return [...out, noDate].filter(sec => sec.tasks.length)
+}
+
+const completedSection = computed(() => CLOSED.has(view.value.kind) ? null : doneTasks.value)
 
 const completedOpen = computed({
 	get: () => !prefs.collapsed[`done:${listKey.value}`],
@@ -261,10 +312,12 @@ const completedOpen = computed({
 
 watch([view, completedOpen], () => {
 	const v = view.value
-	if (!completedOpen.value && v.kind !== 'completed') return
+	if (!completedOpen.value && !CLOSED.has(v.kind)) return
 	if (v.kind === 'project') data.loadDoneForProject(v.id)
 	else if (v.kind === 'inbox') data.loadDoneForProject(data.inboxId)
-	else if (v.kind === 'completed') data.loadDone(4)
+	else if (v.kind === 'completed') data.loadClosed('completed')
+	else if (v.kind === 'wontdo') data.loadClosed('wontDo')
+	else if (v.kind === 'all' || v.kind === 'assigned') data.loadDone()
 }, {immediate: true})
 
 const isEmpty = computed(() => openTasks.value.length === 0)
@@ -273,12 +326,13 @@ const isEmpty = computed(() => openTasks.value.length === 0)
 const quickDefaults = computed<TaskPatch & {project_id?: number}>(() => {
 	const v = view.value
 	if (v.kind === 'today' || v.kind === 'week') return {...schedulePatch(startOfDay(new Date()), true)}
+	if (v.kind === 'tomorrow') return {...schedulePatch(addDays(startOfDay(new Date()), 1), true)}
 	if (v.kind === 'project') return {project_id: v.id}
 	if (v.kind === 'inbox') return {project_id: data.inboxId}
 	return {}
 })
 const quickLabels = computed(() => label.value ? [label.value.title] : [])
-const placeholder = computed(() => view.value.kind === 'completed' ? '' : t('addTaskTo', {list: header.value.name}))
+const placeholder = computed(() => READ_ONLY.has(view.value.kind) ? '' : t('addTaskTo', {list: header.value.name}))
 
 // ---- selection ----
 // The inline detail pane is hidden on narrow windows; use the drawer there.
@@ -300,6 +354,8 @@ watch(selectedId, id => {
 }, {immediate: true})
 
 function onCreated(id: number) {
+	// Tasks added in Assigned to Me are assigned to you.
+	if (view.value.kind === 'assigned' && data.user) data.assign(id, data.user)
 	if (selectedId.value) select(id)
 }
 
@@ -468,8 +524,8 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<component :is="shared ? Users : UserPlus" :size="18" />
 				</button>
 				<div class="spacer" />
-				<button v-if="layout === 'list' && view.kind !== 'archived' && view.kind !== 'trash'" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
-				<button v-if="view.kind !== 'archived' && view.kind !== 'trash'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
+				<button v-if="layout === 'list' && (!READ_ONLY.has(view.kind) || view.kind === 'filter')" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
+				<button v-if="view.kind !== 'archived' && view.kind !== 'trash' && view.kind !== 'summary'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
 			</header>
 
 			<KanbanBoard
@@ -490,7 +546,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			/>
 			<div v-else class="content">
 				<QuickAdd
-					v-if="view.kind !== 'completed' && view.kind !== 'filter' && view.kind !== 'archived' && view.kind !== 'trash' && !archived"
+					v-if="!READ_ONLY.has(view.kind) && !archived"
 					:key="listKey"
 					class="qa"
 					:placeholder="placeholder"
@@ -504,6 +560,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<button class="btn" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
 				</div>
 				<TrashList v-if="view.kind === 'trash'" />
+				<SummaryView v-else-if="view.kind === 'summary'" @select="select" />
 				<div v-else-if="view.kind === 'archived'" class="archived-lists">
 					<div v-for="p in data.archivedProjects" :key="p.id" class="archived-row" @click="router.push(`/tasks/p${p.id}`)">
 						<span v-if="splitEmoji(p.title).emoji">{{ splitEmoji(p.title).emoji }}</span>
@@ -540,7 +597,13 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 						</template>
 					</template>
 
-					<div v-if="isEmpty && view.kind !== 'completed' && !archived && !(completedSection?.length)" class="empty-state">
+					<div v-if="view.kind === 'wontdo' && !doneTasks.length" class="empty-state">
+						<div class="sub">{{ t('noWontDoTasks') }}</div>
+					</div>
+					<div v-else-if="view.kind === 'assigned' && isEmpty && !(completedSection?.length)" class="empty-state">
+						<div class="sub">{{ t('noAssignedTasks') }}</div>
+					</div>
+					<div v-else-if="isEmpty && !CLOSED.has(view.kind) && !archived && !(completedSection?.length)" class="empty-state">
 						<svg width="150" height="120" viewBox="0 0 150 120" fill="none">
 							<path d="M30 70c-6-26 18-48 44-46 30 2 50 18 48 42-2 26-30 40-58 36-18-3-30-14-34-32z" fill="var(--bg-hover)" />
 							<path d="M58 66l12 12 26-28" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />

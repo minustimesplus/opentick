@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue'
+import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Archive, ChevronDown, ChevronRight, Filter, Inbox, Menu, Plus, SquareCheckBig, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
+import {Archive, ChevronDown, ChevronRight, Filter, Menu, Plus, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
 import DayIcon from './DayIcon.vue'
 import Popover from './Popover.vue'
 import ListEditDialog from './ListEditDialog.vue'
@@ -12,6 +12,8 @@ import {useData} from '@/stores/data'
 import {hasColor, labelColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
+import type {SmartListDef} from '@/lib/smartLists'
+import {useSmartLists} from '@/lib/useSmartLists'
 import {addDays, fmtWeekdayShort, getSchedule, minutesOfDay, moveSchedule, schedulePatch, startOfDay, withMinutes} from '@/lib/dates'
 
 const data = useData()
@@ -19,6 +21,21 @@ const route = useRoute()
 const router = useRouter()
 
 const current = computed(() => String(route.params.list ?? 'today'))
+const smart = useSmartLists()
+
+// Completed, Won't Do and Trash only know whether they are empty by asking the server.
+onMounted(smart.probe)
+watch(() => data.loading, loading => {
+	if (!loading) smart.probe()
+})
+watch(() => [prefs.smartLists.completed, prefs.smartLists.wontDo, prefs.smartLists.trash], smart.probe)
+
+/** Smart lists that tasks can be dropped onto. */
+const droppable = new Set(['today', 'tomorrow', 'week', 'inbox', 'assigned'])
+
+function smartCount(def: SmartListDef) {
+	return smart.count(def.key) || ''
+}
 const todayNum = new Date().getDate()
 // Two-letter weekday ("We"), like TickTick's Next 7 Days icon.
 const weekdayAbbr = computed(() => fmtWeekdayShort(new Date()).slice(0, 2))
@@ -85,7 +102,9 @@ function onDrop(e: DragEvent, key: string) {
 		data.updateTask(id, {project_id: Number(key.slice(1))})
 	} else if (key === 'inbox') {
 		data.updateTask(id, {project_id: data.inboxId})
-	} else if (key === 'today' || key === 'week') {
+	} else if (key === 'assigned') {
+		if (data.user) data.assign(id, data.user)
+	} else if (key === 'today' || key === 'tomorrow' || key === 'week') {
 		const day = key === 'today' ? startOfDay(new Date()) : addDays(startOfDay(new Date()), 1)
 		const s = getSchedule(task)
 		data.updateTask(id, s && !s.allDay ? moveSchedule(s, withMinutes(day, minutesOfDay(s.start)), false) : schedulePatch(day, true))
@@ -223,20 +242,19 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 <template>
 	<aside class="sidebar">
 		<div class="scroll">
-			<button class="item" :class="{active: current === 'today', drop: dropKey === 'today'}" v-bind="dropProps('today')" @click="go('today')">
-				<DayIcon :label="todayNum" :size="17" class="ic smart" />
-				<span class="name">{{ t('today') }}</span>
-				<span class="count">{{ data.counts.today || '' }}</span>
-			</button>
-			<button class="item" :class="{active: current === 'week', drop: dropKey === 'week'}" v-bind="dropProps('week')" @click="go('week')">
-				<DayIcon :label="weekdayAbbr" :size="17" class="ic smart" />
-				<span class="name">{{ t('next7') }}</span>
-				<span class="count">{{ data.counts.week || '' }}</span>
-			</button>
-			<button class="item" :class="{active: current === 'inbox', drop: dropKey === 'inbox'}" v-bind="dropProps('inbox')" @click="go('inbox')">
-				<Inbox :size="17" :stroke-width="1.8" class="ic smart" />
-				<span class="name">{{ t('inbox') }}</span>
-				<span class="count">{{ data.counts.byProject.get(data.inboxId) || '' }}</span>
+			<button
+				v-for="def in smart.shown.value.views"
+				:key="def.key"
+				class="item"
+				:class="{active: current === def.route, drop: dropKey === def.route}"
+				v-bind="droppable.has(def.route!) ? dropProps(def.route!) : {}"
+				@click="go(def.route!)"
+			>
+				<DayIcon v-if="def.key === 'today'" :label="todayNum" :size="17" class="ic smart" />
+				<DayIcon v-else-if="def.key === 'next7'" :label="weekdayAbbr" :size="17" class="ic smart" />
+				<component :is="def.icon" v-else :size="17" :stroke-width="1.8" class="ic smart" />
+				<span class="name">{{ t(def.label) }}</span>
+				<span class="count">{{ smartCount(def) }}</span>
 			</button>
 
 			<div class="sep" />
@@ -286,6 +304,7 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 				</template>
 			</template>
 
+			<template v-if="smart.shown.value.filters">
 			<div class="section-head" @click="toggle('filters')">
 				<span>{{ t('filters') }}</span>
 				<button class="add" :title="t('addFilter')" @click.stop="editingFilter = null"><Plus :size="15" /></button>
@@ -305,7 +324,9 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 				</button>
 				<div v-if="!data.savedFilters.length" class="hint">{{ t('filtersHint') }}</div>
 			</template>
+			</template>
 
+			<template v-if="smart.shown.value.tags">
 			<div class="section-head" @click="toggle('tags')">
 				<span>{{ t('tags') }}</span>
 				<component :is="prefs.collapsed.tags ? ChevronRight : ChevronDown" :size="14" class="chev" />
@@ -324,18 +345,21 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 					<span class="count">{{ data.counts.byLabel.get(l.id) || '' }}</span>
 				</button>
 			</template>
+			</template>
 		</div>
 
-		<div class="bottom">
-			<button class="item" :class="{active: current === 'completed'}" @click="go('completed')">
-				<SquareCheckBig :size="17" class="ic" />
-				<span class="name">{{ t('completed') }}</span>
-			</button>
+		<div v-if="smart.shown.value.closed.length || data.archivedProjects.length" class="bottom">
+			<template v-for="def in smart.shown.value.closed" :key="def.key">
+				<button v-if="def.key !== 'trash'" class="item" :class="{active: current === def.route}" @click="go(def.route!)">
+					<component :is="def.icon" :size="17" class="ic" />
+					<span class="name">{{ t(def.label) }}</span>
+				</button>
+			</template>
 			<button v-if="data.archivedProjects.length" class="item" :class="{active: current === 'archived'}" @click="go('archived')">
 				<Archive :size="17" class="ic" />
 				<span class="name">{{ t('archivedLists') }}</span>
 			</button>
-			<button class="item" :class="{active: current === 'trash'}" @click="go('trash')">
+			<button v-if="smart.visible('trash')" class="item" :class="{active: current === 'trash'}" @click="go('trash')">
 				<Trash2 :size="17" class="ic" />
 				<span class="name">{{ t('trash') }}</span>
 			</button>

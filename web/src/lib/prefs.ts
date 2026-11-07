@@ -2,6 +2,7 @@ import {reactive, watch} from 'vue'
 import type {ThemeColor} from './theme'
 import type {TimelineScale} from './timeline'
 import {isMobile} from './viewport'
+import {smartListDefaults, type SmartListKey, type Visibility} from './smartLists'
 
 /** Optional features from Settings > Features. Turning one off only hides it; its data stays. */
 export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'ai'
@@ -57,6 +58,8 @@ export interface Prefs {
 	focusAutoStartBreak: boolean
 	focusAutoStartPomo: boolean
 	features: Record<Feature, boolean>
+	/** Settings > Smart List: whether each smart list shows in the sidebar. */
+	smartLists: Record<SmartListKey, Visibility>
 }
 
 const KEY = 'tt.prefs'
@@ -98,6 +101,7 @@ const defaults: Prefs = {
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
 	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, ai: true},
+	smartLists: {...smartListDefaults},
 }
 
 // Before color series, `theme` was 'dark' | 'light' | 'system'.
@@ -117,13 +121,18 @@ function load(): Prefs {
 		const raw = localStorage.getItem(KEY)
 		if (raw) {
 			const stored = JSON.parse(raw)
-			// Features added later default to on for existing users.
-			return migrate({...defaults, ...stored, features: {...defaults.features, ...stored.features}})
+			// Features and smart lists added later get their defaults for existing users.
+			return migrate({
+				...defaults,
+				...stored,
+				features: {...defaults.features, ...stored.features},
+				smartLists: {...defaults.smartLists, ...stored.smartLists},
+			})
 		}
 	} catch {
 		// storage unavailable or corrupt
 	}
-	return {...defaults, features: {...defaults.features}}
+	return {...defaults, features: {...defaults.features}, smartLists: {...defaults.smartLists}}
 }
 
 export const prefs = reactive<Prefs>(load())
