@@ -433,7 +433,7 @@ const today0 = computed(() => startOfDay(now.value))
 	<div class="tg" :class="{dragging}">
 		<div class="tg-head" :style="gridCols">
 			<div class="g-head">
-				<div v-if="prefs.showWeekNumbers && days.length" class="wk">{{ t('weekShort') }}{{ weekNumber(days[0]) }}</div>
+				<div class="wk"><template v-if="prefs.showWeekNumbers && days.length">{{ t('weekShort') }}{{ weekNumber(days[0]) }}</template></div>
 			</div>
 			<div
 				v-for="(col, i) in columns"
@@ -595,7 +595,7 @@ const today0 = computed(() => startOfDay(now.value))
 }
 
 .col-head {
-	padding: 0 6px 6px;
+	padding: 0 6px 3px;
 	border-left: 1px solid var(--grid-line);
 	min-width: 0;
 	cursor: default;
@@ -606,15 +606,23 @@ const today0 = computed(() => startOfDay(now.value))
 	background: var(--accent-soft);
 }
 
-.wd {
-	text-align: center;
-	font-size: 13px;
+.wd,
+.wk {
+	height: 26px;
+	line-height: 26px;
+	font-size: 12px;
 	color: var(--text-3);
-	padding: 8px 0 14px;
+	border-bottom: 1px solid var(--grid-line);
+}
+
+/* The divider under the weekday runs edge to edge across the column. */
+.wd {
+	margin: 0 -6px;
+	text-align: center;
 }
 
 .dn {
-	height: 30px;
+	height: 32px;
 	display: flex;
 	align-items: center;
 	padding-left: 4px;
@@ -642,10 +650,8 @@ const today0 = computed(() => startOfDay(now.value))
 }
 
 .wk {
-	padding: 8px 10px 14px 0;
+	padding-right: 10px;
 	text-align: right;
-	font-size: 12px;
-	color: var(--text-3);
 }
 
 .dn span.today {
@@ -915,12 +921,11 @@ const today0 = computed(() => startOfDay(now.value))
 	}
 
 	.col-head {
-		padding: 0 2px 4px;
+		padding: 0 2px 3px;
 	}
 
 	.wd {
-		padding: 6px 0 8px;
-		font-size: 12px;
+		margin: 0 -2px;
 	}
 
 	.dn {

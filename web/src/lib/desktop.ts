@@ -1,5 +1,10 @@
 import {ref} from 'vue'
 
+export type DesktopUpdateCheck =
+	| {status: 'latest' | 'downloading' | 'ready', version: string}
+	| {status: 'unsupported'}
+	| {status: 'error', message: string}
+
 // Bridge exposed by the Electron preload script (web-desktop/preload.js).
 // Undefined when the app runs in a regular browser.
 interface DesktopBridge {
@@ -7,6 +12,8 @@ interface DesktopBridge {
 	setServerUrl(url: string): Promise<string>
 	onUpdateReady(callback: (version: string) => void): void
 	installUpdate(): Promise<void>
+	/** Manual update check (Settings → About). Missing in older builds. */
+	checkForUpdates?(): Promise<DesktopUpdateCheck>
 	/**
 	 * Recolors the window background to the frame color (#rrggbb). Builds before
 	 * color series only understand 'dark' and 'light' and ignore anything else.

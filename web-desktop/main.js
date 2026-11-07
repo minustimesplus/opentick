@@ -18,7 +18,7 @@ const PREFERRED_PORT = 45780
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000
 // Idle time (no bytes either way) before a proxied API request is given up.
 const UPSTREAM_TIMEOUT = 15 * 1000
-const REPO = {owner: 'minustimesplus', repo: 'vikunja-ticktick'}
+const REPO = {owner: 'minustimesplus', repo: 'opentick'}
 
 const MIME_TYPES = {
 	'.html': 'text/html; charset=utf-8',
@@ -278,6 +278,22 @@ ipcMain.on('window:toggle-maximize', () => {
 	else mainWindow.maximize()
 })
 ipcMain.on('window:close', () => mainWindow?.close())
+
+// Manual check from Settings → About. An available update downloads in the
+// background (autoDownload) and announces itself via 'update:ready'.
+ipcMain.handle('update:check', async () => {
+	if (!app.isPackaged) return {status: 'unsupported'}
+	if (downloadedVersion) return {status: 'ready', version: downloadedVersion}
+	try {
+		const result = await autoUpdater.checkForUpdates()
+		if (!result) return {status: 'unsupported'}
+		return result.isUpdateAvailable
+			? {status: 'downloading', version: result.updateInfo.version}
+			: {status: 'latest', version: app.getVersion()}
+	} catch (err) {
+		return {status: 'error', message: err.message}
+	}
+})
 
 ipcMain.handle('update:install', () => {
 	if (!downloadedVersion) return
