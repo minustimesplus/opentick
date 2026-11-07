@@ -3,6 +3,7 @@ import {computed, onBeforeUnmount, onMounted, watch, watchEffect} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import NavRail from './components/NavRail.vue'
 import LoginView from './views/LoginView.vue'
+import OAuthConsentView from './views/OAuthConsentView.vue'
 import TaskDrawer from './components/TaskDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import WindowControls from './components/WindowControls.vue'
@@ -27,6 +28,7 @@ watchEffect(() => {
 })
 
 const showApp = computed(() => data.authed)
+const showConsent = computed(() => data.authed && route.name === 'oauth-authorize')
 
 watch(() => data.authed, authed => {
 	if (authed) loadBackground()
@@ -53,7 +55,7 @@ function onKey(e: KeyboardEvent) {
 	const target = e.target as HTMLElement
 	if (target.closest('input, textarea, [contenteditable="true"]')) return
 	if (e.metaKey || e.ctrlKey || e.altKey) return
-	if (ui.settings) return
+	if (ui.settings || showConsent.value) return
 	if (e.key === '/' ) {
 		e.preventDefault()
 		router.push('/search')
@@ -91,7 +93,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<div v-if="showApp" class="shell">
+	<OAuthConsentView v-if="showConsent" />
+	<div v-else-if="showApp" class="shell">
 		<NavRail />
 		<main class="main" :class="{'has-bg': showBackground}">
 			<div

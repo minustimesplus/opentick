@@ -24,6 +24,7 @@ import (
 	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/models"
 	"code.vikunja.io/api/pkg/modules/auth"
+	"code.vikunja.io/api/pkg/modules/auth/oauth2server"
 	"code.vikunja.io/api/pkg/modules/humabridge"
 	"code.vikunja.io/api/pkg/modules/mcp"
 	"code.vikunja.io/api/pkg/web"
@@ -56,6 +57,12 @@ func SetupTokenMiddleware() echo.MiddlewareFunc {
 		},
 		ErrorHandler: func(c *echo.Context, err error) error {
 			if err != nil {
+				// Point MCP clients at OAuth discovery so they can sign in instead of failing.
+				if c.Request().URL.Path == oauth2server.MCPPath {
+					if challenge := oauth2server.WWWAuthenticateChallenge(); challenge != "" {
+						c.Response().Header().Set("WWW-Authenticate", challenge)
+					}
+				}
 				return c.JSON(http.StatusUnauthorized, web.HTTPError{
 					HTTPCode: http.StatusUnauthorized,
 					Code:     ErrCodeInvalidToken,

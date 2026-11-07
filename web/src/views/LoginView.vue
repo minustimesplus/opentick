@@ -7,6 +7,7 @@ import {t} from '@/lib/i18n'
 import {ApiError} from '@/api/client'
 import {desktop} from '@/lib/desktop'
 import {type AuthInfo, getAuthInfo, loadClerk, SSO_CALLBACK_PATH} from '@/lib/clerk'
+import {takeOAuthReturn} from '@/lib/oauthReturn'
 
 type Mode = 'signin' | 'signup' | 'reset'
 // form: email + password. code: a one-time code from email or SMS.
@@ -139,7 +140,7 @@ async function exchange() {
 		}
 		throw e
 	}
-	if (route.path === SSO_CALLBACK_PATH) router.replace('/')
+	if (route.path === SSO_CALLBACK_PATH) router.replace(takeOAuthReturn() ?? '/')
 }
 
 async function finishSignIn() {

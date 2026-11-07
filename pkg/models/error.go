@@ -2810,6 +2810,58 @@ func (err *ErrOAuthInvalidGrantType) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrOAuthGrantInvalid represents an error where an OAuth grant's refresh token is unknown, expired, or revoked.
+type ErrOAuthGrantInvalid struct{}
+
+// IsErrOAuthGrantInvalid checks if an error is ErrOAuthGrantInvalid.
+func IsErrOAuthGrantInvalid(err error) bool {
+	_, ok := err.(*ErrOAuthGrantInvalid)
+	return ok
+}
+
+func (err *ErrOAuthGrantInvalid) Error() string {
+	return "OAuth grant invalid"
+}
+
+// ErrCodeOAuthGrantInvalid holds the unique world-error code of this error
+const ErrCodeOAuthGrantInvalid = 17008
+
+// HTTPError holds the http error description
+func (err *ErrOAuthGrantInvalid) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeOAuthGrantInvalid,
+		Message:  "The refresh token is invalid, expired, or its access was revoked.",
+	}
+}
+
+// ErrOAuthInvalidClientMetadata represents an error where a dynamic client registration request is invalid.
+type ErrOAuthInvalidClientMetadata struct {
+	Reason string
+}
+
+// IsErrOAuthInvalidClientMetadata checks if an error is ErrOAuthInvalidClientMetadata.
+func IsErrOAuthInvalidClientMetadata(err error) bool {
+	_, ok := err.(*ErrOAuthInvalidClientMetadata)
+	return ok
+}
+
+func (err *ErrOAuthInvalidClientMetadata) Error() string {
+	return "Invalid client metadata: " + err.Reason
+}
+
+// ErrCodeOAuthInvalidClientMetadata holds the unique world-error code of this error
+const ErrCodeOAuthInvalidClientMetadata = 17009
+
+// HTTPError holds the http error description
+func (err *ErrOAuthInvalidClientMetadata) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeOAuthInvalidClientMetadata,
+		Message:  "Invalid client metadata: " + err.Reason,
+	}
+}
+
 // ====================
 // Time Tracking Errors
 // ====================

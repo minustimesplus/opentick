@@ -134,6 +134,7 @@ async function copy(value: string) {
 				</span>
 			</div>
 		</div>
+		<p class="intro">{{ t('mcpClaudeConnectorHint') }}</p>
 
 		<template v-if="newToken">
 			<p class="intro success">{{ t('mcpTokenReady') }}</p>

@@ -261,6 +261,7 @@ func CollectRoutesForAPITokenUsage(route echo.RouteInfo, requiresJWT bool) {
 		routeGroupName == "tokens" ||
 		routeGroupName == "*" ||
 		routeGroupName == "oauth_authorize" ||
+		routeGroupName == "oauth_clients" || // OAuth client lookups serve the consent page, which needs a user session.
 		routeGroupName == "mcp" ||
 		strings.HasPrefix(routeGroupName, "mcp_") ||
 		strings.HasPrefix(routeGroupName, "user_") {

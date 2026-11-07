@@ -2,9 +2,10 @@ import {createRouter, createWebHistory} from 'vue-router'
 import {openSettings} from './lib/ui'
 import {getToken} from './api/client'
 import {routeAllowed} from './lib/features'
+import {OAUTH_AUTHORIZE_PATH, takeOAuthReturn} from './lib/oauthReturn'
 
 export const router = createRouter({
-	history: createWebHistory(),
+	history: createWebHistory(import.meta.env.BASE_URL),
 	routes: [
 		{path: '/', redirect: '/tasks/today'},
 		{path: '/tasks', redirect: '/tasks/today'},
@@ -17,7 +18,9 @@ export const router = createRouter({
 		{path: '/countdowns', name: 'countdowns', component: () => import('./views/CountdownsView.vue')},
 		{path: '/search', name: 'search', component: () => import('./views/SearchView.vue')},
 		// OAuth providers return here; the login screen finishes the sign in.
-		{path: '/sso-callback', component: {render: () => null}, beforeEnter: () => getToken() ? '/tasks/today' : true},
+		{path: '/sso-callback', component: {render: () => null}, beforeEnter: () => getToken() ? (takeOAuthReturn() ?? '/tasks/today') : true},
+		// OAuth consent for MCP clients; App renders OAuthConsentView instead of the shell.
+		{path: OAUTH_AUTHORIZE_PATH, name: 'oauth-authorize', component: {render: () => null}},
 		{path: '/settings', redirect: () => {
 			openSettings()
 			return '/tasks/today'

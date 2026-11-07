@@ -50,6 +50,10 @@ type TokenRequest struct {
 	RedirectURI  string `json:"redirect_uri" form:"redirect_uri"`
 	CodeVerifier string `json:"code_verifier" form:"code_verifier"`
 	RefreshToken string `json:"refresh_token" form:"refresh_token"`
+	// Resource is the RFC 8707 resource indicator; accepted and ignored since the MCP endpoint is the only resource.
+	Resource string `json:"resource,omitempty" form:"resource"`
+	// Clients registered via DCR may send other RFC 6749 parameters (scope, client_secret); they are ignored.
+	_ struct{} `additionalProperties:"true"`
 }
 
 // HandleToken handles POST /oauth/token.
@@ -138,6 +142,10 @@ func exchangeAuthorizationCode(ctx context.Context, req *TokenRequest, deviceInf
 		return nil, &models.ErrOAuthPKCEVerifyFailed{}
 	}
 
+	if oauthCode.Permissions != nil {
+		return issueGrant(oauthCode)
+	}
+
 	s := db.NewSession()
 	defer s.Close()
 
@@ -180,6 +188,10 @@ func exchangeAuthorizationCode(ctx context.Context, req *TokenRequest, deviceInf
 }
 
 func exchangeRefreshToken(req *TokenRequest) (*TokenResponse, error) {
+	if resp, found, err := refreshGrant(req.RefreshToken, req.ClientID); found || err != nil {
+		return resp, err
+	}
+
 	result, err := auth.RefreshSession(req.RefreshToken)
 	if err != nil {
 		return nil, err
@@ -191,4 +203,71 @@ func exchangeRefreshToken(req *TokenRequest) (*TokenResponse, error) {
 		ExpiresIn:    result.ExpiresIn,
 		RefreshToken: result.NewRefreshToken,
 	}, nil
+}
+
+// issueGrant mints the API token and refresh token for an authorization code
+// issued to a dynamically registered client.
+func issueGrant(oauthCode *models.OAuthCode) (*TokenResponse, error) {
+	s := db.NewSession()
+	defer s.Close()
+
+	client, err := models.GetOAuthClient(s, oauthCode.ClientID)
+	if err != nil {
+		_ = s.Rollback()
+		return nil, err
+	}
+	u, err := user.GetUserByID(s, oauthCode.UserID)
+	if err != nil {
+		_ = s.Rollback()
+		return nil, err
+	}
+	tokens, err := models.CreateOAuthGrant(s, u, client, oauthCode.Permissions)
+	if err != nil {
+		_ = s.Rollback()
+		return nil, err
+	}
+	if err := s.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &TokenResponse{
+		AccessToken:  tokens.AccessToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    tokens.ExpiresIn,
+		RefreshToken: tokens.RefreshToken,
+	}, nil
+}
+
+// refreshGrant rotates an OAuth grant's tokens. found is false when the
+// refresh token belongs to no grant, i.e. it is a session refresh token.
+func refreshGrant(refreshToken, clientID string) (resp *TokenResponse, found bool, err error) {
+	s := db.NewSession()
+	defer s.Close()
+
+	tokens, found, err := models.RefreshOAuthGrant(s, refreshToken, clientID)
+	if !found {
+		_ = s.Rollback()
+		return nil, false, err
+	}
+	if err != nil {
+		if models.IsErrOAuthGrantInvalid(err) {
+			// Keep the deletion of an expired or revoked grant.
+			if commitErr := s.Commit(); commitErr != nil {
+				log.Errorf("Could not commit OAuth grant deletion: %s", commitErr)
+			}
+		} else {
+			_ = s.Rollback()
+		}
+		return nil, true, err
+	}
+	if err := s.Commit(); err != nil {
+		return nil, true, err
+	}
+
+	return &TokenResponse{
+		AccessToken:  tokens.AccessToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    tokens.ExpiresIn,
+		RefreshToken: tokens.RefreshToken,
+	}, true, nil
 }

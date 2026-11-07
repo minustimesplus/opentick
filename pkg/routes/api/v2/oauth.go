@@ -18,13 +18,16 @@ package apiv2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
+	"code.vikunja.io/api/pkg/models"
 	"code.vikunja.io/api/pkg/modules/auth/oauth2server"
 	"code.vikunja.io/api/pkg/modules/humabridge"
 	"code.vikunja.io/api/pkg/user"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v5"
 )
 
 // oauthTokenBody wraps the OAuth 2.0 token response.
@@ -69,6 +72,80 @@ func RegisterOAuthRoutes(api huma.API) {
 		DefaultStatus: http.StatusOK,
 		Tags:          tags,
 	}, oauthAuthorize)
+
+	Register(api, huma.Operation{
+		OperationID: "oauth-register",
+		Summary:     "OAuth 2.0 dynamic client registration",
+		Description: "Registers a public OAuth client (RFC 7591), e.g. an MCP client such as Claude. Only the authorization code flow with PKCE and token_endpoint_auth_method none are supported. Redirect URIs must be https or loopback http. Tokens issued to registered clients are API tokens limited to the permissions the user approves.",
+		Method:      http.MethodPost,
+		Path:        "/oauth/register",
+		Tags:        tags,
+		Security:    publicSecurity,
+	}, oauthRegister)
+
+	Register(api, huma.Operation{
+		OperationID: "oauth-client-read",
+		Summary:     "Get a registered OAuth client",
+		Description: "Returns the public metadata of a dynamically registered client so the consent screen can show who is asking for access. Requires a user session; API tokens are rejected.",
+		Method:      http.MethodGet,
+		Path:        "/oauth/clients/{client_id}",
+		Tags:        tags,
+	}, oauthClientInfo)
+}
+
+// oauthRegisterBody wraps the RFC 7591 client information response.
+type oauthRegisterBody struct {
+	CacheControl string `header:"Cache-Control"`
+	Body         *oauth2server.RegisterResponse
+}
+
+// oauthErrorModel adds the RFC 6749 §5.2 error fields OAuth clients parse to
+// the regular problem+json body, so first-party clients keep reading `code`.
+type oauthErrorModel struct {
+	*vikunjaErrorModel
+	OAuthError       string `json:"error"`
+	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+// oauthError translates err like translateDomainError and adds the OAuth
+// error code that classify picks for the domain error code and status.
+func oauthError(err error, classify func(code, status int) string) error {
+	var echoErr *echo.HTTPError
+	if errors.As(err, &echoErr) {
+		err = huma.NewError(echoErr.Code, echoErr.Message)
+	}
+	err = translateDomainError(err)
+	vm := &vikunjaErrorModel{}
+	ok := errors.As(err, &vm)
+	if !ok {
+		return err
+	}
+	return &oauthErrorModel{vikunjaErrorModel: vm, OAuthError: classify(vm.Code, vm.Status), ErrorDescription: vm.Detail}
+}
+
+func classifyTokenError(code, status int) string {
+	switch {
+	case status >= 500:
+		return "server_error"
+	case code == models.ErrCodeOAuthInvalidGrantType:
+		return "unsupported_grant_type"
+	case status == http.StatusUnprocessableEntity:
+		return "invalid_request"
+	default:
+		// Unknown, used, or expired codes and refresh tokens, PKCE and redirect mismatches.
+		return "invalid_grant"
+	}
+}
+
+func classifyRegisterError(code, status int) string {
+	switch {
+	case status >= 500:
+		return "server_error"
+	case code == models.ErrCodeOAuthInvalidRedirectURI:
+		return "invalid_redirect_uri"
+	default:
+		return "invalid_client_metadata"
+	}
 }
 
 func oauthToken(ctx context.Context, in *struct {
@@ -77,7 +154,7 @@ func oauthToken(ctx context.Context, in *struct {
 	deviceInfo, ipAddress := requestClientInfo(ctx)
 	resp, err := oauth2server.ExchangeToken(ctx, &in.Body, deviceInfo, ipAddress)
 	if err != nil {
-		return nil, translateDomainError(err)
+		return nil, oauthError(err, classifyTokenError)
 	}
 	return &oauthTokenBody{CacheControl: "no-store", Body: resp}, nil
 }
@@ -98,9 +175,37 @@ func oauthAuthorize(ctx context.Context, in *struct{ Body oauth2server.Authorize
 
 	resp, err := oauth2server.Authorize(&in.Body, u.ID)
 	if err != nil {
+		var echoErr *echo.HTTPError
+		if errors.As(err, &echoErr) {
+			return nil, huma.NewError(echoErr.Code, echoErr.Message)
+		}
 		return nil, translateDomainError(err)
 	}
 	return &oauthAuthorizeBody{Body: resp}, nil
+}
+
+func oauthRegister(_ context.Context, in *struct{ Body oauth2server.RegisterRequest }) (*oauthRegisterBody, error) {
+	resp, err := oauth2server.RegisterClient(&in.Body)
+	if err != nil {
+		return nil, oauthError(err, classifyRegisterError)
+	}
+	return &oauthRegisterBody{CacheControl: "no-store", Body: resp}, nil
+}
+
+func oauthClientInfo(ctx context.Context, in *struct {
+	ClientID string `path:"client_id" doc:"A client ID issued by dynamic client registration."`
+}) (*singleBody[oauth2server.ClientInfo], error) {
+	if ec := humabridge.EchoContextFrom(ctx); ec != nil && (*ec).Get("api_token") != nil {
+		return nil, huma.Error403Forbidden("API tokens cannot read OAuth clients")
+	}
+	if _, err := authFromCtx(ctx); err != nil {
+		return nil, err
+	}
+	info, err := oauth2server.GetClientInfo(in.ClientID)
+	if err != nil {
+		return nil, translateDomainError(err)
+	}
+	return &singleBody[oauth2server.ClientInfo]{Body: info}, nil
 }
 
 // requestClientInfo pulls the user agent and client IP off the underlying Echo

@@ -17,6 +17,7 @@
 package mcp
 
 import (
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -64,4 +65,48 @@ func (m *Module) ConnectionInfo() apiv2.ConnectionSettings {
 			Full:     map[string]string{"*": "*"},
 		},
 	}
+}
+
+// PermissionsForPreset expands an access preset (typed, read_only, full) the
+// same way the MCP settings UI does: against the permissions exposed tools can
+// use, with `*` as a group or permission wildcard. The result always includes
+// mcp:access. ok is false for an unknown preset.
+func (m *Module) PermissionsForPreset(preset string) (permissions models.APIPermissions, ok bool) {
+	info := m.ConnectionInfo()
+	var wanted map[string][]string
+	switch preset {
+	case "typed":
+		wanted = info.Presets.Typed
+	case "read_only":
+		wanted = info.Presets.ReadOnly
+	case "full":
+		wanted = map[string][]string{}
+		for group, permission := range info.Presets.Full {
+			wanted[group] = []string{permission}
+		}
+	default:
+		return nil, false
+	}
+
+	out := models.APIPermissions{}
+	for group, perms := range wanted {
+		targets := []string{group}
+		if group == "*" {
+			targets = slices.Collect(maps.Keys(info.Routes))
+		}
+		for _, target := range targets {
+			for available := range info.Routes[target] {
+				if slices.Contains(perms, "*") || slices.Contains(perms, available) {
+					if !slices.Contains(out[target], available) {
+						out[target] = append(out[target], available)
+					}
+				}
+			}
+		}
+	}
+	out["mcp"] = []string{"access"}
+	for _, perms := range out {
+		sort.Strings(perms)
+	}
+	return out, true
 }

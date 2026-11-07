@@ -261,6 +261,12 @@ func RegisterRoutes(e *echo.Echo) {
 
 	e.GET("/.well-known/change-password", ChangePasswordRedirect)
 
+	// OAuth discovery for MCP clients (RFC 9728 + RFC 8414). Registered on e so
+	// they win over the SPA fallback, which would otherwise answer with HTML.
+	e.GET(oauth2server.ProtectedResourceMetadataPath, oauth2server.HandleProtectedResourceMetadata, noAuthRateLimit)
+	e.GET(oauth2server.ProtectedResourceMetadataPath+oauth2server.MCPPath, oauth2server.HandleProtectedResourceMetadata, noAuthRateLimit)
+	e.GET(oauth2server.AuthorizationServerMetadataPath, oauth2server.HandleAuthorizationServerMetadata, noAuthRateLimit)
+
 	// healthcheck
 	e.GET("/health", HealthcheckHandler)
 
@@ -343,6 +349,7 @@ var unauthenticatedAPIPaths = map[string]bool{
 	"/api/v2/user/confirm":                   true,
 	"/api/v2/shares/:share/auth":             true,
 	"/api/v2/oauth/token":                    true,
+	"/api/v2/oauth/register":                 true,
 	"/api/v2/login":                          true,
 	auth.RefreshTokenPathV2:                  true,
 	"/api/v2/auth/openid/:provider/callback": true,
@@ -440,6 +447,7 @@ var v2CredentialPaths = unauthenticatedPathSet(
 	"/api/v2/auth/openid/:provider/callback",
 	"/api/v2/auth/clerk",
 	"/api/v2/shares/:share/auth",
+	"/api/v2/oauth/register",
 )
 
 var v2SessionRenewalPaths = unauthenticatedPathSet(
@@ -500,6 +508,7 @@ func registerAPIRoutesV2(e *echo.Echo, a *echo.Group, noAuthRateLimit, refreshRa
 	}
 	m.Register(a)
 	apiv2.RegisterMCPInfo(api, m.ConnectionInfo)
+	oauth2server.PermissionsForPreset = m.PermissionsForPreset
 }
 
 func registerAPIRoutes(a *echo.Group, noAuthRateLimit, refreshRateLimit echo.MiddlewareFunc) {
