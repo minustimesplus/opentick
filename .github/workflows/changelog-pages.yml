@@ -2,7 +2,8 @@ name: Changelog pages
 
 # Rebuilds the changelog site (changelog/build.mjs) from the desktop-v* tags and
 # publishes it to GitHub Pages. Runs after each desktop release so the new tag is
-# included. Requires Settings → Pages → Source: "GitHub Actions".
+# included. Requires Settings → Pages → Source: "GitHub Actions" (until that was
+# enabled, every run failed in configure-pages with "Get Pages site failed").
 
 on:
   workflow_run:
@@ -26,6 +27,8 @@ permissions:
 
 jobs:
   deploy:
+    # A failed desktop release creates no new tag, so there is nothing to publish.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
