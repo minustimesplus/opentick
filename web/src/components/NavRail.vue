@@ -19,6 +19,7 @@ import type {ProjectInvitation} from '@/api/types'
 import {featureOn} from '@/lib/features'
 import type {Feature} from '@/lib/prefs'
 import {isMobile} from '@/lib/viewport'
+import {lastTasksList} from '@/router'
 
 const data = useData()
 const focus = useFocus()
@@ -31,7 +32,7 @@ const helpEl = ref<HTMLElement | null>(null)
 const menu = ref<'avatar' | 'bell' | 'help' | 'local' | null>(null)
 
 const items = computed(() => [
-	{key: 'tasks', icon: TasksIcon, to: '/tasks/today', active: route.path.startsWith('/tasks'), title: t('lists')},
+	{key: 'tasks', icon: TasksIcon, to: lastTasksList.value, active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', feature: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', feature: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
 	{key: 'habits', feature: 'habit', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
