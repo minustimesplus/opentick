@@ -9,6 +9,8 @@ import {desktop} from '@/lib/desktop'
 import {type AuthInfo, getAuthInfo, loadClerk, SSO_CALLBACK_PATH} from '@/lib/clerk'
 import {takeOAuthReturn} from '@/lib/oauthReturn'
 
+type SignInResource = NonNullable<Clerk['client']>['signIn']
+
 type Mode = 'signin' | 'signup' | 'reset'
 // form: email + password. code: a one-time code from email or SMS.
 // resetCode: code plus new password. totp: this app's own two-factor code.
@@ -143,8 +145,9 @@ async function exchange() {
 	if (route.path === SSO_CALLBACK_PATH) router.replace(takeOAuthReturn() ?? '/')
 }
 
-async function finishSignIn() {
-	const signIn = clerk!.client!.signIn
+// Takes the SignIn an attempt returned: once it completes, Clerk resets
+// client.signIn to an empty one, so reading that would lose the session.
+async function finishSignIn(signIn: SignInResource) {
 	switch (signIn.status) {
 	case 'complete':
 		await clerk!.setActive({session: signIn.createdSessionId})
@@ -179,6 +182,12 @@ async function startSecondFactor() {
 }
 
 async function submitClerk() {
+	// A Clerk session already exists (e.g. an earlier attempt got that far
+	// before failing): just turn it into an app session.
+	if (clerk!.session && step.value !== 'totp') {
+		await exchange()
+		return
+	}
 	if (step.value === 'totp') {
 		await exchange()
 		return
@@ -191,19 +200,17 @@ async function submitClerk() {
 			await clerk!.setActive({session: res.createdSessionId})
 			await exchange()
 		} else {
-			await clerk!.client!.signIn.attemptSecondFactor({strategy: codeFor.value, code: code.value.trim()})
-			await finishSignIn()
+			await finishSignIn(await clerk!.client!.signIn.attemptSecondFactor({strategy: codeFor.value, code: code.value.trim()}))
 		}
 		return
 	}
 
 	if (step.value === 'resetCode') {
-		await clerk!.client!.signIn.attemptFirstFactor({
+		await finishSignIn(await clerk!.client!.signIn.attemptFirstFactor({
 			strategy: 'reset_password_email_code',
 			code: code.value.trim(),
 			password: password.value,
-		})
-		await finishSignIn()
+		}))
 		return
 	}
 
@@ -231,8 +238,7 @@ async function submitClerk() {
 		return
 	}
 
-	await clerk!.client!.signIn.create({identifier: email.value.trim(), password: password.value})
-	await finishSignIn()
+	await finishSignIn(await clerk!.client!.signIn.create({identifier: email.value.trim(), password: password.value}))
 }
 
 async function resend() {
