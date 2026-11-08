@@ -167,16 +167,20 @@ func TestDatabaseNotifications_ReadAll_ProjectPermissions(t *testing.T) {
 func TestNotificationScopeClassification(t *testing.T) {
 	projectScoped := []string{
 		"project.created",
+		"project.invitation.accepted",
+		"project.shared",
 		"task.assigned",
 		"task.comment",
 		"task.created",
 		"task.deleted",
+		"task.done",
 		"task.mentioned",
 		"task.reminder",
 	}
 	accountScoped := []string{
 		"api_token.expiring.day",
 		"api_token.expiring.week",
+		"project.invitation",
 		"team.member.added",
 	}
 

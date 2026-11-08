@@ -57,6 +57,18 @@ func (t *TaskUpdatedEvent) Name() string {
 	return "task.updated"
 }
 
+// TaskCompletedEvent is dispatched when a task is marked done. For a
+// repeating task this is one occurrence; the task itself is undone again.
+type TaskCompletedEvent struct {
+	Task *Task      `json:"task"`
+	Doer *user.User `json:"doer"`
+}
+
+// Name defines the name for TaskCompletedEvent
+func (t *TaskCompletedEvent) Name() string {
+	return "task.completed"
+}
+
 // TaskDeletedEvent represents a TaskDeletedEvent event
 type TaskDeletedEvent struct {
 	Task *Task      `json:"task"`

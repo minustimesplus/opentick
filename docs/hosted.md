@@ -49,6 +49,20 @@ Clerk updates it here on the next sign in.
 
 Heroku sets `PORT` and the server listens on it automatically.
 
+### Email (optional)
+
+Sharing a list by email sends the invitation through the mailer. Without one,
+the share dialog still shows the invitation link once, to send by hand.
+
+| Variable | Value |
+|---|---|
+| `VIKUNJA_MAILER_ENABLED` | `true` |
+| `VIKUNJA_MAILER_HOST` | SMTP host, e.g. `smtp.postmarkapp.com` |
+| `VIKUNJA_MAILER_PORT` | `587` |
+| `VIKUNJA_MAILER_USERNAME` | SMTP user |
+| `VIKUNJA_MAILER_PASSWORD` | SMTP password |
+| `VIKUNJA_MAILER_FROMEMAIL` | The sender address, e.g. `opentick@yourdomain.com` |
+
 Use Neon's direct connection string, not the `-pooler` one.
 
 ## Clerk settings
@@ -64,3 +78,19 @@ Clerk production instances only accept requests from their own domain. The
 desktop app serves the UI from `127.0.0.1`, so it shows a notice instead of
 the sign in form for a hosted server. Clerk development keys (`pk_test_...`)
 work from the desktop app.
+
+## Sharing lists
+
+List admins invite people from a list's share dialog:
+
+- **By username**: the user joins right away, or gets an invitation to accept if
+  they turned off *Settings > Collaborate > Auto accept invites*.
+- **By email**: the address gets a link to `/invite/<token>`, valid for 30 days.
+  Opening it shows who invited them; after signing in or signing up they join.
+  The invitation also appears in the notifications of an account with that
+  (verified) address.
+- **Join link**: a reusable link for anyone with an account, until it is
+  disabled.
+
+The same works on a self-hosted server. The demo and the "use without an
+account" mode keep everything in the browser, so they cannot share lists.

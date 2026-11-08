@@ -95,6 +95,10 @@
                 "subject": "\"%[1]s\" (%[2]s) has been created",
                 "message": "%[1]s created the task \"%[2]s\" (%[3]s)"
             },
+            "done": {
+                "subject": "\"%[1]s\" (%[2]s) has been completed",
+                "message": "%[1]s completed the task \"%[2]s\" (%[3]s)"
+            },
             "mentioned": {
                 "subject_new": "%[1]s mentioned you in a new task \"%[2]s\" (%[3]s)",
                 "subject": "%[1]s mentioned you in a task \"%[2]s\" (%[3]s)"
@@ -112,7 +116,17 @@
             }
         },
         "project": {
-            "created": "%[1]s created the project \"%[2]s\""
+            "created": "%[1]s created the project \"%[2]s\"",
+            "invitation": {
+                "subject": "%[1]s invited you to \"%[2]s\"",
+                "message": "%[1]s invited you to collaborate on the project \"%[2]s\".",
+                "action": "View invitation",
+                "accepted": "%[1]s joined \"%[2]s\""
+            },
+            "shared": {
+                "subject": "%[1]s shared \"%[2]s\" with you",
+                "message": "%[1]s shared the project \"%[2]s\" with you."
+            }
         },
         "team": {
             "member_added": {

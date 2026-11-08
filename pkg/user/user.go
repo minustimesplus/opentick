@@ -114,6 +114,14 @@ type User struct {
 	OverdueTasksRemindersEnabled bool   `xorm:"bool default true index" json:"-"`
 	OverdueTasksRemindersTime    string `xorm:"varchar(5) not null default '09:00'" json:"-"`
 	DefaultProjectID             int64  `xorm:"bigint null index" json:"-"`
+
+	// Collaboration settings. Invitations by username join right away unless
+	// ConfirmProjectInvites is set; the Notify* flags send a notification when
+	// someone else changes a task in a shared project.
+	ConfirmProjectInvites   bool `xorm:"bool not null default false" json:"-"`
+	NotifySharedTaskDone    bool `xorm:"bool not null default false" json:"-"`
+	NotifySharedTaskCreated bool `xorm:"bool not null default false" json:"-"`
+	NotifySharedTaskDeleted bool `xorm:"bool not null default false" json:"-"`
 	// BotOwnerID is the ID of the owning (human) user if this user is a bot.
 	// A non-zero value means this user is a bot and cannot authenticate via password.
 	BotOwnerID int64  `xorm:"bigint null index" json:"bot_owner_id,omitempty" readOnly:"true" doc:"The id of the owning (human) user. Set by the server on creation; a non-zero value means this user is a bot."`
@@ -626,6 +634,10 @@ var baseUserUpdateColumns = [...]string{
 	"timezone",
 	"overdue_tasks_reminders_time",
 	"extra_settings_links",
+	"confirm_project_invites",
+	"notify_shared_task_done",
+	"notify_shared_task_created",
+	"notify_shared_task_deleted",
 }
 
 func premarshalFrontendSettings(settings interface{}) (*string, error) {
