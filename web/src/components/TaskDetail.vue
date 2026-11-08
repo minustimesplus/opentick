@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {Ban, CalendarDays, ChevronLeft, CircleUserRound, Copy, Flag, Inbox, ListTree, Menu, MessageSquare, MoreHorizontal, Paperclip, RotateCcw, Trash2, Unlink, X, Tag} from 'lucide-vue-next'
+import {ArrowUpToLine, CalendarDays, ChevronLeft, CircleUserRound, Copy, FileType, Flag, Inbox, Link, Link2, ListChecks, ListTree, Menu, MessageSquare, MoreHorizontal, NotebookPen, Paperclip, Printer, RotateCcw, SquareX, Trash2, Unlink, Upload, X, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
@@ -17,6 +17,7 @@ import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} 
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
 import {t} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
+import {router} from '@/router'
 
 const props = defineProps<{taskId: number, closable?: boolean}>()
 const emit = defineEmits<{close: [], deleted: [], open: [number]}>()
@@ -179,6 +180,20 @@ async function remove() {
 	toast(t('movedToTrash', {name: tk.title}), {label: t('undo'), run: () => data.restoreTask(tk.id)})
 }
 
+// A link that opens this task in its list, for pasting elsewhere.
+async function copyLink() {
+	pop.value = null
+	const tk = task.value
+	if (!tk) return
+	const url = new URL(router.resolve(`/tasks/p${tk.project_id}/${tk.id}`).href, window.location.origin)
+	try {
+		await navigator.clipboard.writeText(url.href)
+		toast(t('copied'))
+	} catch {
+		toast(url.href)
+	}
+}
+
 async function duplicate() {
 	pop.value = null
 	await data.duplicateTask(props.taskId)
@@ -191,8 +206,7 @@ const meta = computed(() => {
 		const d = parseDate(tk.done_at)
 		return d ? t(tk.wont_do ? 'wontDoOn' : 'completedOn', {date: `${fmtDayMonth(d)} ${fmtTime(d)}`}) : ''
 	}
-	const c = parseDate(tk.created)
-	return c ? `${t('created')} ${fmtDayMonth(c)}` : ''
+	return ''
 })
 </script>
 
@@ -242,7 +256,7 @@ const meta = computed(() => {
 			<MarkdownEditor
 					ref="descEl"
 					v-model="description"
-					:placeholder="t('description')"
+					:placeholder="t('descriptionPlaceholder')"
 					@focus="descFocused = true"
 					@blur="descFocused = false; saveDescription()"
 				/>
@@ -293,14 +307,24 @@ const meta = computed(() => {
 			<div class="menu">
 				<button class="menu-item" @click="addSubtask"><ListTree :size="16" /> {{ t('addSubtask') }}</button>
 				<button v-if="parent" class="menu-item" @click="detach"><Unlink :size="16" /> {{ t('detachSubtask') }}</button>
-				<button class="menu-item" @click="pickFiles"><Paperclip :size="16" /> {{ t('uploadAttachment') }}</button>
-				<div class="menu-sep" />
+				<button v-else class="menu-item" disabled :title="t('comingSoon')"><Link2 :size="16" /> {{ t('linkParentTask') }}</button>
+				<button class="menu-item" disabled :title="t('comingSoon')"><ArrowUpToLine :size="16" /> {{ t('pin') }}</button>
 				<button class="menu-item" @click="data.toggleWontDo(task.id); pop = null">
 					<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
-					<template v-else><Ban :size="16" /> {{ t('wontDo') }}</template>
+					<template v-else><SquareX :size="16" /> {{ t('wontDo') }}</template>
 				</button>
+				<button class="menu-item" @click="pop = 'tag'"><Tag :size="16" /> {{ t('tags') }}</button>
+				<button class="menu-item" @click="pickFiles"><Paperclip :size="16" /> {{ t('uploadAttachment') }}</button>
+				<div class="menu-sep" />
+				<button class="menu-item" disabled :title="t('comingSoon')"><ListChecks :size="16" /> {{ t('taskActivities') }}</button>
+				<button class="menu-item" disabled :title="t('comingSoon')"><FileType :size="16" /> {{ t('saveAsTemplate') }}</button>
 				<button class="menu-item" @click="duplicate"><Copy :size="16" /> {{ t('duplicate') }}</button>
-				<button class="menu-item danger" @click="remove"><Trash2 :size="16" /> {{ t('delete') }}</button>
+				<button class="menu-item" @click="copyLink"><Link :size="16" /> {{ t('copyLink') }}</button>
+				<button class="menu-item" disabled :title="t('comingSoon')"><NotebookPen :size="16" /> {{ t('convertToNote') }}</button>
+				<div class="menu-sep" />
+				<button class="menu-item" disabled :title="t('comingSoon')"><Upload :size="16" /> {{ t('export') }}</button>
+				<button class="menu-item" disabled :title="t('comingSoon')"><Printer :size="16" /> {{ t('print') }}</button>
+				<button class="menu-item" @click="remove"><Trash2 :size="16" /> {{ t('delete') }}</button>
 			</div>
 		</Popover>
 		<Popover v-if="pop === 'tag'" :anchor="tagEl" @close="pop = null">
