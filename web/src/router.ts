@@ -1,8 +1,9 @@
 import {createRouter, createWebHistory} from 'vue-router'
-import {openSettings} from './lib/ui'
+import {openSettings, ui} from './lib/ui'
 import {getToken} from './api/client'
 import {routeAllowed} from './lib/features'
 import {OAUTH_AUTHORIZE_PATH, takeOAuthReturn} from './lib/oauthReturn'
+import {INVITE_PATH, rememberInviteToken} from './lib/inviteLink'
 
 export const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
@@ -21,6 +22,17 @@ export const router = createRouter({
 		{path: '/sso-callback', component: {render: () => null}, beforeEnter: () => getToken() ? (takeOAuthReturn() ?? '/tasks/today') : true},
 		// OAuth consent for MCP clients; App renders OAuthConsentView instead of the shell.
 		{path: OAUTH_AUTHORIZE_PATH, name: 'oauth-authorize', component: {render: () => null}},
+		// Invitation links: App asks whether to join once the user is signed in.
+		{path: INVITE_PATH, redirect: to => {
+			rememberInviteToken(String(to.params.token))
+			ui.inviteLink++
+			return '/tasks/today'
+		}},
+		// Linked from invitation emails to existing users.
+		{path: '/invitations', redirect: () => {
+			ui.invitations++
+			return '/tasks/today'
+		}},
 		{path: '/settings', redirect: () => {
 			openSettings()
 			return '/tasks/today'

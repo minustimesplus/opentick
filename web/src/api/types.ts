@@ -117,6 +117,44 @@ export interface UserSettings {
 	timezone?: string
 	name?: string
 	language?: string
+	/** Invitations by username wait for an answer instead of joining right away. */
+	confirm_project_invites?: boolean
+	notify_shared_task_done?: boolean
+	notify_shared_task_created?: boolean
+	notify_shared_task_deleted?: boolean
+}
+
+export type Permission = 0 | 1 | 2
+
+/**
+ * An invitation to a list. kind user: an existing user by username; email: an
+ * address, joined through the mailed link; link: a join link for anyone.
+ */
+export interface ProjectInvitation {
+	id: number
+	project_id: number
+	kind: 'user' | 'email' | 'link'
+	permission: Permission
+	email?: string
+	uses: number
+	expires_at?: string | null
+	created?: string
+	/** accepted: the user joined right away, nothing is pending. */
+	status: 'pending' | 'accepted'
+	invitee?: User
+	inviter?: User
+	/** Set on invitations the current user received. */
+	project_title?: string
+	/** Join links always; email invitations only in the response that created them. */
+	invite_url?: string
+}
+
+/** What an invitation link leads to, readable without an account. */
+export interface InvitationPreview {
+	project_title: string
+	inviter_name: string
+	permission: Permission
+	kind: 'email' | 'link'
 }
 
 export interface CurrentUser extends User {

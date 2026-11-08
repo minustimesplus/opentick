@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef, watch} from 'vue'
 import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken, type Paginated} from '@/api/client'
-import type {AppNotification, Attachment, CurrentUser, Label, Project, RelationKind, Task, User} from '@/api/types'
+import type {AppNotification, Attachment, CurrentUser, Label, Project, ProjectInvitation, RelationKind, Task, User, UserSettings} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
@@ -50,6 +50,8 @@ export const useData = defineStore('data', () => {
 	const loading = ref(false)
 	const loaded = ref(false)
 	const notifications = ref<AppNotification[]>([])
+	/** Invitations to lists waiting for the user to accept or decline them. */
+	const invitations = ref<ProjectInvitation[]>([])
 	/** Manual task order per project, from the project's list view: project id → task id → position. */
 	const positions = reactive(new Map<number, Map<number, number>>())
 	/** Everyone with access to a list (owner, shares, teams), by project id; loaded on demand. */
@@ -83,6 +85,7 @@ export const useData = defineStore('data', () => {
 		doneQueries.clear()
 		positions.clear()
 		members.clear()
+		invitations.value = []
 		setAvatarUrl(null)
 		avatarLoadedFor = null
 	}
@@ -185,6 +188,7 @@ export const useData = defineStore('data', () => {
 			for (const t of fresh) tasks.set(t.id, t)
 			loaded.value = true
 			loadNotifications()
+			loadInvitations()
 			loadArchived()
 			if (avatarLoadedFor !== u.username) loadAvatar()
 		} finally {
@@ -889,6 +893,50 @@ export const useData = defineStore('data', () => {
 		setAvatarUrl(null)
 	}
 
+	// ---------- collaboration ----------
+
+	async function loadInvitations() {
+		// The in-browser backend has nobody to share with.
+		if (local.value) return
+		try {
+			invitations.value = await api<ProjectInvitation[]>('GET', '/project-invitations')
+		} catch {
+			invitations.value = []
+		}
+	}
+
+	/** Accepts a received invitation and returns the id of the list joined. */
+	async function acceptInvitation(id: number): Promise<number> {
+		const res = await api<{project_id: number}>('POST', `/project-invitations/${id}/accept`)
+		invitations.value = invitations.value.filter(i => i.id !== id)
+		await loadAll()
+		return res.project_id
+	}
+
+	async function declineInvitation(id: number) {
+		await api('DELETE', `/project-invitations/${id}`)
+		invitations.value = invitations.value.filter(i => i.id !== id)
+	}
+
+	/** Joins through an invitation link and returns the id of the list joined. */
+	async function claimInvitation(token: string): Promise<number> {
+		const res = await api<{project_id: number}>('POST', '/project-invitations/claim', {body: {token}})
+		await loadAll()
+		return res.project_id
+	}
+
+	/** Merges collaboration settings into the user's server settings. */
+	async function updateUserSettings(patch: Partial<UserSettings>) {
+		const before = user.value
+		if (before) user.value = {...before, settings: {...before.settings, ...patch}}
+		try {
+			await api('PATCH', '/user/settings/general', {body: patch, contentType: MERGE})
+		} catch (e) {
+			user.value = before
+			toast(String((e as Error).message))
+		}
+	}
+
 	async function markNotificationsRead() {
 		try {
 			await api('POST', '/notifications')
@@ -911,5 +959,6 @@ export const useData = defineStore('data', () => {
 		archivedProjects, loadArchived, setArchived,
 		createProject, updateProject, deleteProject, saveFilter, deleteFilter, markNotificationsRead, loadNotifications,
 		uploadAvatar, removeAvatar,
+		invitations, loadInvitations, acceptInvitation, declineInvitation, claimInvitation, updateUserSettings,
 	}
 })

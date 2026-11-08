@@ -11,6 +11,10 @@ export const ui = reactive({
 	dragTaskId: null as number | null,
 	/** Section shown in the settings dialog, null while it is closed. */
 	settings: null as SettingsSection | null,
+	/** Increments to open the notifications panel on the invitations. */
+	invitations: 0,
+	/** Bumped when an invitation link was opened, so App offers to join. */
+	inviteLink: 0,
 })
 
 /** Where a dragged task lands relative to a task row. */
