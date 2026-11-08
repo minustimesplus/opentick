@@ -1538,6 +1538,9 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		}
 	}
 
+	// Captured before a repeating task resets itself to undone below.
+	completed := !ot.Done && t.Done
+
 	// Only rule-based series can end, and only when their stored rule runs out on this completion.
 	loc := config.GetTimeZone()
 	if ot.RepeatRule != "" && !ot.Done && t.Done {
@@ -1742,6 +1745,12 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		Task: t,
 		Doer: doerFromAuth(s, a),
 	})
+	if completed {
+		events.DispatchOnCommit(s, &TaskCompletedEvent{
+			Task: t,
+			Doer: doerFromAuth(s, a),
+		})
+	}
 
 	return updateProjectLastUpdated(s, &Project{ID: t.ProjectID})
 }

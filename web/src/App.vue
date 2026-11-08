@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, watch, watchEffect} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import NavRail from './components/NavRail.vue'
 import LoginView from './views/LoginView.vue'
@@ -9,6 +9,9 @@ import Toasts from './components/Toasts.vue'
 import WindowControls from './components/WindowControls.vue'
 import TaskContextMenu from './components/TaskContextMenu.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
+import InviteDialog from './components/collab/InviteDialog.vue'
+import InviteBanner from './components/collab/InviteBanner.vue'
+import {pendingInviteToken} from './lib/inviteLink'
 import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
@@ -28,6 +31,12 @@ watchEffect(() => {
 })
 
 const showApp = computed(() => data.authed)
+
+// An opened invitation link waits here until the user is signed in.
+const inviteToken = ref(pendingInviteToken())
+watch(() => ui.inviteLink, () => {
+	inviteToken.value = pendingInviteToken()
+})
 const showConsent = computed(() => data.authed && route.name === 'oauth-authorize')
 
 watch(() => data.authed, authed => {
@@ -111,8 +120,12 @@ onBeforeUnmount(() => {
 		<TaskDrawer v-if="ui.drawerTaskId !== null" :key="ui.drawerTaskId" :task-id="ui.drawerTaskId" />
 		<TaskContextMenu v-if="ui.ctx" :key="ui.ctx.taskId + ':' + ui.ctx.x + ':' + ui.ctx.y" />
 		<SettingsDialog v-if="ui.settings" />
+		<InviteDialog v-if="inviteToken && data.loaded" :token="inviteToken" @close="inviteToken = pendingInviteToken()" />
 	</div>
-	<LoginView v-else />
+	<template v-else>
+		<InviteBanner v-if="inviteToken" :token="inviteToken" />
+		<LoginView />
+	</template>
 	<WindowControls v-if="ownWindowControls" />
 	<Toasts />
 </template>

@@ -11,7 +11,11 @@ import {t} from '@/lib/i18n'
 import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
-import {openSettings} from '@/lib/ui'
+import {openSettings, ui} from '@/lib/ui'
+import {splitEmoji} from '@/lib/tasks'
+import {toast} from '@/lib/toast'
+import {permissionLabel} from './collab/permissions'
+import type {ProjectInvitation} from '@/api/types'
 import {featureOn} from '@/lib/features'
 import type {Feature} from '@/lib/prefs'
 import {isMobile} from '@/lib/viewport'
@@ -36,12 +40,33 @@ const items = computed(() => [
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ].filter(i => !i.feature || featureOn(i.feature as Feature)))
 
-const unread = computed(() => data.notifications.filter(n => !n.read_at).length)
+// An invitation still waiting for an answer is listed with its buttons
+// above, so its notification would only repeat it.
+const shownNotifications = computed(() => {
+	const open = new Set(data.invitations.map(i => i.id))
+	return data.notifications.filter(n => n.name !== 'project.invitation' || !open.has(n.notification.invitation_id as number))
+})
+
+const unread = computed(() => shownNotifications.value.filter(n => !n.read_at).length + data.invitations.length)
+
+type Person = {username?: string, name?: string} | undefined
+
+function personName(p: Person) {
+	return p?.name || p?.username || ''
+}
 
 function notificationText(n: {name: string, notification: Record<string, unknown>}) {
 	const task = n.notification.task as {title?: string} | undefined
-	const doer = n.notification.doer as {username?: string, name?: string} | undefined
-	const who = doer?.name || doer?.username || ''
+	const doer = n.notification.doer as Person
+	const project = n.notification.project as {title?: string} | undefined
+	const list = splitEmoji(project?.title ?? '').name
+	const who = personName(doer)
+	switch (n.name) {
+	case 'project.invitation': return t('invitationFrom', {name: who, list})
+	case 'project.shared': return t('notifShared', {name: who, list})
+	case 'project.invitation.accepted': return t('notifJoined', {name: personName(n.notification.member as Person), list})
+	case 'task.done': return t('notifTaskDone', {name: who, task: task?.title ?? ''})
+	}
 	const what = n.name.replace(/^task\.|^project\./, '').replace(/[._]/g, ' ')
 	return [who, what, task?.title ? `“${task.title}”` : ''].filter(Boolean).join(' · ')
 }
@@ -49,6 +74,31 @@ function notificationText(n: {name: string, notification: Record<string, unknown
 function openBell() {
 	menu.value = 'bell'
 	data.loadNotifications()
+	data.loadInvitations()
+}
+
+// The /invitations link in invitation emails opens the panel.
+watch(() => ui.invitations, openBell)
+
+const answering = ref<number | null>(null)
+
+async function answer(inv: ProjectInvitation, accept: boolean) {
+	answering.value = inv.id
+	try {
+		if (accept) {
+			const id = await data.acceptInvitation(inv.id)
+			toast(t('joinedList', {name: splitEmoji(inv.project_title ?? '').name}))
+			menu.value = null
+			router.push(`/tasks/p${id}`)
+		} else {
+			await data.declineInvitation(inv.id)
+		}
+	} catch (e) {
+		toast((e as Error).message)
+		data.loadInvitations()
+	} finally {
+		answering.value = null
+	}
 }
 
 async function logout() {
@@ -159,8 +209,20 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 					<span>{{ t('notifications') }}</span>
 					<button v-if="unread" class="link" @click="data.markNotificationsRead()">✓</button>
 				</div>
-				<div v-if="!data.notifications.length" class="muted pad">{{ t('noNotifications') }}</div>
-				<div v-for="n in data.notifications" :key="n.id" class="notif-row" :class="{unread: !n.read_at}">
+				<template v-if="data.invitations.length">
+					<div class="menu-label">{{ t('invitations') }}</div>
+					<div v-for="inv in data.invitations" :key="'inv' + inv.id" class="notif-row unread invite-row">
+						<div>{{ t('invitationFrom', {name: personName(inv.inviter), list: splitEmoji(inv.project_title ?? '').name}) }}</div>
+						<div class="muted small">{{ t(permissionLabel(inv.permission)) }}</div>
+						<div class="invite-actions">
+							<button class="btn small-btn" :disabled="answering === inv.id" @click="answer(inv, false)">{{ t('decline') }}</button>
+							<button class="btn primary small-btn" :disabled="answering === inv.id" @click="answer(inv, true)">{{ t('accept') }}</button>
+						</div>
+					</div>
+					<div v-if="shownNotifications.length" class="menu-sep" />
+				</template>
+				<div v-if="!shownNotifications.length && !data.invitations.length" class="muted pad">{{ t('noNotifications') }}</div>
+				<div v-for="n in shownNotifications" :key="n.id" class="notif-row" :class="{unread: !n.read_at}">
 					<div>{{ notificationText(n) }}</div>
 					<div class="muted small">{{ parseDate(n.created) ? fmtDayMonth(parseDate(n.created)!) + ' ' + fmtTime(parseDate(n.created)!) : '' }}</div>
 				</div>
@@ -302,6 +364,23 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 
 .notif-row.unread {
 	background: var(--accent-soft);
+}
+
+.invite-row + .invite-row {
+	margin-top: 4px;
+}
+
+.invite-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.small-btn {
+	height: 26px;
+	padding: 0 10px;
+	font-size: 12px;
 }
 
 .small {

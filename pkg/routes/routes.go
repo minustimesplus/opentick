@@ -344,6 +344,7 @@ var unauthenticatedAPIPaths = map[string]bool{
 
 	"/api/v2/register":                       true,
 	"/api/v2/invite-links/check":             true,
+	"/api/v2/project-invitations/preview":    true,
 	"/api/v2/user/password/token":            true,
 	"/api/v2/user/password/reset":            true,
 	"/api/v2/user/confirm":                   true,
@@ -439,6 +440,7 @@ func unauthenticatedPathSet(paths ...string) pathSet {
 // endpoints only, never the docs/info/health ones.
 var v2CredentialPaths = unauthenticatedPathSet(
 	"/api/v2/invite-links/check",
+	"/api/v2/project-invitations/preview",
 	"/api/v2/register",
 	"/api/v2/user/password/token",
 	"/api/v2/user/password/reset",

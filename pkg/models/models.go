@@ -84,6 +84,7 @@ func GetTables() []interface{} {
 		&HabitCheckin{},
 		&Countdown{},
 		&FocusSession{},
+		&ProjectInvitation{},
 	}
 }
 

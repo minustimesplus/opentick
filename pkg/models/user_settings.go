@@ -42,6 +42,10 @@ type UserGeneralSettings struct {
 	Language                     string `json:"language" doc:"The user's language."`
 	Timezone                     string `json:"timezone" doc:"The user's time zone, used to send task reminders in their local time."`
 	FrontendSettings             any    `json:"frontend_settings" doc:"Arbitrary settings used only by the frontend. Any JSON value; stored and returned verbatim."`
+	ConfirmProjectInvites        bool   `json:"confirm_project_invites" doc:"If true, invitations to a project by username wait until the user accepts them. If false, the user joins right away. Invitations by email always wait."`
+	NotifySharedTaskDone         bool   `json:"notify_shared_task_done" doc:"Notify the user when someone else completes a task in a project shared with them."`
+	NotifySharedTaskCreated      bool   `json:"notify_shared_task_created" doc:"Notify the user when someone else adds a task to a project shared with them."`
+	NotifySharedTaskDeleted      bool   `json:"notify_shared_task_deleted" doc:"Notify the user when someone else deletes a task from a project shared with them."`
 	// Server/OpenID-provided; populated on read, ignored on write.
 	ExtraSettingsLinks map[string]any `json:"extra_settings_links" readOnly:"true" doc:"Additional settings links provided by the OpenID provider. Server-controlled."`
 }
@@ -61,6 +65,10 @@ func NewUserGeneralSettings(u *user.User) *UserGeneralSettings {
 		Language:                     u.Language,
 		Timezone:                     u.Timezone,
 		FrontendSettings:             u.FrontendSettings,
+		ConfirmProjectInvites:        u.ConfirmProjectInvites,
+		NotifySharedTaskDone:         u.NotifySharedTaskDone,
+		NotifySharedTaskCreated:      u.NotifySharedTaskCreated,
+		NotifySharedTaskDeleted:      u.NotifySharedTaskDeleted,
 		ExtraSettingsLinks:           u.ExtraSettingsLinks,
 	}
 }
@@ -115,6 +123,10 @@ func UpdateUserGeneralSettings(s *xorm.Session, u *user.User, settings *UserGene
 	u.Timezone = settings.Timezone
 	u.OverdueTasksRemindersTime = settings.OverdueTasksRemindersTime
 	u.FrontendSettings = settings.FrontendSettings
+	u.ConfirmProjectInvites = settings.ConfirmProjectInvites
+	u.NotifySharedTaskDone = settings.NotifySharedTaskDone
+	u.NotifySharedTaskCreated = settings.NotifySharedTaskCreated
+	u.NotifySharedTaskDeleted = settings.NotifySharedTaskDeleted
 
 	if _, err := user.UpdateUser(s, u, true); err != nil {
 		return err

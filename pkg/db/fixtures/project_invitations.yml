@@ -1,0 +1,51 @@
+# user1 owns project 1.
+# 1: user2 was invited by username and has not answered yet.
+- id: 1
+  project_id: 1
+  inviter_id: 1
+  invitee_id: 2
+  kind: user
+  permission: 1
+  uses: 0
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+# 2: a join link. Token: testlinktoken0000000000000000000000000000000001
+- id: 2
+  project_id: 1
+  inviter_id: 1
+  invitee_id: 0
+  kind: link
+  permission: 0
+  token_hash: 'debb6bbfcffc5112a966393624c41b10611a0c3862d88742f8fc0b1b1c65229e'
+  link_token: 'testlinktoken0000000000000000000000000000000001'
+  uses: 0
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+# 3: an email invitation for an address without an account.
+# Token: testemailtoken000000000000000000000000000000001
+- id: 3
+  project_id: 1
+  inviter_id: 1
+  invitee_id: 0
+  email: 'newcomer@example.com'
+  kind: email
+  permission: 1
+  token_hash: 'eae2072a0dfee9711e7fe8cbf345da8f15f1c9f1d3d210fde8b132206700ce34'
+  uses: 0
+  expires_at: 2099-01-01 00:00:00
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12
+# 4: an expired email invitation to user2's address.
+# Token: testexpiredtoken00000000000000000000000000000001
+- id: 4
+  project_id: 1
+  inviter_id: 1
+  invitee_id: 0
+  email: 'user2@example.com'
+  kind: email
+  permission: 2
+  token_hash: 'd3ed9933c66f47c2e7c27916a91a2b10dc3a8018762c9b13b88b5431fdb5e150'
+  uses: 0
+  expires_at: 2018-01-01 00:00:00
+  created: 2017-12-01 15:13:12
+  updated: 2017-12-01 15:13:12

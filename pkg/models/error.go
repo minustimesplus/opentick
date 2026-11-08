@@ -3498,3 +3498,59 @@ func (err ErrFocusSessionInvalidTimes) HTTPError() web.HTTPError {
 		Message:  "A focus session needs a start time, must not end before it starts, and its duration must fit between start and end.",
 	}
 }
+
+// =================
+// Project invitation errors
+// =================
+
+// ErrProjectInvitationDoesNotExist represents an error where an invitation does not exist, expired or was used.
+type ErrProjectInvitationDoesNotExist struct{}
+
+// IsErrProjectInvitationDoesNotExist checks if an error is ErrProjectInvitationDoesNotExist.
+func IsErrProjectInvitationDoesNotExist(err error) bool {
+	_, ok := err.(ErrProjectInvitationDoesNotExist)
+	return ok
+}
+
+func (err ErrProjectInvitationDoesNotExist) Error() string {
+	return "Project invitation does not exist"
+}
+
+// ErrCodeProjectInvitationDoesNotExist holds the unique world-error code of this error
+const ErrCodeProjectInvitationDoesNotExist = 24001
+
+// HTTPError holds the http error description
+func (err ErrProjectInvitationDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeProjectInvitationDoesNotExist,
+		Message:  "This invitation does not exist, has expired or was already used.",
+	}
+}
+
+// ErrProjectInvitationExists represents an error where the invitee already has an open invitation to the project.
+type ErrProjectInvitationExists struct {
+	ProjectID int64
+}
+
+// IsErrProjectInvitationExists checks if an error is ErrProjectInvitationExists.
+func IsErrProjectInvitationExists(err error) bool {
+	_, ok := err.(ErrProjectInvitationExists)
+	return ok
+}
+
+func (err ErrProjectInvitationExists) Error() string {
+	return fmt.Sprintf("An invitation to this project is already pending [ProjectID: %d]", err.ProjectID)
+}
+
+// ErrCodeProjectInvitationExists holds the unique world-error code of this error
+const ErrCodeProjectInvitationExists = 24002
+
+// HTTPError holds the http error description
+func (err ErrProjectInvitationExists) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusConflict,
+		Code:     ErrCodeProjectInvitationExists,
+		Message:  "This person already has a pending invitation to this project.",
+	}
+}

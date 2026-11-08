@@ -183,6 +183,8 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		{"user_id", &CalendarSubscription{}},
 		{"user_id", &Countdown{}},
 		{"user_id", &FocusSession{}},
+		{"inviter_id", &ProjectInvitation{}},
+		{"invitee_id", &ProjectInvitation{}},
 	}
 
 	for _, entity := range relatedEntities {
