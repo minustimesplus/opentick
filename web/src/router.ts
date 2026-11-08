@@ -1,3 +1,4 @@
+import {ref} from 'vue'
 import {createRouter, createWebHistory} from 'vue-router'
 import {openSettings, ui} from './lib/ui'
 import {getToken} from './api/client'
@@ -43,3 +44,10 @@ export const router = createRouter({
 
 // Views of features turned off in Settings > Features are not reachable.
 router.beforeEach(to => routeAllowed(to) || '/tasks/today')
+
+// The list last open in the tasks view, so coming back from another view
+// (the rail's tasks button) lands on it instead of Today.
+export const lastTasksList = ref('/tasks/today')
+router.afterEach(to => {
+	if (to.name === 'tasks' && typeof to.params.list === 'string') lastTasksList.value = `/tasks/${to.params.list}`
+})

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Archive, ArchiveRestore, UserPlus, Users, ArrowUpDown, ChevronDown, ChevronRight, Columns3, ChartGantt, List, Menu, MoreHorizontal, PanelLeft, Pencil, Trash2, Eye, EyeOff, Check, Tag, Filter} from 'lucide-vue-next'
+import {Archive, ArchiveRestore, ArrowUpDown, ChevronDown, ChevronRight, Columns3, ChartGantt, ChartSpline, List, ListCollapse, Menu, MoreHorizontal, PanelLeft, Pencil, Plus, Printer, Settings2, Share2, SquareCheckBig, Trash2, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
 import TaskRow from '@/components/TaskRow.vue'
 import TaskDetail from '@/components/TaskDetail.vue'
@@ -9,7 +9,6 @@ import KanbanBoard from '@/components/KanbanBoard.vue'
 import TimelineView from '@/components/TimelineView.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import Popover from '@/components/Popover.vue'
-import ListEditDialog from '@/components/ListEditDialog.vue'
 import FilterEditDialog from '@/components/FilterEditDialog.vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import TrashList from '@/components/TrashList.vue'
@@ -463,16 +462,22 @@ async function onRowDrop(dragged: number, target: number, zone: DropZone) {
 const sortEl = ref<HTMLElement | null>(null)
 const moreEl = ref<HTMLElement | null>(null)
 const pop = ref<'sort' | 'more' | null>(null)
-const editing = ref(false)
 
 const editingFilter = ref(false)
 const sharing = ref(false)
 
-// Lists other people can see get a filled share icon.
+// Lists other people can see get a highlighted Share entry.
 watch(() => view.value.kind === 'project' ? view.value.id : null, id => {
 	if (id) data.loadMembers(id)
 }, {immediate: true})
 const shared = computed(() => view.value.kind === 'project' && data.isShared(view.value.id))
+
+const kanbanEl = ref<InstanceType<typeof KanbanBoard> | null>(null)
+
+function addSection() {
+	pop.value = null
+	kanbanEl.value?.startAddSection()
+}
 
 async function deleteFilter() {
 	pop.value = null
@@ -482,12 +487,38 @@ async function deleteFilter() {
 	router.push('/tasks/today')
 }
 
-async function deleteList() {
-	pop.value = null
-	if (!project.value || !confirm(t('deleteListConfirm', {name: project.value.title}))) return
-	await data.deleteProject(project.value.id)
-	router.push('/tasks/today')
+// ---- inline title editing ----
+// The list's name in the header is its raw title, emoji included: the
+// leading emoji is the list's icon everywhere, so editing it here changes
+// the icon in the sidebar too.
+const titleEditable = computed(() => view.value.kind === 'project' && !!project.value && !archived.value)
+const titleEditing = ref(false)
+const titleDraft = ref('')
+const titleInput = ref<HTMLInputElement | null>(null)
+
+async function startTitleEdit() {
+	if (!titleEditable.value || !project.value) return
+	titleDraft.value = project.value.title
+	titleEditing.value = true
+	await nextTick()
+	titleInput.value?.focus()
 }
+
+function saveTitle() {
+	if (!titleEditing.value) return
+	titleEditing.value = false
+	const p = project.value
+	const {emoji, name} = splitEmoji(titleDraft.value.trim())
+	if (!p || !name.trim()) return
+	const title = emoji && name !== titleDraft.value.trim() ? `${emoji} ${name.trim()}` : name.trim()
+	if (title !== p.title) data.updateProject(p.id, {title})
+}
+
+function cancelTitleEdit() {
+	titleEditing.value = false
+}
+
+watch(() => project.value?.id, cancelTitleEdit)
 
 const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 	{key: 'date', label: 'sortDate'},
@@ -514,15 +545,22 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 		<section class="list-pane">
 			<header class="head">
 				<button class="icon-btn" @click="sidebarOpen = !sidebarOpen"><PanelLeft :size="19" /></button>
-				<h1>
+				<input
+					v-if="titleEditing"
+					ref="titleInput"
+					v-model="titleDraft"
+					class="title-input"
+					:size="Math.max(titleDraft.length, 4)"
+					@keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+					@keydown.esc.stop="cancelTitleEdit"
+					@blur="saveTitle"
+				>
+				<h1 v-else :class="{editable: titleEditable}" @click="startTitleEdit">
 					<Tag v-if="view.kind === 'label'" :size="19" class="h-ic" />
 					<Filter v-else-if="view.kind === 'filter'" :size="19" class="h-ic" />
 					<span v-else-if="header.emoji" class="h-emoji">{{ header.emoji }}</span>
 					{{ header.name }}
 				</h1>
-				<button v-if="view.kind === 'project' && project && !archived" class="icon-btn share-btn" :class="{shared}" :title="t('shareList')" @click="sharing = true">
-					<component :is="shared ? Users : UserPlus" :size="18" />
-				</button>
 				<div class="spacer" />
 				<button v-if="layout === 'list' && (!READ_ONLY.has(view.kind) || view.kind === 'filter')" ref="sortEl" class="icon-btn" :title="t('sortBy')" @click="pop = 'sort'"><ArrowUpDown :size="18" /></button>
 				<button v-if="view.kind !== 'archived' && view.kind !== 'trash' && view.kind !== 'summary'" ref="moreEl" class="icon-btn" @click="pop = 'more'"><MoreHorizontal :size="18" /></button>
@@ -530,6 +568,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 
 			<KanbanBoard
 				v-if="layout === 'kanban' && project"
+				ref="kanbanEl"
 				class="kanban"
 				:project="project"
 				:selected-id="selectedId"
@@ -673,14 +712,21 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<div class="menu-sep" />
 				</template>
 				<button class="menu-item" @click="showCompleted = !showCompleted; pop = null">
-					<component :is="showCompleted ? EyeOff : Eye" :size="15" /> {{ showCompleted ? t('hideCompleted') : t('showCompleted') }}
+					<SquareCheckBig :size="15" /> {{ showCompleted ? t('hideCompleted') : t('showCompleted') }}
 				</button>
+				<button class="menu-item" disabled :title="t('comingSoon')"><ListCollapse :size="15" /> {{ t('showDetails') }}</button>
+				<button class="menu-item" disabled :title="t('comingSoon')"><Settings2 :size="15" /> {{ t('viewOptions') }}</button>
 				<template v-if="view.kind === 'project' && project">
 					<div class="menu-sep" />
-					<button class="menu-item" @click="editing = true; pop = null"><Pencil :size="15" /> {{ t('editList') }}</button>
-					<button v-if="archived" class="menu-item" @click="setArchived(false)"><ArchiveRestore :size="15" /> {{ t('unarchive') }}</button>
-					<button v-else class="menu-item" @click="setArchived(true)"><Archive :size="15" /> {{ t('archive') }}</button>
-					<button class="menu-item danger" @click="deleteList"><Trash2 :size="15" /> {{ t('delete') }}</button>
+					<button
+						class="menu-item"
+						:disabled="layout !== 'kanban' || archived"
+						:title="layout !== 'kanban' ? t('comingSoon') : undefined"
+						@click="addSection"
+					><Plus :size="15" /> {{ t('addSection') }}</button>
+					<button v-if="!archived" class="menu-item" :class="{accent: shared}" @click="sharing = true; pop = null"><Share2 :size="15" /> {{ t('share') }}</button>
+					<button class="menu-item" disabled :title="t('comingSoon')"><ChartSpline :size="15" /> {{ t('listActivities') }}</button>
+					<button class="menu-item" disabled :title="t('comingSoon')"><Printer :size="15" /> {{ t('print') }}<ChevronRight :size="14" class="menu-chevron" /></button>
 				</template>
 				<template v-if="view.kind === 'filter' && savedFilter">
 					<div class="menu-sep" />
@@ -691,7 +737,6 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 		</Popover>
 		<ShareDialog v-if="sharing && project" :project="project" @close="sharing = false" />
 		<FilterEditDialog v-if="editingFilter && savedFilter" :filter="savedFilter" @close="editingFilter = false" />
-		<ListEditDialog v-if="editing && project" :project="project" @close="editing = false" />
 	</div>
 </template>
 
@@ -730,12 +775,34 @@ h1 {
 	text-overflow: ellipsis;
 }
 
-.share-btn {
-	flex-shrink: 0;
+/* h1 and the input share padding and border width so the text doesn't move
+   when one replaces the other. */
+h1.editable,
+.title-input {
+	min-width: 0;
+	padding: 2px 8px;
+	border: 1.5px solid transparent;
+	border-radius: 8px;
 }
 
-.share-btn.shared {
-	color: var(--accent);
+h1.editable {
+	cursor: text;
+}
+
+h1.editable:hover {
+	background: var(--bg-hover);
+}
+
+.title-input {
+	max-width: 100%;
+	height: auto;
+	font: inherit;
+	font-size: 22px;
+	font-weight: 700;
+	color: var(--text);
+	background: transparent;
+	border-color: var(--accent);
+	outline: none;
 }
 
 .h-ic {

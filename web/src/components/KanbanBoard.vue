@@ -174,6 +174,9 @@ const menu = ref<{bucket: Bucket, el: HTMLElement} | null>(null)
 const renaming = ref<number | null>(null)
 const renameDraft = ref('')
 const addingSection = ref(false)
+
+// The list header's "Add Section" menu entry opens the same inline input.
+defineExpose({startAddSection: () => { addingSection.value = true }})
 const sectionDraft = ref('')
 
 async function addSection() {
