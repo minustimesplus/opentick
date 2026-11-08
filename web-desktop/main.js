@@ -174,7 +174,12 @@ function createMainWindow() {
 		height: 900,
 		icon: path.join(__dirname, 'icon.png'),
 		autoHideMenuBar: true,
-		backgroundColor: FRAME_COLORS.dark,
+		// Start with the frame color the page used last time, so the first
+		// frame already matches the theme.
+		backgroundColor: config.frameColor || FRAME_COLORS.dark,
+		// Mapping a frameless window before it has painted shows the desktop
+		// through it on Linux; stay hidden until the first frame is ready.
+		show: false,
 		...(IS_MAC ? {titleBarStyle: 'hidden'} : {frame: false}),
 		webPreferences: {
 			preload: path.join(__dirname, 'preload.js'),
@@ -183,6 +188,13 @@ function createMainWindow() {
 			sandbox: true,
 		},
 	})
+
+	const showWindow = () => {
+		if (mainWindow && !mainWindow.isVisible()) mainWindow.show()
+	}
+	mainWindow.once('ready-to-show', showWindow)
+	// Don't leave the app invisible if the page never paints (e.g. load error).
+	setTimeout(showWindow, 3000)
 
 	mainWindow.webContents.setWindowOpenHandler(({url}) => {
 		if (/^(https?|mailto):/i.test(url)) shell.openExternal(url)
@@ -264,6 +276,10 @@ ipcMain.on('theme:set', (_event, theme) => {
 	const color = /^#[0-9a-f]{6}$/i.test(theme) ? theme : FRAME_COLORS[theme]
 	if (!color || !mainWindow) return
 	mainWindow.setBackgroundColor(color)
+	if (color !== config.frameColor) {
+		config = {...config, frameColor: color}
+		saveConfig(config)
+	}
 })
 
 ipcMain.handle('window:info', () => ({
