@@ -113,6 +113,13 @@ export const useData = defineStore('data', () => {
 		await loadAll()
 	}
 
+	/** Signs in with an access token obtained elsewhere (desktop browser sign in). */
+	async function loginWithToken(accessToken: string) {
+		setToken(accessToken)
+		authed.value = true
+		await loadAll()
+	}
+
 	async function register(username: string, email: string, password: string) {
 		await api('POST', '/register', {auth: false, body: {username, email, password}})
 		await login(username, password)
@@ -948,7 +955,7 @@ export const useData = defineStore('data', () => {
 
 	return {
 		authed, user, projects, labels, tasks, loading, loaded, notifications, avatarUrl,
-		login, loginWithClerk, register, logout, enterLocal, local, loadAll, loadDone, loadClosed, loadClosedBetween, loadDoneForProject, loadDoneInRange,
+		login, loginWithClerk, loginWithToken, register, logout, enterLocal, local, loadAll, loadDone, loadClosed, loadClosedBetween, loadDoneForProject, loadDoneInRange,
 		closedNonEmpty, probeNonEmpty, isTomorrow, isAssignedToMe, loadSavedFilterTasks, searchRemote,
 		inboxId, realProjects, listProjects, savedFilters, projectMap, allTasks, openTasks, counts, project, isToday, inNext7,
 		members, loadMembers, isShared, assign, unassign,

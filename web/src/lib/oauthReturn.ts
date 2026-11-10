@@ -4,6 +4,8 @@
 
 export const OAUTH_AUTHORIZE_PATH = '/oauth/authorize'
 const KEY = 'tt.oauthReturn'
+/** First-party client id the desktop app signs in with through the browser. */
+export const DESKTOP_CLIENT_ID = 'opentick-desktop'
 
 if (window.location.pathname === OAUTH_AUTHORIZE_PATH) {
 	try {

@@ -10,6 +10,13 @@ export type DesktopUpdateCheck =
 interface DesktopBridge {
 	getServerUrl(): Promise<string>
 	setServerUrl(url: string): Promise<string>
+	/**
+	 * Signs in through the system browser (OAuth with a loopback redirect) and
+	 * resolves with an access token. error is 'cancelled' when the user backed
+	 * out. Missing in builds before browser sign in.
+	 */
+	signInWithBrowser?(): Promise<{token?: string, error?: string}>
+	cancelBrowserSignIn?(): void
 	onUpdateReady(callback: (version: string) => void): void
 	installUpdate(): Promise<void>
 	/** Manual update check (Settings → About). Missing in older builds. */

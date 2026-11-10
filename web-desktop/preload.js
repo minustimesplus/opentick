@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('ttDesktop', {
 		ipcRenderer.removeAllListeners('update:ready')
 		ipcRenderer.on('update:ready', (_event, version) => callback(version))
 	},
+	signInWithBrowser: () => ipcRenderer.invoke('auth:browser-sign-in'),
+	cancelBrowserSignIn: () => ipcRenderer.send('auth:cancel-browser-sign-in'),
 	installUpdate: () => ipcRenderer.invoke('update:install'),
 	checkForUpdates: () => ipcRenderer.invoke('update:check'),
 	setTheme: theme => ipcRenderer.send('theme:set', theme),
