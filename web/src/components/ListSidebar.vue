@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {Archive, ChevronDown, ChevronRight, Filter, Menu, Plus, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
+import {Archive, Bot, ChevronDown, ChevronRight, Filter, Menu, Plus, Tag, Pencil, Trash2, Folder} from 'lucide-vue-next'
 import DayIcon from './DayIcon.vue'
 import Popover from './Popover.vue'
 import ListEditDialog from './ListEditDialog.vue'
@@ -9,6 +9,7 @@ import FilterEditDialog from './FilterEditDialog.vue'
 import {filterIdOf} from '@/lib/filters'
 import type {Project} from '@/api/types'
 import {useData} from '@/stores/data'
+import {agentName, useAgents} from '@/stores/agents'
 import {hasColor, labelColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
@@ -17,6 +18,11 @@ import {useSmartLists} from '@/lib/useSmartLists'
 import {addDays, fmtWeekdayShort, getSchedule, minutesOfDay, moveSchedule, schedulePatch, startOfDay, withMinutes} from '@/lib/dates'
 
 const data = useData()
+const agents = useAgents()
+
+function agentOf(id: number) {
+	return agents.enabled ? agents.listAgent(id) : ''
+}
 const route = useRoute()
 const router = useRouter()
 
@@ -281,6 +287,7 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 						<span v-else-if="splitEmoji(node.project.title).emoji" class="ic emoji">{{ splitEmoji(node.project.title).emoji }}</span>
 						<Menu v-else :size="18" class="ic" />
 						<span class="name">{{ splitEmoji(node.project.title).name }}</span>
+						<Bot v-if="agentOf(node.project.id)" :size="14" class="agent-mark" :class="agentOf(node.project.id)" :title="t('agentListMark', {agent: agentName(agentOf(node.project.id) || 'claude')})" />
 						<span v-if="hasColor(node.project)" class="cdot" :style="{background: projectColor(node.project)}" />
 						<span class="count">{{ data.counts.byProject.get(node.project.id) || '' }}</span>
 					</button>
@@ -297,6 +304,7 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 							<span v-if="splitEmoji(c.title).emoji" class="ic emoji">{{ splitEmoji(c.title).emoji }}</span>
 							<Menu v-else :size="18" class="ic" />
 							<span class="name">{{ splitEmoji(c.title).name }}</span>
+							<Bot v-if="agentOf(c.id)" :size="14" class="agent-mark" :class="agentOf(c.id)" :title="t('agentListMark', {agent: agentName(agentOf(c.id) || 'claude')})" />
 							<span v-if="hasColor(c)" class="cdot" :style="{background: projectColor(c)}" />
 							<span class="count">{{ data.counts.byProject.get(c.id) || '' }}</span>
 						</button>
@@ -476,6 +484,15 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 	color: var(--text-3);
 	min-width: 18px;
 	text-align: right;
+}
+
+.agent-mark {
+	flex-shrink: 0;
+	color: #d97757;
+}
+
+.agent-mark.instinct {
+	color: #8b5cf6;
 }
 
 .cdot {

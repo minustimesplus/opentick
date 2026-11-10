@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {Ban, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
+import {Ban, Bot, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import ListPicker from './ListPicker.vue'
 import DatePicker from './DatePicker.vue'
 import {useData} from '@/stores/data'
-import {ui} from '@/lib/ui'
+import {AGENTS, agentName, useAgents} from '@/stores/agents'
+import {openAgentSend, ui} from '@/lib/ui'
 import {t} from '@/lib/i18n'
 import {addDays, getSchedule, moveSchedule, schedulePatch, startOfDay, startOfWeek, withMinutes, minutesOfDay} from '@/lib/dates'
 import {level, PRIORITY_COLORS, priorityName, type Level} from '@/lib/tasks'
 import {toast} from '@/lib/toast'
 
 const data = useData()
+const agents = useAgents()
 const task = computed(() => ui.ctx ? data.tasks.get(ui.ctx.taskId) : undefined)
 const anchor = computed(() => ui.ctx ? {x: ui.ctx.x, y: ui.ctx.y} : null)
 const moveEl = ref<HTMLElement | null>(null)
@@ -53,6 +55,12 @@ function toggleWontDo() {
 	close()
 }
 
+function sendToAgent(agent: typeof AGENTS[number]) {
+	const tk = task.value
+	close()
+	if (tk) openAgentSend(tk.id, agent)
+}
+
 function remove() {
 	const tk = task.value
 	if (!tk) return
@@ -88,6 +96,11 @@ const today = startOfDay(new Date())
 				<template v-else><Ban :size="16" /> {{ t('wontDo') }}</template>
 			</button>
 			<button class="menu-item" @click="duplicate"><Copy :size="16" /> {{ t('duplicate') }}</button>
+			<template v-if="agents.enabled">
+				<div class="menu-sep" />
+				<button v-for="a in AGENTS" :key="a" class="menu-item" @click="sendToAgent(a)"><Bot :size="16" /> {{ t('agentSendTo', {agent: agentName(a)}) }}</button>
+				<div class="menu-sep" />
+			</template>
 			<button class="menu-item danger" @click="remove"><Trash2 :size="16" /> {{ t('delete') }}</button>
 		</div>
 	</Popover>

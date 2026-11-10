@@ -2361,6 +2361,11 @@ func hardDeleteTask(s *xorm.Session, t *Task) (err error) {
 		return
 	}
 
+	_, err = s.Where("task_id = ?", t.ID).Delete(&AgentDispatch{})
+	if err != nil {
+		return
+	}
+
 	_, err = s.Where("entity_id = ? AND entity_type = ?", t.ID, SubscriptionEntityTask).Delete(&Subscription{})
 	if err != nil {
 		return

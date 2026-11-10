@@ -1,4 +1,5 @@
 import {reactive} from 'vue'
+import type {AgentKind} from '@/api/types'
 
 export const ui = reactive({
 	/** Task shown in the floating detail drawer (matrix, calendar, search). */
@@ -15,6 +16,8 @@ export const ui = reactive({
 	invitations: 0,
 	/** Bumped when an invitation link was opened, so App offers to join. */
 	inviteLink: 0,
+	/** Task being handed to an AI agent, with the agent picked first. */
+	agentSend: null as {taskId: number, agent: AgentKind} | null,
 })
 
 /** Where a dragged task lands relative to a task row. */
@@ -41,4 +44,8 @@ export function openTaskDrawer(id: number) {
 
 export function closeTaskDrawer() {
 	ui.drawerTaskId = null
+}
+
+export function openAgentSend(taskId: number, agent: AgentKind) {
+	ui.agentSend = {taskId, agent}
 }

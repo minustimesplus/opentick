@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {ArrowUpToLine, CalendarDays, ChevronLeft, CircleUserRound, Copy, FileType, Flag, Inbox, Link, Link2, ListChecks, ListTree, Menu, MessageSquare, MoreHorizontal, NotebookPen, Paperclip, Printer, RotateCcw, SquareX, Trash2, Unlink, Upload, X, Tag} from 'lucide-vue-next'
+import {ArrowUpToLine, Bot, CalendarDays, ChevronLeft, CircleUserRound, Copy, FileType, Flag, Inbox, Link, Link2, ListChecks, ListTree, Menu, MessageSquare, MoreHorizontal, NotebookPen, Paperclip, Printer, RotateCcw, SquareX, Trash2, Unlink, Upload, X, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
@@ -10,9 +10,13 @@ import MarkdownEditor from './MarkdownEditor.vue'
 import SubtaskList from './SubtaskList.vue'
 import TaskAttachments from './TaskAttachments.vue'
 import TaskComments from './TaskComments.vue'
+import TaskAgentPanel from './TaskAgentPanel.vue'
 import AssigneeMenu from './AssigneeMenu.vue'
 import PersonAvatar from './PersonAvatar.vue'
 import {parentId, useData} from '@/stores/data'
+import {AGENTS, agentName, useAgents} from '@/stores/agents'
+import {openAgentSend} from '@/lib/ui'
+import type {AgentKind} from '@/api/types'
 import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} from '@/lib/dates'
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
 import {t} from '@/lib/i18n'
@@ -22,6 +26,7 @@ import {router} from '@/router'
 const props = defineProps<{taskId: number, closable?: boolean}>()
 const emit = defineEmits<{close: [], deleted: [], open: [number]}>()
 const data = useData()
+const agents = useAgents()
 
 const task = computed(() => data.tasks.get(props.taskId))
 const schedule = computed(() => task.value ? getSchedule(task.value) : null)
@@ -194,6 +199,11 @@ async function copyLink() {
 	}
 }
 
+function sendToAgent(agent: AgentKind) {
+	pop.value = null
+	openAgentSend(props.taskId, agent)
+}
+
 async function duplicate() {
 	pop.value = null
 	await data.duplicateTask(props.taskId)
@@ -272,6 +282,7 @@ const meta = computed(() => {
 			</div>
 
 			<TaskAttachments :task-id="task.id" />
+			<TaskAgentPanel :task-id="task.id" />
 			<TaskComments ref="commentsEl" :task-id="task.id" />
 			<input ref="fileEl" type="file" multiple hidden @change="onFiles">
 		</div>
@@ -319,6 +330,9 @@ const meta = computed(() => {
 				<button class="menu-item" disabled :title="t('comingSoon')"><ListChecks :size="16" /> {{ t('taskActivities') }}</button>
 				<button class="menu-item" disabled :title="t('comingSoon')"><FileType :size="16" /> {{ t('saveAsTemplate') }}</button>
 				<button class="menu-item" @click="duplicate"><Copy :size="16" /> {{ t('duplicate') }}</button>
+				<template v-if="agents.enabled">
+					<button v-for="a in AGENTS" :key="a" class="menu-item" @click="sendToAgent(a)"><Bot :size="16" /> {{ t('agentSendTo', {agent: agentName(a)}) }}</button>
+				</template>
 				<button class="menu-item" @click="copyLink"><Link :size="16" /> {{ t('copyLink') }}</button>
 				<button class="menu-item" disabled :title="t('comingSoon')"><NotebookPen :size="16" /> {{ t('convertToNote') }}</button>
 				<div class="menu-sep" />
