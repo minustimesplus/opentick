@@ -4,6 +4,8 @@ import {api, fetchAll} from '@/api/client'
 import type {CalendarSubscription, CalendarSubscriptionEvents} from '@/api/types'
 import {useData} from '@/stores/data'
 import {toast} from '@/lib/toast'
+import {prefs} from '@/lib/prefs'
+import {addDays, startOfDay, startOfMonth, startOfWeek} from '@/lib/dates'
 
 const MERGE = 'application/merge-patch+json'
 /** The server caches feeds for 15 minutes; this only avoids refetching while navigating. */
@@ -41,6 +43,21 @@ function hostnameOf(url: string): string {
 
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
+/**
+ * The window of events the calendar loads for a view anchored at `at`.
+ * The scrolling month grid can show a few weeks before and after the anchor
+ * month (whose month is the one of its third row), so it loads a wider window.
+ * Day and week views load whole weeks, so stepping through days stays in cache.
+ */
+export function eventRangeFor(mode: 'day' | 'week' | 'month', at: Date): {start: Date, end: Date} {
+	if (mode === 'month') {
+		const s = startOfWeek(startOfMonth(at))
+		return {start: addDays(s, -21), end: addDays(s, 70)}
+	}
+	const s = startOfWeek(at)
+	return {start: s, end: addDays(s, 7)}
+}
+
 export const useCalendars = defineStore('calendars', () => {
 	const data = useData()
 	const subscriptions = ref<CalendarSubscription[]>([])
@@ -68,13 +85,20 @@ export const useCalendars = defineStore('calendars', () => {
 		if (!authed) reset()
 	})
 
-	async function load() {
-		try {
-			subscriptions.value = await fetchAll<CalendarSubscription>('/calendar-subscriptions')
-			loaded.value = true
-		} catch (e) {
-			toast(String((e as Error).message))
-		}
+	let loading: Promise<void> | null = null
+
+	/** Loads the subscriptions. Quiet loads (background preloads) don't toast errors. */
+	function load(quiet = false): Promise<void> {
+		loading ??= fetchAll<CalendarSubscription>('/calendar-subscriptions')
+			.then(subs => {
+				subscriptions.value = subs
+				loaded.value = true
+			})
+			.catch(e => {
+				if (!quiet) toast(String((e as Error).message))
+			})
+			.finally(() => { loading = null })
+		return loading
 	}
 
 	function subscription(id: number) {
@@ -88,6 +112,11 @@ export const useCalendars = defineStore('calendars', () => {
 	function cached(sub: CalendarSubscription, start: Date, end: Date): CalEvent[] | undefined {
 		const hit = cache.get(cacheKey(sub, start, end))
 		return hit && Date.now() - hit.at < CLIENT_TTL ? hit.events : undefined
+	}
+
+	/** Cached events regardless of age, shown while a fresh copy loads. */
+	function stale(sub: CalendarSubscription, start: Date, end: Date): CalEvent[] | undefined {
+		return cache.get(cacheKey(sub, start, end))?.events
 	}
 
 	/** Requests in flight by cache key, so a prefetch and a navigation share one request. */
@@ -142,6 +171,10 @@ export const useCalendars = defineStore('calendars', () => {
 			events.value = new Map(hits as [number, CalEvent[]][])
 			return
 		}
+		// Everything cached but some of it expired: show the old events right
+		// away and swap in the fresh ones once they arrive.
+		const old = subs.map(sub => [sub.id, stale(sub, start, end)] as const)
+		if (old.every(([, list]) => list)) events.value = new Map(old as [number, CalEvent[]][])
 		const results = await Promise.all(subs.map(async sub => {
 			try {
 				const list = await fetchEvents(sub, start, end)
@@ -149,7 +182,7 @@ export const useCalendars = defineStore('calendars', () => {
 				return [sub.id, list] as const
 			} catch (e) {
 				errors.set(sub.id, String((e as Error).message))
-				return [sub.id, [] as CalEvent[]] as const
+				return [sub.id, stale(sub, start, end) ?? [] as CalEvent[]] as const
 			}
 		}))
 		// Navigating quickly fires overlapping requests; only the latest may land.
@@ -161,6 +194,25 @@ export const useCalendars = defineStore('calendars', () => {
 	function prefetchEvents(start: Date, end: Date, ids: number[]) {
 		for (const sub of subscriptions.value) {
 			if (ids.includes(sub.id)) fetchEvents(sub, start, end).catch(() => {})
+		}
+	}
+
+	/**
+	 * Warms the cache for the first two weeks the calendar shows when opened
+	 * on today, so switching to it right after startup shows events at once.
+	 * Cheap to call repeatedly: fresh ranges are served from the cache.
+	 */
+	async function preload() {
+		if (!loaded.value) await load(true)
+		if (!loaded.value) return
+		const hidden = new Set(prefs.calendarHiddenSubs)
+		const ids = subscriptions.value.filter(s => !hidden.has(s.id)).map(s => s.id)
+		if (!ids.length) return
+		const today = startOfDay(new Date())
+		const anchors = prefs.calendarMode === 'month' ? [today] : [today, addDays(today, 7)]
+		for (const at of anchors) {
+			const r = eventRangeFor(prefs.calendarMode, at)
+			prefetchEvents(r.start, r.end, ids)
 		}
 	}
 
@@ -201,5 +253,5 @@ export const useCalendars = defineStore('calendars', () => {
 		}
 	}
 
-	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, create, update, remove}
+	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, preload, create, update, remove}
 })
