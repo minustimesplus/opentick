@@ -9,7 +9,7 @@ import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
 import {openSettings} from '@/lib/ui'
 import {toast} from '@/lib/toast'
-import {DEMO, HOSTED_URL, REPO_URL, SELF_HOST_DOCS_URL} from '@/lib/localMode'
+import {DEMO, HOSTED_SIGNUP_URL, REPO_URL, SELF_HOST_DOCS_URL} from '@/lib/localMode'
 
 const emit = defineEmits<{close: []}>()
 const data = useData()
@@ -60,7 +60,7 @@ async function signIn() {
 			</div>
 			<p class="intro">{{ DEMO ? t('demoIntro') : t('localIntro') }}</p>
 
-			<a v-if="HOSTED_URL" class="option" :href="HOSTED_URL" target="_blank" rel="noopener">
+			<a v-if="HOSTED_SIGNUP_URL" class="option" :href="HOSTED_SIGNUP_URL" target="_blank" rel="noopener">
 				<span class="icon cloud"><Cloud :size="20" /></span>
 				<span class="text">
 					<strong>{{ t('hostedTitle') }}</strong>

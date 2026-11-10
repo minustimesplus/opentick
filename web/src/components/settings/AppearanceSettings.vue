@@ -5,25 +5,12 @@ import AppearanceDisplay from './AppearanceDisplay.vue'
 import SettingSelect from './SettingSelect.vue'
 import SettingToggle from './SettingToggle.vue'
 import {prefs} from '@/lib/prefs'
-import {t, type MessageKey} from '@/lib/i18n'
-import {colorSeries, type ThemeColor} from '@/lib/theme'
+import {t} from '@/lib/i18n'
+import {colorSeries, colorSeriesLabels} from '@/lib/theme'
 import {background, removeBackground, uploadBackground} from '@/lib/background'
 import {toast} from '@/lib/toast'
 
-const labels: Record<ThemeColor, MessageKey> = {
-	default: 'themeDefault',
-	sky: 'themeSky',
-	turquoise: 'themeTurquoise',
-	teal: 'themeTeal',
-	matcha: 'themeMatcha',
-	sunshine: 'themeSunshine',
-	peach: 'themePeach',
-	lilac: 'themeLilac',
-	ebony: 'themeEbony',
-	navy: 'themeNavy',
-	gray: 'themeGray',
-	dark: 'themeDark',
-}
+const labels = colorSeriesLabels
 
 const tab = ref<'theme' | 'display'>('theme')
 

@@ -1,6 +1,7 @@
 import {ref, watchEffect} from 'vue'
 import {prefs} from './prefs'
 import {desktop} from './desktop'
+import type {MessageKey} from './i18n'
 
 export type ThemeColor =
 	| 'default' | 'sky' | 'turquoise' | 'teal' | 'matcha' | 'sunshine' | 'peach' | 'lilac'
@@ -28,6 +29,21 @@ export const colorSeries: ColorSeries[] = [
 	{key: 'gray', swatch: 'linear-gradient(135deg, #575b66, #363941)'},
 	{key: 'dark', swatch: '#0d0d0d'},
 ]
+
+export const colorSeriesLabels: Record<ThemeColor, MessageKey> = {
+	default: 'themeDefault',
+	sky: 'themeSky',
+	turquoise: 'themeTurquoise',
+	teal: 'themeTeal',
+	matcha: 'themeMatcha',
+	sunshine: 'themeSunshine',
+	peach: 'themePeach',
+	lilac: 'themeLilac',
+	ebony: 'themeEbony',
+	navy: 'themeNavy',
+	gray: 'themeGray',
+	dark: 'themeDark',
+}
 
 const media = window.matchMedia('(prefers-color-scheme: dark)')
 const systemDark = ref(media.matches)

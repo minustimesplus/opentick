@@ -7,8 +7,11 @@ const LOCAL_KEY = 'tt.local'
 /** True in the static demo build, which has no server at all. */
 export const DEMO = import.meta.env.VITE_DEMO === '1'
 
-/** Sign up page of the hosted instance; empty hides the option. */
+/** Hosted instance; empty hides the option. */
 export const HOSTED_URL = (import.meta.env.VITE_HOSTED_URL as string | undefined) ?? ''
+
+/** The hosted instance's sign up page (also fine if HOSTED_URL already points at it). */
+export const HOSTED_SIGNUP_URL = HOSTED_URL && (/\/signup\/?$/.test(HOSTED_URL) ? HOSTED_URL : `${HOSTED_URL.replace(/\/+$/, '')}/signup`)
 
 export const REPO_URL = 'https://github.com/minustimesplus/opentick'
 export const SELF_HOST_DOCS_URL = `${REPO_URL}#installing`

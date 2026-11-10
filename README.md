@@ -16,6 +16,10 @@ entirely in your browser with example tasks, no account or server needed. The
 app also offers "Use without an account" on its sign in screen, which keeps
 your tasks in that browser until you sign up or self-host.
 
+**[Sign up for OpenTick Cloud](https://opentick-b9732eb8fdac.herokuapp.com/signup)**:
+the hosted instance, nothing to install. It can import your TickTick backup
+while you set up.
+
 > [!NOTE]
 > OpenTick is developed with LLM-assisted coding tools in various parts of the codebase.
 
