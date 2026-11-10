@@ -5,6 +5,8 @@ import {getToken} from './api/client'
 import {routeAllowed} from './lib/features'
 import {OAUTH_AUTHORIZE_PATH, takeOAuthReturn} from './lib/oauthReturn'
 import {INVITE_PATH, rememberInviteToken} from './lib/inviteLink'
+import {DEMO, HOSTED_SIGNUP_URL} from './lib/localMode'
+import {useData} from './stores/data'
 
 export const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,6 +21,23 @@ export const router = createRouter({
 		{path: '/focus', name: 'focus', component: () => import('./views/FocusView.vue')},
 		{path: '/countdowns', name: 'countdowns', component: () => import('./views/CountdownsView.vue')},
 		{path: '/search', name: 'search', component: () => import('./views/SearchView.vue')},
+		// Linkable sign up and sign in pages (e.g. from the README or the demo).
+		// Signed out, App shows LoginView in the matching mode; signed in, they
+		// lead into the app.
+		{path: '/signup', name: 'signup', component: {render: () => null}, beforeEnter: async () => {
+			// The demo has no server: send people to the hosted instance's page.
+			if (DEMO) {
+				if (HOSTED_SIGNUP_URL) window.location.assign(HOSTED_SIGNUP_URL)
+				return '/tasks/today'
+			}
+			if (getToken()) return '/tasks/today'
+			// Using the app without an account: signing up means leaving that
+			// mode. The local data stays in the browser.
+			const data = useData()
+			if (data.local) await data.logout()
+			return true
+		}},
+		{path: '/login', name: 'login', component: {render: () => null}, beforeEnter: () => getToken() || DEMO ? '/tasks/today' : true},
 		// OAuth providers return here; the login screen finishes the sign in.
 		{path: '/sso-callback', component: {render: () => null}, beforeEnter: () => getToken() ? (takeOAuthReturn() ?? '/tasks/today') : true},
 		// OAuth consent for MCP clients; App renders OAuthConsentView instead of the shell.

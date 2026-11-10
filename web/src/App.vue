@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from 'vue'
+import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import NavRail from './components/NavRail.vue'
 import LoginView from './views/LoginView.vue'
@@ -23,6 +23,9 @@ import {featureOn, routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
 import {applyTheme} from './lib/theme'
 import {background, clearBackground, loadBackground} from './lib/background'
+import {onboardingPending} from './lib/onboarding'
+
+const OnboardingFlow = defineAsyncComponent(() => import('./components/onboarding/OnboardingFlow.vue'))
 
 const data = useData()
 const router = useRouter()
@@ -53,6 +56,18 @@ watch(() => data.authed, authed => {
 	// A fresh sign in; startup itself is covered by refresh() on mount.
 	else preloadCalendar()
 })
+
+// The sign up and sign in pages lead into the app once signed in.
+watch(() => data.authed && (route.name === 'signup' || route.name === 'login'), leave => {
+	if (leave) router.replace('/tasks/today')
+}, {immediate: true})
+
+// The setup wizard after signing up, once the new account has loaded.
+const showOnboarding = ref(false)
+watch(() => data.authed && data.loaded, ready => {
+	if (ready && onboardingPending()) showOnboarding.value = true
+	if (!data.authed) showOnboarding.value = false
+}, {immediate: true})
 
 // Leave a view as soon as its feature is turned off.
 watch(() => routeAllowed(route), allowed => {
@@ -99,7 +114,7 @@ function onKey(e: KeyboardEvent) {
 	const target = e.target as HTMLElement
 	if (target.closest('input, textarea, [contenteditable="true"]')) return
 	if (e.metaKey || e.ctrlKey || e.altKey) return
-	if (ui.settings || showConsent.value) return
+	if (ui.settings || showConsent.value || showOnboarding.value) return
 	if (e.key === '/' ) {
 		e.preventDefault()
 		router.push('/search')
@@ -162,7 +177,8 @@ onBeforeUnmount(() => {
 			:agent="ui.agentSend.agent"
 			@close="ui.agentSend = null"
 		/>
-		<InviteDialog v-if="inviteToken && data.loaded" :token="inviteToken" @close="inviteToken = pendingInviteToken()" />
+		<OnboardingFlow v-if="showOnboarding" @close="showOnboarding = false" />
+		<InviteDialog v-if="inviteToken && data.loaded && !showOnboarding" :token="inviteToken" @close="inviteToken = pendingInviteToken()" />
 	</div>
 	<template v-else>
 		<InviteBanner v-if="inviteToken" :token="inviteToken" />

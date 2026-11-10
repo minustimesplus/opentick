@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onMounted, ref} from 'vue'
+import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import type {Clerk} from '@clerk/clerk-js'
 import {useData} from '@/stores/data'
@@ -8,6 +8,8 @@ import {ApiError} from '@/api/client'
 import {desktop} from '@/lib/desktop'
 import {type AuthInfo, getAuthInfo, loadClerk, SSO_CALLBACK_PATH} from '@/lib/clerk'
 import {takeOAuthReturn} from '@/lib/oauthReturn'
+import {finishOnboarding, requestOnboarding} from '@/lib/onboarding'
+import {CalendarDays, Check, Download, ShieldCheck} from 'lucide-vue-next'
 
 type SignInResource = NonNullable<Clerk['client']>['signIn']
 
@@ -21,7 +23,9 @@ const data = useData()
 const route = useRoute()
 const router = useRouter()
 
-const mode = ref<Mode>('signin')
+// /signup opens on sign up (linked from the demo and the README); every
+// other address on sign in.
+const mode = ref<Mode>(route.name === 'signup' ? 'signup' : 'signin')
 const step = ref<Step>('form')
 const username = ref('')
 const email = ref('')
@@ -51,7 +55,10 @@ const desktopBlocked = computed(() => !!desktop && useClerk.value && auth.value!
 // builds lack the bridge for it).
 const browserSignIn = computed(() => desktopBlocked.value && !!desktop?.signInWithBrowser)
 const waitingForBrowser = ref(false)
+const pitchTasks = computed(() => [t('signupMockTask1'), t('signupMockTask2'), t('signupMockTask3')])
 const canSignUp = computed(() => useClerk.value || !!auth.value?.local.registration_enabled)
+// The sign up page pairs the form with what OpenTick offers, room permitting.
+const showPitch = computed(() => mode.value === 'signup' && step.value === 'form' && !booting.value && !desktop)
 const providers = computed(() => useClerk.value ? auth.value!.clerk!.social_providers : [])
 const visibleProviders = computed(() => showMore.value ? providers.value : providers.value.slice(0, 2))
 
@@ -59,6 +66,7 @@ const title = computed(() => {
 	if (step.value === 'totp' || (step.value === 'code' && codeFor.value !== 'signup')) return t('twoFactor')
 	if (step.value === 'code') return t('verifyEmail')
 	if (mode.value === 'reset') return t('resetPassword')
+	if (mode.value === 'signup') return t('signupTitle')
 	return mode.value === 'signin' ? t('login') : t('register')
 })
 
@@ -84,8 +92,16 @@ function providerName(p: string) {
 	return PROVIDER_NAMES[p] ?? p.charAt(0).toUpperCase() + p.slice(1)
 }
 
+watch(() => route.name, name => {
+	if (name === 'signup' && mode.value !== 'signup') switchMode('signup')
+	else if (name === 'login' && mode.value === 'signup') switchMode('signin')
+})
+
 function switchMode(next: Mode) {
 	mode.value = next
+	// Keep the address in step, so the page can be shared or bookmarked.
+	if (next === 'signup' && route.name !== 'signup') router.replace('/signup')
+	else if (next === 'signin' && route.name === 'signup') router.replace('/login')
 	step.value = 'form'
 	error.value = ''
 	notice.value = ''
@@ -119,7 +135,13 @@ async function submitLocal() {
 		if (mode.value === 'signin') {
 			await data.login(username.value.trim(), password.value, totp.value || undefined)
 		} else {
-			await data.register(username.value.trim(), email.value.trim(), password.value)
+			requestOnboarding()
+			try {
+				await data.register(username.value.trim(), email.value.trim(), password.value)
+			} catch (e) {
+				finishOnboarding()
+				throw e
+			}
 		}
 	} catch (e) {
 		// Vikunja error 1017: TOTP code required.
@@ -202,6 +224,7 @@ async function submitClerk() {
 			const res = await clerk!.client!.signUp.attemptEmailAddressVerification({code: code.value.trim()})
 			if (res.status !== 'complete') throw new Error(t('authUnavailable'))
 			await clerk!.setActive({session: res.createdSessionId})
+			requestOnboarding()
 			await exchange()
 		} else {
 			await finishSignIn(await clerk!.client!.signIn.attemptSecondFactor({strategy: codeFor.value, code: code.value.trim()}))
@@ -231,6 +254,7 @@ async function submitClerk() {
 		const signUp = await clerk!.client!.signUp.create({emailAddress: email.value.trim(), password: password.value})
 		if (signUp.status === 'complete') {
 			await clerk!.setActive({session: signUp.createdSessionId})
+			requestOnboarding()
 			await exchange()
 			return
 		}
@@ -262,6 +286,8 @@ function social(provider: string) {
 	run(async () => {
 		const target = window.location.origin + SSO_CALLBACK_PATH
 		const resource = mode.value === 'signup' ? clerk!.client!.signUp : clerk!.client!.signIn
+		// Picked up when the provider sends the new user back.
+		if (mode.value === 'signup') requestOnboarding()
 		await resource.authenticateWithRedirect({
 			strategy: `oauth_${provider}` as `oauth_${string}` as never,
 			redirectUrl: target,
@@ -350,12 +376,14 @@ async function changeServer() {
 onMounted(async () => {
 	if (desktop) serverUrl.value ||= await desktop.getServerUrl()
 	await run(() => loadAuth())
+	// Servers with registration turned off have no sign up page.
+	if (mode.value === 'signup' && auth.value && !canSignUp.value) switchMode('signin')
 	booting.value = false
 })
 </script>
 
 <template>
-	<div class="login">
+	<div class="login" :class="{'signup-page': showPitch}">
 		<header class="top">
 			<div class="brand">
 				<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#4772FA" /><path d="M9 16.5l4.5 4.5L23 11.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -370,111 +398,131 @@ onMounted(async () => {
 		</header>
 
 		<main class="center">
-			<div v-if="booting" class="card loading">
-				<div class="spinner" />
-			</div>
+			<section v-if="showPitch" class="pitch">
+				<h2>{{ t('signupPitchTitle') }}</h2>
+				<p class="pitch-sub">{{ t('signupPitchSub') }}</p>
+				<div class="mock" aria-hidden="true">
+					<div class="mock-head"><span class="mock-dot" />{{ t('today') }}</div>
+					<div v-for="(task, i) in pitchTasks" :key="task" class="mock-row" :style="{'--i': i}">
+						<span class="mock-check"><Check :size="10" :stroke-width="3.5" /></span>
+						<span class="mock-title">{{ task }}</span>
+					</div>
+				</div>
+				<ul class="perks">
+					<li :style="{'--i': 0}"><Download :size="16" />{{ t('signupPerkImport') }}</li>
+					<li :style="{'--i': 1}"><CalendarDays :size="16" />{{ t('signupPerkViews') }}</li>
+					<li :style="{'--i': 2}"><ShieldCheck :size="16" />{{ t('signupPerkOwn') }}</li>
+				</ul>
+			</section>
 
-			<form v-else class="card" @submit.prevent="submit">
-				<h1>{{ title }}</h1>
+			<div class="column">
+				<div v-if="booting" class="card loading">
+					<div class="spinner" />
+				</div>
 
-				<input v-if="desktop && step === 'form'" v-model="serverUrl" class="field" inputmode="url" spellcheck="false" :placeholder="t('serverUrl')" autocomplete="url" required :disabled="waitingForBrowser" @change="changeServer">
+				<form v-else class="card" @submit.prevent="submit">
+					<h1>{{ title }}</h1>
+					<p v-if="mode === 'signup' && step === 'form' && !desktopBlocked" class="subtitle">{{ t('signupSubtitle') }}</p>
 
-				<template v-if="browserSignIn">
-					<p class="hint">{{ waitingForBrowser ? t('waitingForBrowser') : t('desktopBrowserSignInHint') }}</p>
-					<p v-if="error" class="error">{{ error }}</p>
-					<button class="submit" :disabled="waitingForBrowser || busy">
-						<span v-if="waitingForBrowser || busy" class="spinner small" />
-						<template v-else>{{ t('signInWithBrowser') }}</template>
-					</button>
-					<button v-if="waitingForBrowser" class="link" type="button" @click="cancelBrowserSignIn">{{ t('cancel') }}</button>
-				</template>
+					<input v-if="desktop && step === 'form'" v-model="serverUrl" class="field" inputmode="url" spellcheck="false" :placeholder="t('serverUrl')" autocomplete="url" required :disabled="waitingForBrowser" @change="changeServer">
 
-				<p v-else-if="desktopBlocked" class="hint">{{ t('desktopHostedSignIn') }}</p>
-
-				<template v-else-if="step === 'form'">
-					<p v-if="mode === 'reset'" class="hint">{{ t('resetPasswordHint') }}</p>
-					<template v-if="useClerk">
-						<input v-model="email" class="field" type="email" :placeholder="t('email')" autocomplete="email" required autofocus>
+					<template v-if="browserSignIn">
+						<p class="hint">{{ waitingForBrowser ? t('waitingForBrowser') : t('desktopBrowserSignInHint') }}</p>
+						<p v-if="error" class="error">{{ error }}</p>
+						<button class="submit" :disabled="waitingForBrowser || busy">
+							<span v-if="waitingForBrowser || busy" class="spinner small" />
+							<template v-else>{{ t('signInWithBrowser') }}</template>
+						</button>
+						<button v-if="waitingForBrowser" class="link" type="button" @click="cancelBrowserSignIn">{{ t('cancel') }}</button>
 					</template>
+
+					<p v-else-if="desktopBlocked" class="hint">{{ t('desktopHostedSignIn') }}</p>
+
+					<template v-else-if="step === 'form'">
+						<p v-if="mode === 'reset'" class="hint">{{ t('resetPasswordHint') }}</p>
+						<template v-if="useClerk">
+							<input v-model="email" class="field" type="email" :placeholder="t('email')" autocomplete="email" required autofocus>
+						</template>
+						<template v-else>
+							<input v-model="username" class="field" :placeholder="mode === 'signin' ? t('username') : t('usernameOnly')" autocomplete="username" required autofocus>
+							<input v-if="mode === 'signup'" v-model="email" class="field" type="email" :placeholder="t('email')" autocomplete="email" required>
+						</template>
+						<input v-if="mode !== 'reset'" v-model="password" class="field" type="password" :placeholder="t('password')" :autocomplete="mode === 'signin' ? 'current-password' : 'new-password'" required>
+					</template>
+
 					<template v-else>
-						<input v-model="username" class="field" :placeholder="mode === 'signin' ? t('username') : t('usernameOnly')" autocomplete="username" required autofocus>
-						<input v-if="mode === 'signup'" v-model="email" class="field" type="email" :placeholder="t('email')" autocomplete="email" required>
+						<p class="hint">{{ step === 'totp' ? t('totpPrompt') : codeHint }}</p>
+						<input v-if="step === 'totp'" v-model="totp" class="field" inputmode="numeric" :placeholder="t('totp')" autocomplete="one-time-code" required autofocus>
+						<input v-else v-model="code" class="field" :inputmode="codeFor === 'backup_code' ? 'text' : 'numeric'" :placeholder="t('verificationCode')" autocomplete="one-time-code" required autofocus>
+						<input v-if="step === 'resetCode'" v-model="password" class="field" type="password" :placeholder="t('newPassword')" autocomplete="new-password" required>
 					</template>
-					<input v-if="mode !== 'reset'" v-model="password" class="field" type="password" :placeholder="t('password')" :autocomplete="mode === 'signin' ? 'current-password' : 'new-password'" required>
-				</template>
 
-				<template v-else>
-					<p class="hint">{{ step === 'totp' ? t('totpPrompt') : codeHint }}</p>
-					<input v-if="step === 'totp'" v-model="totp" class="field" inputmode="numeric" :placeholder="t('totp')" autocomplete="one-time-code" required autofocus>
-					<input v-else v-model="code" class="field" :inputmode="codeFor === 'backup_code' ? 'text' : 'numeric'" :placeholder="t('verificationCode')" autocomplete="one-time-code" required autofocus>
-					<input v-if="step === 'resetCode'" v-model="password" class="field" type="password" :placeholder="t('newPassword')" autocomplete="new-password" required>
-				</template>
+					<!-- Clerk mounts its bot protection challenge here during sign up. -->
+					<div v-if="useClerk && mode === 'signup'" id="clerk-captcha" />
 
-				<!-- Clerk mounts its bot protection challenge here during sign up. -->
-				<div v-if="useClerk && mode === 'signup'" id="clerk-captcha" />
+					<p v-if="error && !browserSignIn" class="error">{{ error }}</p>
+					<p v-if="notice" class="notice">{{ notice }}</p>
 
-				<p v-if="error && !browserSignIn" class="error">{{ error }}</p>
-				<p v-if="notice" class="notice">{{ notice }}</p>
-
-				<button v-if="!desktopBlocked" class="submit" :disabled="busy">
-					<span v-if="busy" class="spinner small" />
-					<template v-else-if="step !== 'form'">{{ t('verify') }}</template>
-					<template v-else-if="mode === 'reset'">{{ t('sendCode') }}</template>
-					<template v-else>{{ mode === 'signin' ? t('login') : t('register') }}</template>
-				</button>
-
-				<button v-if="mode === 'signin' && step === 'form' && useClerk && !desktopBlocked" class="link" type="button" @click="switchMode('reset')">
-					{{ t('forgotPassword') }}
-				</button>
-				<button v-if="step === 'code' || step === 'resetCode'" class="link" type="button" :disabled="busy" @click="resend">
-					{{ t('resendCode') }}
-				</button>
-				<button v-if="mode === 'reset' || step !== 'form'" class="link" type="button" @click="switchMode('signin')">
-					{{ t('backToSignIn') }}
-				</button>
-
-				<template v-if="providers.length && step === 'form' && mode !== 'reset' && !desktopBlocked">
-					<div class="divider" />
-					<button
-						v-for="p in visibleProviders"
-						:key="p"
-						type="button"
-						class="social"
-						:disabled="busy"
-						@click="social(p)"
-					>
-						<svg v-if="p === 'google'" viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
-							<path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-							<path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-							<path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-							<path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-						</svg>
-						<svg v-else-if="p === 'apple'" viewBox="0 0 384 512" width="16" height="16" aria-hidden="true">
-							<path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
-						</svg>
-						<svg v-else-if="p === 'github'" viewBox="0 0 16 16" width="17" height="17" aria-hidden="true">
-							<path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-						</svg>
-						<svg v-else-if="p === 'microsoft'" viewBox="0 0 21 21" width="16" height="16" aria-hidden="true">
-							<path fill="#F25022" d="M1 1h9v9H1z" /><path fill="#7FBA00" d="M11 1h9v9h-9z" /><path fill="#00A4EF" d="M1 11h9v9H1z" /><path fill="#FFB900" d="M11 11h9v9h-9z" />
-						</svg>
-						<span v-else class="initial" aria-hidden="true">{{ providerName(p).charAt(0) }}</span>
-						<span>{{ t('continueWith', {provider: providerName(p)}) }}</span>
+					<button v-if="!desktopBlocked" class="submit" :disabled="busy">
+						<span v-if="busy" class="spinner small" />
+						<template v-else-if="step !== 'form'">{{ t('verify') }}</template>
+						<template v-else-if="mode === 'reset'">{{ t('sendCode') }}</template>
+						<template v-else>{{ mode === 'signin' ? t('login') : t('register') }}</template>
 					</button>
-					<button v-if="providers.length > 2 && !showMore" type="button" class="link" @click="showMore = true">
-						{{ t('moreProviders') }}
+
+					<button v-if="mode === 'signin' && step === 'form' && useClerk && !desktopBlocked" class="link" type="button" @click="switchMode('reset')">
+						{{ t('forgotPassword') }}
 					</button>
-				</template>
-			</form>
+					<button v-if="step === 'code' || step === 'resetCode'" class="link" type="button" :disabled="busy" @click="resend">
+						{{ t('resendCode') }}
+					</button>
+					<button v-if="mode === 'reset' || step !== 'form'" class="link" type="button" @click="switchMode('signin')">
+						{{ t('backToSignIn') }}
+					</button>
 
-			<p v-if="canSignUp && step === 'form' && !booting && !desktopBlocked" class="bottom-switch">
-				<template v-if="mode === 'signup'">{{ t('haveAccount') }} <a href="#" @click.prevent="switchMode('signin')">{{ t('login') }}</a></template>
-				<template v-else>{{ t('noAccount') }} <a href="#" @click.prevent="switchMode('signup')">{{ t('register') }}</a></template>
-			</p>
+					<template v-if="providers.length && step === 'form' && mode !== 'reset' && !desktopBlocked">
+						<div class="divider" />
+						<button
+							v-for="p in visibleProviders"
+							:key="p"
+							type="button"
+							class="social"
+							:disabled="busy"
+							@click="social(p)"
+						>
+							<svg v-if="p === 'google'" viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
+								<path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+								<path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+								<path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+								<path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+							</svg>
+							<svg v-else-if="p === 'apple'" viewBox="0 0 384 512" width="16" height="16" aria-hidden="true">
+								<path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+							</svg>
+							<svg v-else-if="p === 'github'" viewBox="0 0 16 16" width="17" height="17" aria-hidden="true">
+								<path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+							</svg>
+							<svg v-else-if="p === 'microsoft'" viewBox="0 0 21 21" width="16" height="16" aria-hidden="true">
+								<path fill="#F25022" d="M1 1h9v9H1z" /><path fill="#7FBA00" d="M11 1h9v9h-9z" /><path fill="#00A4EF" d="M1 11h9v9H1z" /><path fill="#FFB900" d="M11 11h9v9h-9z" />
+							</svg>
+							<span v-else class="initial" aria-hidden="true">{{ providerName(p).charAt(0) }}</span>
+							<span>{{ t('continueWith', {provider: providerName(p)}) }}</span>
+						</button>
+						<button v-if="providers.length > 2 && !showMore" type="button" class="link" @click="showMore = true">
+							{{ t('moreProviders') }}
+						</button>
+					</template>
+				</form>
 
-			<div v-if="step === 'form' && !booting" class="local-entry">
-				<button type="button" class="local-btn" :disabled="busy || waitingForBrowser" @click="useLocal">{{ t('useWithoutAccount') }}</button>
-				<p class="local-hint">{{ t('useWithoutAccountHint') }}</p>
+				<p v-if="canSignUp && step === 'form' && !booting && !desktopBlocked" class="bottom-switch">
+					<template v-if="mode === 'signup'">{{ t('haveAccount') }} <a href="#" @click.prevent="switchMode('signin')">{{ t('login') }}</a></template>
+					<template v-else>{{ t('noAccount') }} <a href="#" @click.prevent="switchMode('signup')">{{ t('register') }}</a></template>
+				</p>
+
+				<div v-if="step === 'form' && !booting" class="local-entry">
+					<button type="button" class="local-btn" :disabled="busy || waitingForBrowser" @click="useLocal">{{ t('useWithoutAccount') }}</button>
+					<p class="local-hint">{{ t('useWithoutAccountHint') }}</p>
+				</div>
 			</div>
 		</main>
 	</div>
@@ -577,6 +625,186 @@ h1 {
 	margin: 0 0 10px;
 	font-size: 26px;
 	font-weight: 700;
+}
+
+.subtitle {
+	margin: -16px 0 4px;
+	color: var(--l-muted);
+	font-size: 13.5px;
+}
+
+.column {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+	max-width: 382px;
+}
+
+/* ---------- sign up page: the pitch beside the form ---------- */
+
+.signup-page .center {
+	flex-direction: row;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 72px;
+}
+
+.pitch {
+	flex: 0 1 400px;
+	margin-top: calc(8vh + 18px);
+	animation: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pitch h2 {
+	margin: 0;
+	font-size: 34px;
+	font-weight: 700;
+	line-height: 1.15;
+	letter-spacing: -0.5px;
+}
+
+.pitch-sub {
+	margin: 12px 0 26px;
+	color: var(--l-muted);
+	font-size: 15px;
+	line-height: 1.55;
+}
+
+.mock {
+	padding: 14px 16px 10px;
+	border-radius: 12px;
+	background: var(--l-card);
+	box-shadow: 0 10px 30px rgba(71, 114, 250, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
+	transform: rotate(-1.2deg);
+}
+
+.mock-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.mock-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--l-accent);
+}
+
+.mock-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 0;
+	border-top: 1px solid #f2f2f2;
+	font-size: 13.5px;
+}
+
+.mock-check {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	border: 1.5px solid #c4c4c4;
+	border-radius: 4px;
+	color: transparent;
+	animation: check 6s ease infinite;
+	animation-delay: calc(var(--i) * 1.1s + 0.8s);
+}
+
+.mock-title {
+	position: relative;
+	animation: done 6s ease infinite;
+	animation-delay: calc(var(--i) * 1.1s + 0.8s);
+}
+
+.perks {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 28px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.perks li {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 14px;
+	animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	animation-delay: calc(var(--i) * 0.12s + 0.25s);
+}
+
+.perks svg {
+	flex-shrink: 0;
+	color: var(--l-accent);
+}
+
+@keyframes rise {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+}
+
+@keyframes check {
+	0%, 4% {
+		border-color: #c4c4c4;
+		background: transparent;
+		color: transparent;
+		transform: none;
+	}
+	8% {
+		transform: scale(1.2);
+	}
+	12%, 80% {
+		border-color: var(--l-accent);
+		background: var(--l-accent);
+		color: #fff;
+		transform: none;
+	}
+	88%, 100% {
+		border-color: #c4c4c4;
+		background: transparent;
+		color: transparent;
+	}
+}
+
+@keyframes done {
+	0%, 6% {
+		color: var(--l-text);
+		text-decoration-color: transparent;
+	}
+	14%, 80% {
+		color: #a3a3a3;
+		text-decoration: line-through;
+		text-decoration-color: #a3a3a3;
+	}
+	88%, 100% {
+		color: var(--l-text);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pitch,
+	.perks li,
+	.mock-check,
+	.mock-title {
+		animation: none;
+	}
+}
+
+@media (max-width: 900px) {
+	.pitch {
+		display: none;
+	}
 }
 
 .field {
