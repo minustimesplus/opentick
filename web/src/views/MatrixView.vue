@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {AlignLeft, ChevronDown, ChevronRight, MoreHorizontal, Plus, Eye, EyeOff, Check} from 'lucide-vue-next'
+import {AlignLeft, ChevronDown, ChevronRight, MoreHorizontal, Plus, Eye, EyeOff, Check, Layers, ArrowUpDown, RotateCcw} from 'lucide-vue-next'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import Popover from '@/components/Popover.vue'
-import QuickAdd from '@/components/QuickAdd.vue'
+import TaskCreatePopup from '@/components/TaskCreatePopup.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
-import {getSchedule, isOverdue, parseDate, taskDateLabel} from '@/lib/dates'
+import {addDays, getSchedule, isOverdue, parseDate, startOfDay, taskDateLabel} from '@/lib/dates'
 import {level, priorityName, splitEmoji, type Level} from '@/lib/tasks'
 import {t, type MessageKey} from '@/lib/i18n'
-import {openTaskDrawer, openTaskMenu, ui} from '@/lib/ui'
-import {prefs} from '@/lib/prefs'
+import {openTaskDrawer, openTaskMenu} from '@/lib/ui'
+import {prefs, type MatrixGroup, type MatrixQuadrantView, type MatrixSort} from '@/lib/prefs'
 import {isMobile} from '@/lib/viewport'
 
 const data = useData()
@@ -21,6 +21,14 @@ interface Quadrant {
 	title: MessageKey
 	color: string
 	priority: Level
+}
+
+interface Group {
+	key: string
+	title: string
+	emoji?: string | null
+	header: boolean
+	tasks: Task[]
 }
 
 // Same arrangement as TickTick: I | III on top, II | IV below.
@@ -40,30 +48,120 @@ const listFilter = computed<number[]>({
 	set: v => { prefs.matrixLists = v },
 })
 
-function sortKey(task: Task) {
+// ---- per-quadrant grouping and sorting ----
+const DEFAULT_VIEW: MatrixQuadrantView = {group: 'priority', sort: 'date'}
+
+const groupOptions: {key: MatrixGroup, label: MessageKey}[] = [
+	{key: 'priority', label: 'priority'},
+	{key: 'list', label: 'groupList'},
+	{key: 'date', label: 'date'},
+	{key: 'none', label: 'none'},
+]
+const sortOptions: {key: MatrixSort, label: MessageKey}[] = [
+	{key: 'date', label: 'sortDate'},
+	{key: 'priority', label: 'sortPriority'},
+	{key: 'title', label: 'sortTitle'},
+	{key: 'created', label: 'sortCreated'},
+	{key: 'custom', label: 'sortCustom'},
+]
+
+function viewOf(qid: number): MatrixQuadrantView {
+	return {...DEFAULT_VIEW, ...prefs.matrixView[qid]}
+}
+
+function setView(qid: number, patch: Partial<MatrixQuadrantView>) {
+	prefs.matrixView = {...prefs.matrixView, [qid]: {...viewOf(qid), ...patch}}
+}
+
+function resetView(qid: number) {
+	const {[qid]: _v, ...views} = prefs.matrixView
+	const {[qid]: _o, ...orders} = prefs.matrixOrder
+	prefs.matrixView = views
+	prefs.matrixOrder = orders
+}
+
+function isDefault(qid: number) {
+	const v = viewOf(qid)
+	return v.group === DEFAULT_VIEW.group && v.sort === DEFAULT_VIEW.sort && !prefs.matrixOrder[qid]
+}
+
+function dateKey(task: Task) {
 	const s = getSchedule(task)
 	return s ? s.date.getTime() : Number.MAX_SAFE_INTEGER
 }
 
-function tasksFor(q: Quadrant): {priority: number, tasks: Task[]}[] {
+function comparator(qid: number): (a: Task, b: Task) => number {
+	const sort = viewOf(qid).sort
+	const byDate = (a: Task, b: Task) => dateKey(a) - dateKey(b) || a.id - b.id
+	switch (sort) {
+		case 'priority':
+			return (a, b) => (b.priority ?? 0) - (a.priority ?? 0) || byDate(a, b)
+		case 'title':
+			return (a, b) => a.title.localeCompare(b.title) || a.id - b.id
+		case 'created':
+			return (a, b) => (parseDate(b.created)?.getTime() ?? 0) - (parseDate(a.created)?.getTime() ?? 0) || b.id - a.id
+		case 'custom': {
+			const order = new Map((prefs.matrixOrder[qid] ?? []).map((id, i) => [id, i]))
+			// Tasks not placed yet (new ones) go on top, newest first.
+			return (a, b) => (order.get(a.id) ?? -1 - a.id) - (order.get(b.id) ?? -1 - b.id)
+		}
+		default:
+			return byDate
+	}
+}
+
+type DateBucket = 'overdue' | 'today' | 'tomorrow' | 'next7' | 'later' | 'noDate'
+const DATE_BUCKETS: DateBucket[] = ['overdue', 'today', 'tomorrow', 'next7', 'later', 'noDate']
+
+function dateBucket(task: Task): DateBucket {
+	const s = getSchedule(task)
+	if (!s) return 'noDate'
+	const today = startOfDay(new Date())
+	const day = startOfDay(s.date)
+	if (day < today) return task.done ? 'today' : 'overdue'
+	if (day.getTime() === today.getTime()) return 'today'
+	if (day.getTime() === addDays(today, 1).getTime()) return 'tomorrow'
+	if (day < addDays(today, 7)) return 'next7'
+	return 'later'
+}
+
+function tasksFor(q: Quadrant): Group[] {
+	const view = viewOf(q.id)
 	const source = data.allTasks.filter(task =>
 		(!task.done || (showDone.value && isRecentDone(task)))
 		&& data.projectMap.has(task.project_id)
 		&& level(task.priority) === q.priority
 		&& (!listFilter.value.length || listFilter.value.includes(task.project_id)))
-	const groups = new Map<number, Task[]>()
-	for (const task of source) {
-		const p = task.priority ?? 0
-		const g = q.priority === 3 ? 3 : p
-		if (!groups.has(g)) groups.set(g, [])
-		groups.get(g)!.push(task)
+	const groups = new Map<string, Group>()
+	const add = (key: string, make: () => Omit<Group, 'tasks' | 'key'>, task: Task) => {
+		if (!groups.has(key)) groups.set(key, {key, ...make(), tasks: []})
+		groups.get(key)!.tasks.push(task)
 	}
-	return [...groups.entries()]
-		.sort((a, b) => b[0] - a[0])
-		.map(([priority, tasks]) => ({
-			priority,
-			tasks: tasks.sort((a, b) => Number(a.done) - Number(b.done) || sortKey(a) - sortKey(b) || a.id - b.id),
-		}))
+	for (const task of source) {
+		if (view.group === 'priority') {
+			const p = q.priority === 3 ? 3 : task.priority ?? 0
+			add(`p${p}`, () => ({title: priorityName(level(p)), header: q.priority !== 0}), task)
+		} else if (view.group === 'list') {
+			const l = listLabel(task)
+			add(`l${task.project_id}`, () => ({title: l?.name ?? '', emoji: l?.emoji, header: true}), task)
+		} else if (view.group === 'date') {
+			const b = dateBucket(task)
+			add(`d${b}`, () => ({title: t(b), header: true}), task)
+		} else {
+			add('all', () => ({title: '', header: false}), task)
+		}
+	}
+	const projectIndex = new Map(data.realProjects.map((p, i) => [p.id, i]))
+	const rank = (g: Group) => {
+		if (view.group === 'priority') return -Number(g.key.slice(1))
+		if (view.group === 'list') return projectIndex.get(Number(g.key.slice(1))) ?? 0
+		if (view.group === 'date') return DATE_BUCKETS.indexOf(g.key.slice(1) as DateBucket)
+		return 0
+	}
+	const cmp = comparator(q.id)
+	return [...groups.values()]
+		.sort((a, b) => rank(a) - rank(b))
+		.map(g => ({...g, tasks: g.tasks.sort((a, b) => Number(a.done) - Number(b.done) || cmp(a, b))}))
 }
 
 function isRecentDone(task: Task) {
@@ -82,42 +180,110 @@ function listLabel(task: Task) {
 
 const collapsed = ref<Record<string, boolean>>({})
 
-// ---- drag & drop between quadrants ----
+// ---- drag & drop: between quadrants changes priority, within one reorders ----
 const dropQ = ref<number | null>(null)
+const dragId = ref<number | null>(null)
+const dropAt = ref<{q: number, id: number, after: boolean} | null>(null)
 
 function onDragStart(e: DragEvent, task: Task) {
+	dragId.value = task.id
 	e.dataTransfer?.setData('application/x-task-id', String(task.id))
 	if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+
+function onDragEnd() {
+	dragId.value = null
+	dropAt.value = null
+	dropQ.value = null
 }
 
 function onDragOver(e: DragEvent, q: Quadrant) {
 	if (!e.dataTransfer?.types.includes('application/x-task-id')) return
 	e.preventDefault()
 	dropQ.value = q.id
+	const row = (e.target as HTMLElement).closest?.('.m-row[data-id]') as HTMLElement | null
+	const id = Number(row?.dataset.id)
+	if (!row || !id || id === dragId.value) {
+		if (!row) dropAt.value = null
+		return
+	}
+	const r = row.getBoundingClientRect()
+	dropAt.value = {q: q.id, id, after: e.clientY > r.top + r.height / 2}
+}
+
+function onDragLeave(e: DragEvent, q: Quadrant) {
+	if ((e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) return
+	if (dropQ.value === q.id) dropQ.value = null
+	if (dropAt.value?.q === q.id) dropAt.value = null
 }
 
 function onDrop(e: DragEvent, q: Quadrant) {
-	dropQ.value = null
-	const id = Number(e.dataTransfer?.getData('application/x-task-id'))
+	const target = dropAt.value?.q === q.id ? dropAt.value : null
+	const id = dragId.value ?? Number(e.dataTransfer?.getData('application/x-task-id'))
+	onDragEnd()
 	const task = id ? data.tasks.get(id) : undefined
-	if (!task || level(task.priority) === q.priority) return
-	data.updateTask(id, {priority: q.priority})
+	if (!task) return
+	if (level(task.priority) !== q.priority) data.updateTask(id, {priority: q.priority})
+	if (target && target.id !== id) reorder(q.id, id, target.id, target.after)
+}
+
+/** Moves a task before or after another one and switches the quadrant to custom order. */
+function reorder(qid: number, id: number, targetId: number, after: boolean) {
+	const shown = (groupsByQuadrant.value.get(qid) ?? []).flatMap(g => g.tasks.map(task => task.id)).filter(x => x !== id)
+	let i = shown.indexOf(targetId)
+	if (i < 0) return
+	if (after) i++
+	shown.splice(i, 0, id)
+	// Keep tasks hidden by the filters where they were, after the visible ones.
+	const hidden = (prefs.matrixOrder[qid] ?? []).filter(x => !shown.includes(x))
+	prefs.matrixOrder = {...prefs.matrixOrder, [qid]: [...shown, ...hidden]}
+	if (viewOf(qid).sort !== 'custom') setView(qid, {sort: 'custom'})
 }
 
 // ---- add per quadrant ----
-const adding = ref<number | null>(null)
+const adding = ref<{q: Quadrant, el: HTMLElement} | null>(null)
 
-// ---- menu ----
+function startAdd(q: Quadrant, e: MouseEvent) {
+	adding.value = {q, el: e.currentTarget as HTMLElement}
+}
+
+// ---- quadrant menu ----
+const qMenu = ref<{q: Quadrant, el: HTMLElement} | null>(null)
+const qSub = ref<'group' | 'sort' | null>(null)
+const groupEl = ref<HTMLElement | null>(null)
+const sortEl = ref<HTMLElement | null>(null)
+
+function openQMenu(q: Quadrant, e: MouseEvent) {
+	qSub.value = null
+	qMenu.value = {q, el: e.currentTarget as HTMLElement}
+}
+
+function closeQMenu() {
+	qSub.value = null
+	qMenu.value = null
+}
+
+function pickGroup(g: MatrixGroup) {
+	if (qMenu.value) setView(qMenu.value.q.id, {group: g})
+	closeQMenu()
+}
+
+function pickSort(s: MatrixSort) {
+	if (qMenu.value) setView(qMenu.value.q.id, {sort: s})
+	closeQMenu()
+}
+
+function optionLabel<K extends string>(opts: {key: K, label: MessageKey}[], key: K) {
+	return t(opts.find(o => o.key === key)?.label ?? opts[0].label)
+}
+
+// ---- view menu ----
 const moreEl = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
 
 function toggleList(id: number) {
 	const cur = listFilter.value
 	listFilter.value = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]
-}
-
-function groupTitle(p: number) {
-	return priorityName(level(p))
 }
 </script>
 
@@ -133,47 +299,48 @@ function groupTitle(p: number) {
 				v-for="q in quadrants"
 				:key="q.id"
 				class="quad"
-				:class="{drop: dropQ === q.id}"
+				:class="{drop: dropQ === q.id, active: adding?.q.id === q.id || qMenu?.q.id === q.id}"
 				:style="{'--q-order': q.id}"
 				@dragover="onDragOver($event, q)"
-				@dragleave="dropQ === q.id && (dropQ = null)"
+				@dragleave="onDragLeave($event, q)"
 				@drop="onDrop($event, q)"
 			>
 				<div class="q-head" :style="{color: q.color}">
 					<span class="roman" :style="{background: q.color}">{{ q.roman }}</span>
 					<span class="q-title">{{ t(q.title) }}</span>
-					<button class="q-add" :title="t('addTask')" @click="adding = adding === q.id ? null : q.id"><Plus :size="16" /></button>
+					<button class="q-btn" :title="t('addTask')" @click="startAdd(q, $event)"><Plus :size="16" /></button>
+					<button class="q-btn" @click="openQMenu(q, $event)"><MoreHorizontal :size="16" /></button>
 				</div>
 
-				<QuickAdd
-					v-if="adding === q.id"
-					:key="'qa' + q.id + ui.focusQuickAdd"
-					class="q-qa"
-					:defaults="{priority: q.priority}"
-					@created="adding = null"
-				/>
-
 				<div class="q-body">
-					<template v-for="g in groupsByQuadrant.get(q.id)" :key="g.priority">
-						<div v-if="q.priority !== 0" class="g-head" @click="collapsed[`${q.id}:${g.priority}`] = !collapsed[`${q.id}:${g.priority}`]">
-							<component :is="collapsed[`${q.id}:${g.priority}`] ? ChevronRight : ChevronDown" :size="14" />
-							<span>{{ groupTitle(g.priority) }}</span>
+					<template v-for="g in groupsByQuadrant.get(q.id)" :key="g.key">
+						<div v-if="g.header" class="g-head" @click="collapsed[`${q.id}:${g.key}`] = !collapsed[`${q.id}:${g.key}`]">
+							<component :is="collapsed[`${q.id}:${g.key}`] ? ChevronRight : ChevronDown" :size="14" />
+							<span v-if="g.emoji">{{ g.emoji }}</span>
+							<span>{{ g.title }}</span>
 							<span class="g-count">{{ g.tasks.length }}</span>
 						</div>
-						<template v-if="!collapsed[`${q.id}:${g.priority}`]">
+						<template v-if="!g.header || !collapsed[`${q.id}:${g.key}`]">
 							<div
 								v-for="task in g.tasks"
 								:key="task.id"
 								class="m-row"
-								:class="{done: task.done}"
+								:data-id="task.id"
+								:class="{
+									done: task.done,
+									dragging: dragId === task.id,
+									'drop-before': dropAt?.q === q.id && dropAt.id === task.id && !dropAt.after,
+									'drop-after': dropAt?.q === q.id && dropAt.id === task.id && dropAt.after,
+								}"
 								:draggable="!isMobile"
 								@dragstart="onDragStart($event, task)"
+								@dragend="onDragEnd"
 								@click="openTaskDrawer(task.id)"
 								@contextmenu="openTaskMenu(task.id, $event)"
 							>
 								<TaskCheckbox :done="task.done" :wont-do="task.wont_do" :priority="task.priority" @toggle="data.toggleDone(task.id)" />
 								<span class="m-title">{{ task.title }}</span>
-								<span v-if="listLabel(task)" class="m-list">
+								<span v-if="viewOf(q.id).group !== 'list' && listLabel(task)" class="m-list">
 									<span v-if="listLabel(task)!.emoji">{{ listLabel(task)!.emoji }}</span>{{ listLabel(task)!.name }}
 								</span>
 								<AlignLeft v-if="task.description && task.description.replace(/<[^>]*>/g, '').trim()" :size="13" class="m-ic" />
@@ -185,6 +352,48 @@ function groupTitle(p: number) {
 				</div>
 			</section>
 		</div>
+
+		<TaskCreatePopup
+			v-if="adding"
+			:key="adding.q.id"
+			:anchor="adding.el"
+			:priority="adding.q.priority"
+			:project-id="listFilter.length === 1 ? listFilter[0] : undefined"
+			@close="adding = null"
+		/>
+
+		<Popover v-if="qMenu" :anchor="qMenu.el" placement="bottom-end" @close="closeQMenu">
+			<div class="menu q-menu">
+				<button ref="groupEl" class="menu-item" :class="{active: qSub === 'group'}" @click="qSub = 'group'">
+					<Layers :size="15" /> {{ t('groupBy') }}
+					<span class="q-menu-val">{{ optionLabel(groupOptions, viewOf(qMenu.q.id).group) }}</span>
+					<ChevronRight :size="14" />
+				</button>
+				<button ref="sortEl" class="menu-item" :class="{active: qSub === 'sort'}" @click="qSub = 'sort'">
+					<ArrowUpDown :size="15" /> {{ t('sortBy') }}
+					<span class="q-menu-val">{{ optionLabel(sortOptions, viewOf(qMenu.q.id).sort) }}</span>
+					<ChevronRight :size="14" />
+				</button>
+				<div class="menu-sep" />
+				<button class="menu-item" :disabled="isDefault(qMenu.q.id)" @click="resetView(qMenu.q.id); closeQMenu()">
+					<RotateCcw :size="15" /> {{ t('resetMatrixSort') }}
+				</button>
+			</div>
+		</Popover>
+		<Popover v-if="qMenu && qSub === 'group'" :anchor="groupEl" placement="right-start" @close="qSub = null">
+			<div class="menu">
+				<button v-for="o in groupOptions" :key="o.key" class="menu-item" @click="pickGroup(o.key)">
+					<Check :size="15" :style="{visibility: viewOf(qMenu.q.id).group === o.key ? 'visible' : 'hidden'}" /> {{ t(o.label) }}
+				</button>
+			</div>
+		</Popover>
+		<Popover v-if="qMenu && qSub === 'sort'" :anchor="sortEl" placement="right-start" @close="qSub = null">
+			<div class="menu">
+				<button v-for="o in sortOptions" :key="o.key" class="menu-item" @click="pickSort(o.key)">
+					<Check :size="15" :style="{visibility: viewOf(qMenu.q.id).sort === o.key ? 'visible' : 'hidden'}" /> {{ t(o.label) }}
+				</button>
+			</div>
+		</Popover>
 
 		<Popover v-if="menuOpen" :anchor="moreEl" placement="bottom-end" @close="menuOpen = false">
 			<div class="menu lists-menu">
@@ -281,31 +490,37 @@ h1 {
 	flex: 1;
 }
 
-.q-add {
+.q-btn {
 	display: none;
 	color: var(--text-3);
 	border-radius: 5px;
 	padding: 3px;
 }
 
-.quad:hover .q-add {
+.quad:hover .q-btn,
+.quad.active .q-btn {
 	display: flex;
 }
 
-/* Touch screens can't hover, so the add button always shows. */
+/* Touch screens can't hover, so the buttons always show. */
 @media (hover: none) {
-	.q-add {
+	.q-btn {
 		display: flex;
 	}
 }
 
-.q-add:hover {
+.q-btn:hover {
 	background: var(--bg-hover);
 	color: var(--text);
 }
 
-.q-qa {
-	margin: 0 8px 8px 0;
+.q-menu {
+	min-width: 240px;
+}
+
+.q-menu-val {
+	margin-left: auto;
+	color: var(--text-3);
 }
 
 .q-body {
@@ -341,6 +556,31 @@ h1 {
 	border-radius: 6px;
 	cursor: default;
 	position: relative;
+}
+
+.m-row.dragging {
+	opacity: 0.4;
+}
+
+/* Where a dragged task will land. */
+.m-row.drop-before::before,
+.m-row.drop-after::before {
+	content: "";
+	position: absolute;
+	left: 30px;
+	right: 12px;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--accent);
+	z-index: 1;
+}
+
+.m-row.drop-before::before {
+	top: -1px;
+}
+
+.m-row.drop-after::before {
+	bottom: -1px;
 }
 
 .m-row::after {
@@ -454,7 +694,7 @@ h1 {
 		padding-right: 0;
 	}
 
-	.q-add {
+	.q-btn {
 		padding: 6px;
 	}
 
