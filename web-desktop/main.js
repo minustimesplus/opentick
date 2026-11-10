@@ -5,8 +5,9 @@
 // the user picks on the login screen. Keeping everything same-origin means
 // the refresh-token cookie and fetch() work exactly as in the browser.
 
-const {app, BrowserWindow, ipcMain, shell, Menu} = require('electron')
+const {app, BrowserWindow, ipcMain, shell, Menu, session} = require('electron')
 const {autoUpdater} = require('electron-updater')
+const crypto = require('crypto')
 const fs = require('fs')
 const http = require('http')
 const https = require('https')
@@ -19,6 +20,14 @@ const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000
 // Idle time (no bytes either way) before a proxied API request is given up.
 const UPSTREAM_TIMEOUT = 15 * 1000
 const REPO = {owner: 'minustimesplus', repo: 'opentick'}
+// First-party OAuth client id for signing in through the system browser.
+const OAUTH_CLIENT_ID = 'opentick-desktop'
+// How long the browser sign in may take before it is given up.
+const BROWSER_SIGN_IN_TIMEOUT = 10 * 60 * 1000
+// Matches the server's default service.jwtttl. The first refresh replaces the
+// cookie with one carrying the server's real lifetime.
+const REFRESH_COOKIE_LIFETIME = 72 * 60 * 60
+const REFRESH_COOKIE_PATHS = ['/api/v1/user/token/refresh', '/api/v2/user/token/refresh']
 
 const MIME_TYPES = {
 	'.html': 'text/html; charset=utf-8',
@@ -167,6 +176,142 @@ function startServer() {
 	})
 }
 
+// ─── Browser sign in ─────────────────────────────────────────────────
+// Hosted servers sign in through Clerk, which only runs on the server's own
+// domain. So the system browser signs in there and approves this app through
+// the OAuth authorization code flow (PKCE, loopback redirect per RFC 8252).
+
+let browserSignIn = null
+
+const base64url = buf => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+function callbackPage(title, message) {
+	const escape = s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c])
+	return `<!doctype html><html><head><meta charset="utf-8"><title>OpenTick</title>
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#f8f8f8;color:#191919;font:15px system-ui,sans-serif}
+main{max-width:380px;padding:40px;border-radius:14px;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.04);text-align:center}
+h1{margin:0 0 10px;font-size:22px}p{margin:0;color:#757575;line-height:1.5}</style></head>
+<body><main><h1>${escape(title)}</h1><p>${escape(message)}</p></main></body></html>`
+}
+
+/** Stores the refresh token where the proxy would have put the server's cookie. */
+async function storeRefreshToken(refreshToken) {
+	const expirationDate = Math.floor(Date.now() / 1000) + REFRESH_COOKIE_LIFETIME
+	for (const cookiePath of REFRESH_COOKIE_PATHS) {
+		await session.defaultSession.cookies.set({
+			url: origin + cookiePath,
+			name: 'vikunja_refresh_token',
+			value: refreshToken,
+			path: cookiePath,
+			httpOnly: true,
+			sameSite: 'lax',
+			expirationDate,
+		})
+	}
+}
+
+async function exchangeCode(serverUrl, code, redirectUri, verifier) {
+	const res = await fetch(serverUrl + '/api/v2/oauth/token', {
+		method: 'POST',
+		headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+		body: JSON.stringify({
+			grant_type: 'authorization_code',
+			code,
+			client_id: OAUTH_CLIENT_ID,
+			redirect_uri: redirectUri,
+			code_verifier: verifier,
+		}),
+		signal: AbortSignal.timeout(UPSTREAM_TIMEOUT),
+	})
+	const body = await res.json().catch(() => ({}))
+	if (!res.ok || !body.access_token) throw new Error(body.message || body.error_description || `Sign in failed (${res.status})`)
+	if (body.refresh_token) await storeRefreshToken(body.refresh_token)
+	return body.access_token
+}
+
+function cancelBrowserSignIn() {
+	browserSignIn?.finish(new Error('cancelled'))
+}
+
+/** Resolves with an access token once the user approved this app in the browser. */
+function startBrowserSignIn() {
+	cancelBrowserSignIn()
+	if (!config.serverUrl) return Promise.reject(new Error('No server configured'))
+
+	const verifier = base64url(crypto.randomBytes(32))
+	const challenge = base64url(crypto.createHash('sha256').update(verifier).digest())
+	const state = base64url(crypto.randomBytes(16))
+	const serverUrl = config.serverUrl
+
+	return new Promise((resolve, reject) => {
+		let redirectUri = ''
+		let timer = null
+		const server = http.createServer(async (req, res) => {
+			const url = new URL(req.url, 'http://127.0.0.1')
+			if (url.pathname !== '/callback' || url.searchParams.get('state') !== state) {
+				res.writeHead(404)
+				res.end()
+				return
+			}
+			const send = (status, title, message) => {
+				res.writeHead(status, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'})
+				res.end(callbackPage(title, message))
+			}
+			const code = url.searchParams.get('code')
+			if (!code) {
+				send(200, 'Sign in cancelled', 'You can close this tab.')
+				flow.finish(new Error('cancelled'))
+				return
+			}
+			try {
+				const token = await exchangeCode(serverUrl, code, redirectUri, verifier)
+				send(200, 'Signed in', 'You can close this tab and return to OpenTick.')
+				flow.finish(null, token)
+			} catch (err) {
+				send(400, 'Sign in failed', err.message)
+				flow.finish(err)
+			}
+		})
+
+		const flow = {
+			finish(err, token) {
+				if (browserSignIn !== flow) return
+				browserSignIn = null
+				clearTimeout(timer)
+				// Let the response to the browser go out before closing.
+				setTimeout(() => server.close(), 1000)
+				if (err) {
+					reject(err)
+					return
+				}
+				if (mainWindow) {
+					if (mainWindow.isMinimized()) mainWindow.restore()
+					mainWindow.show()
+					mainWindow.focus()
+				}
+				resolve(token)
+			},
+		}
+		browserSignIn = flow
+		timer = setTimeout(() => flow.finish(new Error('timed out')), BROWSER_SIGN_IN_TIMEOUT)
+
+		server.on('error', err => flow.finish(err))
+		server.listen(0, '127.0.0.1', () => {
+			redirectUri = `http://127.0.0.1:${server.address().port}/callback`
+			const authorize = new URL(serverUrl + '/oauth/authorize')
+			authorize.search = new URLSearchParams({
+				response_type: 'code',
+				client_id: OAUTH_CLIENT_ID,
+				redirect_uri: redirectUri,
+				state,
+				code_challenge: challenge,
+				code_challenge_method: 'S256',
+			}).toString()
+			shell.openExternal(authorize.toString()).catch(err => flow.finish(err))
+		})
+	})
+}
+
 // ─── Window ──────────────────────────────────────────────────────────
 function createMainWindow() {
 	mainWindow = new BrowserWindow({
@@ -265,11 +410,23 @@ ipcMain.handle('server:get', () => config.serverUrl || '')
 ipcMain.handle('server:set', (_event, input) => {
 	const serverUrl = normalizeServerUrl(input)
 	if (serverUrl !== config.serverUrl) {
+		cancelBrowserSignIn()
 		config = {...config, serverUrl}
 		saveConfig(config)
 	}
 	return serverUrl
 })
+
+// Errors cross IPC as plain messages; 'cancelled' means the user backed out.
+ipcMain.handle('auth:browser-sign-in', async () => {
+	try {
+		return {token: await startBrowserSignIn()}
+	} catch (err) {
+		return {error: err.message}
+	}
+})
+
+ipcMain.on('auth:cancel-browser-sign-in', cancelBrowserSignIn)
 
 ipcMain.on('theme:set', (_event, theme) => {
 	// Color series send their frame color; older pages send 'dark' / 'light'.

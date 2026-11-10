@@ -47,6 +47,10 @@ const useClerk = computed(() => !!auth.value?.clerk?.enabled && !!auth.value.cle
 // Clerk production instances only accept their own domain, which the
 // desktop app's local origin is not. Development instances allow localhost.
 const desktopBlocked = computed(() => !!desktop && useClerk.value && auth.value!.clerk!.publishable_key!.startsWith('pk_live_'))
+// Such servers sign in through the system browser instead (older desktop
+// builds lack the bridge for it).
+const browserSignIn = computed(() => desktopBlocked.value && !!desktop?.signInWithBrowser)
+const waitingForBrowser = ref(false)
 const canSignUp = computed(() => useClerk.value || !!auth.value?.local.registration_enabled)
 const providers = computed(() => useClerk.value ? auth.value!.clerk!.social_providers : [])
 const visibleProviders = computed(() => showMore.value ? providers.value : providers.value.slice(0, 2))
@@ -266,6 +270,28 @@ function social(provider: string) {
 	})
 }
 
+// ---------- desktop: through the browser ----------
+
+async function signInWithBrowser() {
+	if (waitingForBrowser.value) return
+	error.value = ''
+	waitingForBrowser.value = true
+	try {
+		const res = await desktop!.signInWithBrowser!()
+		if (res.token) {
+			await run(() => data.loginWithToken(res.token!))
+		} else if (res.error && res.error !== 'cancelled') {
+			error.value = t('browserSignInFailed', {message: res.error})
+		}
+	} finally {
+		waitingForBrowser.value = false
+	}
+}
+
+function cancelBrowserSignIn() {
+	desktop?.cancelBrowserSignIn?.()
+}
+
 // ---------- without an account ----------
 
 function useLocal() {
@@ -275,6 +301,10 @@ function useLocal() {
 // ---------- setup ----------
 
 function submit() {
+	if (browserSignIn.value) {
+		signInWithBrowser()
+		return
+	}
 	run(async () => {
 		if (desktop) serverUrl.value = await desktop.setServerUrl(serverUrl.value.trim())
 		if (useClerk.value) await submitClerk()
@@ -331,7 +361,7 @@ onMounted(async () => {
 				<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#4772FA" /><path d="M9 16.5l4.5 4.5L23 11.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
 				<span class="wordmark">OpenTick</span>
 			</div>
-			<div v-if="canSignUp && step === 'form'" class="top-switch">
+			<div v-if="canSignUp && step === 'form' && !desktopBlocked" class="top-switch">
 				<span>{{ mode === 'signup' ? t('haveAccount') : t('noAccount') }}</span>
 				<button class="top-btn" type="button" @click="switchMode(mode === 'signup' ? 'signin' : 'signup')">
 					{{ mode === 'signup' ? t('login') : t('register') }}
@@ -347,9 +377,19 @@ onMounted(async () => {
 			<form v-else class="card" @submit.prevent="submit">
 				<h1>{{ title }}</h1>
 
-				<input v-if="desktop && step === 'form'" v-model="serverUrl" class="field" inputmode="url" spellcheck="false" :placeholder="t('serverUrl')" autocomplete="url" required @change="changeServer">
+				<input v-if="desktop && step === 'form'" v-model="serverUrl" class="field" inputmode="url" spellcheck="false" :placeholder="t('serverUrl')" autocomplete="url" required :disabled="waitingForBrowser" @change="changeServer">
 
-				<p v-if="desktopBlocked" class="hint">{{ t('desktopHostedSignIn') }}</p>
+				<template v-if="browserSignIn">
+					<p class="hint">{{ waitingForBrowser ? t('waitingForBrowser') : t('desktopBrowserSignInHint') }}</p>
+					<p v-if="error" class="error">{{ error }}</p>
+					<button class="submit" :disabled="waitingForBrowser || busy">
+						<span v-if="waitingForBrowser || busy" class="spinner small" />
+						<template v-else>{{ t('signInWithBrowser') }}</template>
+					</button>
+					<button v-if="waitingForBrowser" class="link" type="button" @click="cancelBrowserSignIn">{{ t('cancel') }}</button>
+				</template>
+
+				<p v-else-if="desktopBlocked" class="hint">{{ t('desktopHostedSignIn') }}</p>
 
 				<template v-else-if="step === 'form'">
 					<p v-if="mode === 'reset'" class="hint">{{ t('resetPasswordHint') }}</p>
@@ -373,7 +413,7 @@ onMounted(async () => {
 				<!-- Clerk mounts its bot protection challenge here during sign up. -->
 				<div v-if="useClerk && mode === 'signup'" id="clerk-captcha" />
 
-				<p v-if="error" class="error">{{ error }}</p>
+				<p v-if="error && !browserSignIn" class="error">{{ error }}</p>
 				<p v-if="notice" class="notice">{{ notice }}</p>
 
 				<button v-if="!desktopBlocked" class="submit" :disabled="busy">
@@ -427,13 +467,13 @@ onMounted(async () => {
 				</template>
 			</form>
 
-			<p v-if="canSignUp && step === 'form' && !booting" class="bottom-switch">
+			<p v-if="canSignUp && step === 'form' && !booting && !desktopBlocked" class="bottom-switch">
 				<template v-if="mode === 'signup'">{{ t('haveAccount') }} <a href="#" @click.prevent="switchMode('signin')">{{ t('login') }}</a></template>
 				<template v-else>{{ t('noAccount') }} <a href="#" @click.prevent="switchMode('signup')">{{ t('register') }}</a></template>
 			</p>
 
 			<div v-if="step === 'form' && !booting" class="local-entry">
-				<button type="button" class="local-btn" :disabled="busy" @click="useLocal">{{ t('useWithoutAccount') }}</button>
+				<button type="button" class="local-btn" :disabled="busy || waitingForBrowser" @click="useLocal">{{ t('useWithoutAccount') }}</button>
 				<p class="local-hint">{{ t('useWithoutAccountHint') }}</p>
 			</div>
 		</main>
