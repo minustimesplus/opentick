@@ -14,7 +14,7 @@ import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import SubscriptionDialog from '@/components/SubscriptionDialog.vue'
 import type {CalendarSubscription, Task} from '@/api/types'
 import {useData} from '@/stores/data'
-import {calendarColor, useCalendars, type CalEvent} from '@/stores/calendars'
+import {calendarColor, eventRangeFor, useCalendars, type CalEvent} from '@/stores/calendars'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
 import {
@@ -91,18 +91,6 @@ onMounted(() => {
 
 const hiddenSubs = computed(() => new Set(prefs.calendarHiddenSubs))
 const visibleSubs = computed(() => calendars.subscriptions.filter(s => !hiddenSubs.value.has(s.id)))
-
-// The scrolling month grid can show a few weeks before and after the anchor
-// month (whose month is the one of its third row), so load a wider window there.
-// Day and week views load whole weeks, so stepping through days stays in cache.
-function eventRangeFor(m: typeof mode.value, at: Date) {
-	if (m === 'month') {
-		const s = startOfWeek(startOfMonth(at))
-		return {start: addDays(s, -21), end: addDays(s, 70)}
-	}
-	const s = startOfWeek(at)
-	return {start: s, end: addDays(s, 7)}
-}
 
 const eventRange = computed(() => eventRangeFor(mode.value, anchor.value))
 

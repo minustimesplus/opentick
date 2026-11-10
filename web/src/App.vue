@@ -11,6 +11,7 @@ import TaskContextMenu from './components/TaskContextMenu.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import AgentSendDialog from './components/AgentSendDialog.vue'
 import {useAgents} from './stores/agents'
+import {useCalendars} from './stores/calendars'
 import InviteDialog from './components/collab/InviteDialog.vue'
 import InviteBanner from './components/collab/InviteBanner.vue'
 import {pendingInviteToken} from './lib/inviteLink'
@@ -18,7 +19,7 @@ import {useData} from './stores/data'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
-import {routeAllowed} from './lib/features'
+import {featureOn, routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
 import {applyTheme} from './lib/theme'
 import {background, clearBackground, loadBackground} from './lib/background'
@@ -49,6 +50,8 @@ watch(() => data.authed, authed => {
 
 watch(() => data.authed, authed => {
 	if (!authed) agents.clear()
+	// A fresh sign in; startup itself is covered by refresh() on mount.
+	else preloadCalendar()
 })
 
 // Leave a view as soon as its feature is turned off.
@@ -63,9 +66,29 @@ const showBackground = computed(() =>
 
 let timer: number | undefined
 
+const calendars = useCalendars()
+let calendarViewWarmed = false
+
+/**
+ * Loads the calendar's code and the subscribed calendars' events for the
+ * first two weeks in the background, so opening the calendar after startup
+ * (or after the laptop wakes) shows everything at once.
+ */
+function preloadCalendar() {
+	if (!featureOn('calendar')) return
+	if (!calendarViewWarmed) {
+		calendarViewWarmed = true
+		import('./views/CalendarView.vue').catch(() => { calendarViewWarmed = false })
+	}
+	calendars.preload().catch(() => {})
+}
+
 function refresh() {
 	if (data.authed && !data.loading) data.loadAll().catch(() => {})
-	if (data.authed) agents.load()
+	if (data.authed) {
+		agents.load()
+		preloadCalendar()
+	}
 }
 
 watch(() => agents.enabled, on => {
