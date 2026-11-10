@@ -10,6 +10,13 @@ export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | '
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
 
+export type MatrixGroup = 'priority' | 'list' | 'date' | 'none'
+export type MatrixSort = 'date' | 'priority' | 'title' | 'created' | 'custom'
+export interface MatrixQuadrantView {
+	group: MatrixGroup
+	sort: MatrixSort
+}
+
 export interface Prefs {
 	language: 'auto' | 'en' | 'fr'
 	/** TickTick-style color series; 'default' is plain light, 'dark' is dark mode. */
@@ -47,6 +54,10 @@ export interface Prefs {
 	collapsed: Record<string, boolean>
 	matrixLists: number[]
 	matrixShowDone: boolean
+	/** Grouping and sorting per Eisenhower quadrant (by quadrant id 1-4). */
+	matrixView: Record<number, MatrixQuadrantView>
+	/** Manual task order per quadrant, used when its sort is 'custom'. */
+	matrixOrder: Record<number, number[]>
 	/** Client last picked in the MCP setup guide. */
 	mcpClient: string
 	/** Focus timer lengths in minutes; a long break follows every focusLongBreakEvery pomos. */
@@ -93,6 +104,8 @@ const defaults: Prefs = {
 	collapsed: {},
 	matrixLists: [],
 	matrixShowDone: false,
+	matrixView: {},
+	matrixOrder: {},
 	mcpClient: '',
 	focusPomoMinutes: 25,
 	focusShortBreakMinutes: 5,
