@@ -6,6 +6,7 @@ import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
 import {signOutOfClerk} from '@/lib/clerk'
+import {useAgents} from './agents'
 import {DEMO, isLocal, setLocal} from '@/lib/localMode'
 
 const MERGE = 'application/merge-patch+json'
@@ -440,6 +441,7 @@ export const useData = defineStore('data', () => {
 			const created = await api<Task>('POST', `/projects/${projectId}/tasks`, {body: {...input, project_id: projectId}, query: {format: 'markdown'}})
 			tasks.set(created.id, created)
 			if (inflight) createdDuringSync.add(created.id)
+			useAgents().afterTaskCreated(created)
 			for (const title of labelTitles) {
 				await addLabelByTitle(created.id, title)
 			}

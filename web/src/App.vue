@@ -9,6 +9,8 @@ import Toasts from './components/Toasts.vue'
 import WindowControls from './components/WindowControls.vue'
 import TaskContextMenu from './components/TaskContextMenu.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
+import AgentSendDialog from './components/AgentSendDialog.vue'
+import {useAgents} from './stores/agents'
 import InviteDialog from './components/collab/InviteDialog.vue'
 import InviteBanner from './components/collab/InviteBanner.vue'
 import {pendingInviteToken} from './lib/inviteLink'
@@ -30,6 +32,7 @@ watchEffect(() => {
 	document.documentElement.lang = locale.value
 })
 
+const agents = useAgents()
 const showApp = computed(() => data.authed)
 
 // An opened invitation link waits here until the user is signed in.
@@ -43,6 +46,10 @@ watch(() => data.authed, authed => {
 	if (authed) loadBackground()
 	else clearBackground()
 }, {immediate: true})
+
+watch(() => data.authed, authed => {
+	if (!authed) agents.clear()
+})
 
 // Leave a view as soon as its feature is turned off.
 watch(() => routeAllowed(route), allowed => {
@@ -58,7 +65,12 @@ let timer: number | undefined
 
 function refresh() {
 	if (data.authed && !data.loading) data.loadAll().catch(() => {})
+	if (data.authed) agents.load()
 }
+
+watch(() => agents.enabled, on => {
+	if (on && data.authed) agents.load()
+})
 
 function onKey(e: KeyboardEvent) {
 	const target = e.target as HTMLElement
@@ -120,6 +132,13 @@ onBeforeUnmount(() => {
 		<TaskDrawer v-if="ui.drawerTaskId !== null" :key="ui.drawerTaskId" :task-id="ui.drawerTaskId" />
 		<TaskContextMenu v-if="ui.ctx" :key="ui.ctx.taskId + ':' + ui.ctx.x + ':' + ui.ctx.y" />
 		<SettingsDialog v-if="ui.settings" />
+		<AgentSendDialog
+			v-if="ui.agentSend"
+			:key="ui.agentSend.taskId"
+			:task-id="ui.agentSend.taskId"
+			:agent="ui.agentSend.agent"
+			@close="ui.agentSend = null"
+		/>
 		<InviteDialog v-if="inviteToken && data.loaded" :token="inviteToken" @close="inviteToken = pendingInviteToken()" />
 	</div>
 	<template v-else>

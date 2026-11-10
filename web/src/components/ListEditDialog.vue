@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import Modal from './Modal.vue'
-import type {Project} from '@/api/types'
+import type {AgentKind, Project} from '@/api/types'
 import {useData} from '@/stores/data'
+import {AGENTS, agentName, useAgents} from '@/stores/agents'
 import {splitEmoji, SWATCHES} from '@/lib/tasks'
 import {t} from '@/lib/i18n'
 
 const props = defineProps<{project?: Project | null}>()
 const emit = defineEmits<{close: [], saved: [number]}>()
 const data = useData()
+const agents = useAgents()
 
 const split = splitEmoji(props.project?.title ?? '')
 const emoji = ref(props.project ? (split.emoji ?? '') : '')
 const name = ref(props.project ? split.name : '')
 const color = ref((props.project?.hex_color ?? '').replace('#', ''))
 const parent = ref<number>(props.project?.parent_project_id ?? 0)
+const aiSettings = props.project ? agents.listSettings(props.project.id) : null
+const aiContext = ref(aiSettings?.ai_context ?? '')
+const agent = ref<AgentKind | ''>(aiSettings?.agent ?? '')
 
 const parents = computed(() => data.listProjects.filter(p => p.id !== props.project?.id && !p.parent_project_id))
 const EMOJIS = [...new Set(['', split.emoji ?? '', '📚', '✍️', '💻', '🏃', '🛒', '📅', '💼', '🏠', '💡', '🎯', '📒', '✈️', '❤️', '🎓', '🧪'])]
@@ -23,13 +28,15 @@ async function save() {
 	const title = (emoji.value ? emoji.value + ' ' : '') + name.value.trim()
 	if (!name.value.trim()) return
 	const body = {title, hex_color: color.value, parent_project_id: parent.value}
+	let id: number | undefined
 	if (props.project) {
 		await data.updateProject(props.project.id, body)
-		emit('saved', props.project.id)
+		id = props.project.id
 	} else {
-		const p = await data.createProject(body)
-		if (p) emit('saved', p.id)
+		id = (await data.createProject(body))?.id
 	}
+	if (id && agents.enabled) await agents.saveListSettings(id, {ai_context: aiContext.value, agent: agent.value})
+	if (id) emit('saved', id)
 	emit('close')
 }
 </script>
@@ -61,6 +68,24 @@ async function save() {
 				<option :value="0">{{ t('noParent') }}</option>
 				<option v-for="p in parents" :key="p.id" :value="p.id">{{ p.title }}</option>
 			</select>
+			<template v-if="agents.enabled">
+				<label class="lbl" for="list-ai-context">{{ t('aiContext') }}</label>
+				<textarea
+					id="list-ai-context"
+					v-model="aiContext"
+					class="input ai-context"
+					rows="3"
+					maxlength="10000"
+					:placeholder="t('aiContextPlaceholder')"
+				/>
+				<label class="lbl" for="list-agent">{{ t('agentList') }}</label>
+				<select id="list-agent" v-model="agent" class="input">
+					<option value="">{{ t('agentListNone') }}</option>
+					<option v-for="a in AGENTS" :key="a" :value="a">{{ t('agentListSendTo', {agent: agentName(a)}) }}</option>
+				</select>
+				<p v-if="agent && !agents.ready(agent)" class="hint warn">{{ t('agentNotSetUp', {agent: agentName(agent)}) }}</p>
+				<p v-else-if="agent" class="hint">{{ t('agentListHint', {agent: agentName(agent)}) }}</p>
+			</template>
 			<div class="actions">
 				<button type="button" class="btn" @click="emit('close')">{{ t('cancel') }}</button>
 				<button type="submit" class="btn primary">{{ t('save') }}</button>
@@ -121,6 +146,27 @@ h3 {
 
 .sw.on {
 	outline: 2px solid var(--text);
+}
+
+.ai-context {
+	height: auto;
+	min-height: 64px;
+	padding: 8px 10px;
+	resize: vertical;
+	font: inherit;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.hint {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--text-3);
+}
+
+.hint.warn {
+	color: var(--danger);
 }
 
 .actions {

@@ -1,0 +1,8 @@
+- id: 1
+  user_id: 1
+  claude_fire_url: https://api.anthropic.com/v1/claude_code/routines/trig_test/fire
+  claude_token: sk-ant-oat01-test
+  instinct_email: instinct@example.com
+  system_prompt: ''
+  created: 2018-12-01 15:13:12
+  updated: 2018-12-01 15:13:12

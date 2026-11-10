@@ -1537,6 +1537,11 @@ func (p *Project) Delete(s *xorm.Session, a web.Auth) (err error) {
 		return
 	}
 
+	_, err = s.Where("project_id = ?", p.ID).Delete(&ProjectAgentSettings{})
+	if err != nil {
+		return
+	}
+
 	_, err = s.Where("project_id = ?", p.ID).Delete(&TeamProject{})
 	if err != nil {
 		return

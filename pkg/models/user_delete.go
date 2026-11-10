@@ -185,6 +185,8 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		{"user_id", &FocusSession{}},
 		{"inviter_id", &ProjectInvitation{}},
 		{"invitee_id", &ProjectInvitation{}},
+		{"user_id", &AgentConfig{}},
+		{"created_by_id", &AgentDispatch{}},
 	}
 
 	for _, entity := range relatedEntities {

@@ -358,3 +358,43 @@ export interface FocusStats {
 	/** Oldest first, ending with today. */
 	history: FocusDay[]
 }
+
+export type AgentKind = 'claude' | 'instinct'
+
+/** How the user's tasks reach their AI agents (Settings > AI features). */
+export interface AgentConfig {
+	claude_fire_url: string
+	/** Write-only: send to change, never returned. */
+	claude_token?: string
+	claude_token_set: boolean
+	instinct_email: string
+	/** Empty means default_system_prompt. */
+	system_prompt: string
+	default_system_prompt: string
+	mailer_enabled: boolean
+}
+
+/** AI settings of one list. */
+export interface ProjectAgentSettings {
+	project_id: number
+	/** Context sent with every task of the list, e.g. the language to write in. */
+	ai_context: string
+	/** Every new task in the list goes to this agent; empty for none. */
+	agent: AgentKind | ''
+}
+
+export interface AgentDispatch {
+	id: number
+	task_id: number
+	agent: AgentKind
+	status: 'sent' | 'failed'
+	extra_prompt: string
+	/** Claude only: the cloud session working on the task. */
+	session_url: string
+	error: string
+	/** Sent because the task's list belongs to the agent. */
+	automatic: boolean
+	/** Only on the response of a new dispatch. */
+	prompt?: string
+	created: string
+}

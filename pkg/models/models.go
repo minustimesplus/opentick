@@ -44,6 +44,9 @@ func init() {
 func GetTables() []interface{} {
 	return []interface{}{
 		&Project{},
+		&AgentConfig{},
+		&ProjectAgentSettings{},
+		&AgentDispatch{},
 		&ProjectAncestor{},
 		&Task{},
 		&ProjectTaskCounter{},

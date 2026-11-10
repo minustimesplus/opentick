@@ -2,6 +2,7 @@
 import {computed, onMounted, ref} from 'vue'
 import {Copy, Trash2} from 'lucide-vue-next'
 import McpClientGuide from './McpClientGuide.vue'
+import AgentSettings from './AgentSettings.vue'
 import SettingSelect from './SettingSelect.vue'
 import {api, fetchAll} from '@/api/client'
 import type {ApiPermissions, ApiToken, McpInfo} from '@/api/types'
@@ -117,7 +118,8 @@ async function copy(value: string) {
 </script>
 
 <template>
-	<h2 class="section-title">{{ t('mcp') }}</h2>
+	<AgentSettings />
+	<h2 class="section-title mcp-title">{{ t('mcp') }}</h2>
 	<p class="intro">{{ t('mcpIntro') }}</p>
 
 	<p v-if="loadFailed" class="intro error">{{ t('mcpLoadError') }}</p>
@@ -189,6 +191,10 @@ async function copy(value: string) {
 	margin: 0 0 8px 15px;
 	font-size: 14px;
 	font-weight: 600;
+}
+
+.mcp-title {
+	margin-top: 28px;
 }
 
 .sub-title {

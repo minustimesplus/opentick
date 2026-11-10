@@ -3554,3 +3554,136 @@ func (err ErrProjectInvitationExists) HTTPError() web.HTTPError {
 		Message:  "This person already has a pending invitation to this project.",
 	}
 }
+
+// =============
+// AI agents
+// =============
+
+// ErrAgentNotConfigured represents an error where a task is sent to an agent that isn't set up.
+type ErrAgentNotConfigured struct {
+	Agent string
+}
+
+// IsErrAgentNotConfigured checks if an error is ErrAgentNotConfigured.
+func IsErrAgentNotConfigured(err error) bool {
+	_, ok := err.(ErrAgentNotConfigured)
+	return ok
+}
+
+func (err ErrAgentNotConfigured) Error() string {
+	return fmt.Sprintf("The agent is not set up [Agent: %s]", err.Agent)
+}
+
+// ErrCodeAgentNotConfigured holds the unique world-error code of this error
+const ErrCodeAgentNotConfigured = 25001
+
+// HTTPError holds the http error description
+func (err ErrAgentNotConfigured) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeAgentNotConfigured,
+		Message:  "Set up this agent under Settings → AI features first.",
+	}
+}
+
+// ErrInvalidAgent represents an error where an unknown agent was given.
+type ErrInvalidAgent struct {
+	Agent string
+}
+
+// IsErrInvalidAgent checks if an error is ErrInvalidAgent.
+func IsErrInvalidAgent(err error) bool {
+	_, ok := err.(ErrInvalidAgent)
+	return ok
+}
+
+func (err ErrInvalidAgent) Error() string {
+	return fmt.Sprintf("Unknown agent [Agent: %s]", err.Agent)
+}
+
+// ErrCodeInvalidAgent holds the unique world-error code of this error
+const ErrCodeInvalidAgent = 25002
+
+// HTTPError holds the http error description
+func (err ErrInvalidAgent) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidAgent,
+		Message:  "Unknown agent. Use claude or instinct.",
+	}
+}
+
+// ErrInvalidClaudeFireURL represents an error where the Claude fire URL isn't an Anthropic routine endpoint.
+type ErrInvalidClaudeFireURL struct{}
+
+// IsErrInvalidClaudeFireURL checks if an error is ErrInvalidClaudeFireURL.
+func IsErrInvalidClaudeFireURL(err error) bool {
+	_, ok := err.(ErrInvalidClaudeFireURL)
+	return ok
+}
+
+func (err ErrInvalidClaudeFireURL) Error() string {
+	return "The Claude fire URL is not an Anthropic routine fire endpoint"
+}
+
+// ErrCodeInvalidClaudeFireURL holds the unique world-error code of this error
+const ErrCodeInvalidClaudeFireURL = 25003
+
+// HTTPError holds the http error description
+func (err ErrInvalidClaudeFireURL) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidClaudeFireURL,
+		Message:  "The fire URL must look like https://api.anthropic.com/v1/claude_code/routines/<id>/fire.",
+	}
+}
+
+// ErrInvalidAgentEmail represents an error where the Instinct address is not an email address.
+type ErrInvalidAgentEmail struct{}
+
+// IsErrInvalidAgentEmail checks if an error is ErrInvalidAgentEmail.
+func IsErrInvalidAgentEmail(err error) bool {
+	_, ok := err.(ErrInvalidAgentEmail)
+	return ok
+}
+
+func (err ErrInvalidAgentEmail) Error() string {
+	return "The agent email address is invalid"
+}
+
+// ErrCodeInvalidAgentEmail holds the unique world-error code of this error
+const ErrCodeInvalidAgentEmail = 25004
+
+// HTTPError holds the http error description
+func (err ErrInvalidAgentEmail) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeInvalidAgentEmail,
+		Message:  "Please enter a valid email address.",
+	}
+}
+
+// ErrAgentMailerDisabled represents an error where a task should be emailed but the server can't send email.
+type ErrAgentMailerDisabled struct{}
+
+// IsErrAgentMailerDisabled checks if an error is ErrAgentMailerDisabled.
+func IsErrAgentMailerDisabled(err error) bool {
+	_, ok := err.(ErrAgentMailerDisabled)
+	return ok
+}
+
+func (err ErrAgentMailerDisabled) Error() string {
+	return "The mailer is disabled"
+}
+
+// ErrCodeAgentMailerDisabled holds the unique world-error code of this error
+const ErrCodeAgentMailerDisabled = 25005
+
+// HTTPError holds the http error description
+func (err ErrAgentMailerDisabled) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusPreconditionFailed,
+		Code:     ErrCodeAgentMailerDisabled,
+		Message:  "This server can't send email, so tasks can't be sent to Instinct. Configure the mailer first.",
+	}
+}
