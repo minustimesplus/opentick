@@ -205,6 +205,10 @@ function toggleAll() {
 	prefs.calendarHidden = allVisible.value ? allLists.value.map(p => p.id) : []
 }
 
+function toggleSection(key: string) {
+	prefs.collapsed[key] = !prefs.collapsed[key]
+}
+
 function listName(id: number) {
 	const p = data.project(id)
 	if (!p) return {emoji: null, name: ''}
@@ -256,7 +260,11 @@ const addDefaults = computed(() => {
 				<span class="name">{{ t('all') }}</span>
 				<span class="box" :class="{on: allVisible}"><Check v-if="allVisible" :size="12" /></span>
 			</button>
-			<div class="side-head">{{ t('lists') }}</div>
+			<div class="side-head collapsible" role="button" tabindex="0" :aria-expanded="!prefs.collapsed.calLists" @click="toggleSection('calLists')" @keydown.enter="toggleSection('calLists')">
+				<span class="head-label">{{ t('lists') }}</span>
+				<component :is="prefs.collapsed.calLists ? ChevronRight : ChevronDown" :size="14" class="chev" />
+			</div>
+			<template v-if="!prefs.collapsed.calLists">
 			<button v-for="p in allLists" :key="p.id" class="side-row" @click="toggleList(p.id)">
 				<Inbox v-if="'inbox' in listName(p.id)" :size="15" class="ic" />
 				<span v-else-if="listName(p.id).emoji" class="ic">{{ listName(p.id).emoji }}</span>
@@ -265,10 +273,13 @@ const addDefaults = computed(() => {
 				<span v-if="hasColor(p)" class="cdot" :style="{background: projectColor(p)}" />
 				<span class="box" :class="{on: !hidden.has(p.id)}"><Check v-if="!hidden.has(p.id)" :size="12" /></span>
 			</button>
-			<div class="side-head with-action">
-				{{ t('calendars') }}
-				<button class="side-add" :title="t('subscribeCalendar')" @click="openSubscribe"><Plus :size="15" /></button>
+			</template>
+			<div class="side-head with-action collapsible" role="button" tabindex="0" :aria-expanded="!prefs.collapsed.calCalendars" @click="toggleSection('calCalendars')" @keydown.enter.self="toggleSection('calCalendars')">
+				<span class="head-label">{{ t('calendars') }}</span>
+				<button class="side-add" :title="t('subscribeCalendar')" @click.stop="openSubscribe"><Plus :size="15" /></button>
+				<component :is="prefs.collapsed.calCalendars ? ChevronRight : ChevronDown" :size="14" class="chev" />
 			</div>
+			<template v-if="!prefs.collapsed.calCalendars">
 			<div v-for="sub in calendars.subscriptions" :key="'s' + sub.id" class="side-row sub-row" role="button" tabindex="0" @click="toggleSub(sub.id)" @keydown.enter="toggleSub(sub.id)">
 				<CalendarDays :size="15" class="ic" />
 				<span class="name" :title="sub.title">{{ sub.title }}</span>
@@ -281,6 +292,7 @@ const addDefaults = computed(() => {
 				<Plus :size="15" class="ic" />
 				<span class="name">{{ t('subscribeCalendar') }}</span>
 			</button>
+			</template>
 		</aside>
 
 		<section class="cal-main">
@@ -407,10 +419,28 @@ const addDefaults = computed(() => {
 }
 
 .side-head.with-action {
+	padding-top: 16px;
+}
+
+.side-head.collapsible {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	padding-top: 16px;
+	gap: 4px;
+	border-radius: 6px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.side-head.collapsible:hover {
+	background: var(--bg-hover);
+}
+
+.side-head .head-label {
+	flex: 1;
+}
+
+.side-head .chev {
+	color: var(--text-4);
 }
 
 .side-add {
