@@ -34,24 +34,40 @@ private val timeFmt: DateTimeFormatter get() = DateTimeFormatter.ofLocalizedTime
 
 fun formatTime(ms: Long): String = ms.toLocalDateTime().toLocalTime().format(timeFmt)
 
-/** "Today", "Tomorrow", "Mon", "Nov 14", "Nov 14, 2027" */
+private fun localized(skeleton: String): DateTimeFormatter {
+    val locale = Locale.getDefault()
+    return DateTimeFormatter.ofPattern(android.text.format.DateFormat.getBestDateTimePattern(locale, skeleton), locale)
+}
+
+/** "6 Nov" / "Nov 6" depending on the locale, like TickTick. */
+fun formatShortDate(date: LocalDate): String =
+    date.format(localized(if (date.year == today().year) "dMMM" else "dMMMyyyy"))
+
+/** "Today", "Tomorrow", "Yesterday", or "6 Nov" */
 fun formatDay(date: LocalDate): String {
-    val t = today()
-    val diff = ChronoUnit.DAYS.between(t, date)
-    return when {
-        diff == 0L -> "Today"
-        diff == 1L -> "Tomorrow"
-        diff == -1L -> "Yesterday"
-        diff in 2..6 -> date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-        date.year == t.year -> date.format(DateTimeFormatter.ofPattern("MMM d", Locale.getDefault()))
-        else -> date.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault()))
+    val diff = ChronoUnit.DAYS.between(today(), date)
+    return when (diff) {
+        0L -> "Today"
+        1L -> "Tomorrow"
+        -1L -> "Yesterday"
+        else -> formatShortDate(date)
     }
 }
 
-/** Short label for the task row: "Today", "Tomorrow 15:00", "Nov 14" */
+/** Long day label for headers: "Wed, 11 Nov" */
+fun formatLongDay(date: LocalDate): String = date.format(localized("EEEdMMM"))
+
+/** Task row label: "Today", "14:30" for today with a time, "6 Nov" */
 fun formatDue(ms: Long): String {
+    val date = ms.toLocalDate()
+    if (!isAllDay(ms) && date == today()) return formatTime(ms)
+    return formatDay(date)
+}
+
+/** Label with the time: "Today, 14:30", "6 Nov, 09:00" */
+fun formatDueLong(ms: Long): String {
     val day = formatDay(ms.toLocalDate())
-    return if (isAllDay(ms)) day else "$day ${formatTime(ms)}"
+    return if (isAllDay(ms)) day else "$day, ${formatTime(ms)}"
 }
 
 enum class Section(val title: String) {

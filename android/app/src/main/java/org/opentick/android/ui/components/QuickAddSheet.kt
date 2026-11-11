@@ -1,6 +1,7 @@
 package org.opentick.android.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,27 +11,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +44,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -56,7 +58,8 @@ import org.opentick.android.ui.theme.priorityColor
 import org.opentick.android.util.QuickAddParser
 import org.opentick.android.util.allDayMillis
 import org.opentick.android.util.atTimeMillis
-import org.opentick.android.util.formatDue
+import org.opentick.android.util.formatDueLong
+import org.opentick.android.util.splitEmoji
 import java.time.LocalDate
 
 data class QuickAddResult(
@@ -66,9 +69,10 @@ data class QuickAddResult(
     val datePicked: Boolean,
     val priority: Int,
     val labels: List<String>,
+    val description: String = "",
 )
 
-/** The add-task bar that slides up from the bottom, like TickTick's. */
+/** TickTick's add-task sheet: title, description, then date, priority, tags and list. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickAddSheet(
@@ -78,14 +82,16 @@ fun QuickAddSheet(
     defaultDate: LocalDate?,
     defaultLabel: String?,
     defaultPriority: Int = 0,
+    defaultDue: Long? = null,
     onAdd: (QuickAddResult) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember { mutableStateOf("") }
+    var desc by remember { mutableStateOf("") }
     var projectId by remember { mutableStateOf(defaultProject) }
-    var due by remember { mutableStateOf(defaultDate?.let { allDayMillis(it) }) }
-    var datePicked by remember { mutableStateOf(false) }
+    var due by remember { mutableStateOf(defaultDue ?: defaultDate?.let { allDayMillis(it) }) }
+    var datePicked by remember { mutableStateOf(defaultDue != null) }
     var priority by remember { mutableStateOf(defaultPriority) }
     var tags by remember { mutableStateOf(listOfNotNull(defaultLabel)) }
     var showDate by remember { mutableStateOf(false) }
@@ -93,7 +99,7 @@ fun QuickAddSheet(
     var showList by remember { mutableStateOf(false) }
     var showTags by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
-    val extra = LocalExtra.current
+    val p = LocalExtra.current
 
     val parsed = remember(text) { if (text.isBlank()) null else QuickAddParser.parse(text) }
     val effectiveDue = if (datePicked) due else parsed?.date?.let { d -> parsed.time?.let { atTimeMillis(d, it) } ?: allDayMillis(d) } ?: due
@@ -101,9 +107,10 @@ fun QuickAddSheet(
 
     fun submit() {
         if (text.isBlank()) return
-        onAdd(QuickAddResult(text, projectId, due, datePicked, priority, tags))
+        onAdd(QuickAddResult(text, projectId, due, datePicked, priority, tags, desc.trim()))
         // Stay open for the next task, like TickTick.
         text = ""
+        desc = ""
     }
 
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -112,33 +119,34 @@ fun QuickAddSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
         dragHandle = null,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        containerColor = p.card,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
     ) {
-        Column(Modifier.imePadding().padding(top = 8.dp, bottom = 4.dp)) {
-            TextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("What would you like to do?", color = extra.textTertiary) },
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { submit() }),
-                maxLines = 4,
-            )
+        Column(Modifier.imePadding().padding(top = 18.dp, bottom = 6.dp)) {
+            val fieldStyle = TextStyle(fontSize = 17.sp, color = p.text)
+            Box(Modifier.padding(horizontal = 20.dp)) {
+                if (text.isEmpty()) Text("What would you like to do?", fontSize = 17.sp, color = p.textTertiary)
+                BasicTextField(
+                    value = text, onValueChange = { text = it }, textStyle = fieldStyle, cursorBrush = SolidColor(Accent),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { submit() }),
+                    maxLines = 4,
+                )
+            }
+            Box(Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp)) {
+                if (desc.isEmpty()) Text("Description", fontSize = 14.sp, color = p.textTertiary)
+                BasicTextField(
+                    value = desc, onValueChange = { desc = it }, textStyle = TextStyle(fontSize = 14.sp, color = p.textSecondary),
+                    cursorBrush = SolidColor(Accent), modifier = Modifier.fillMaxWidth(), maxLines = 4,
+                )
+            }
             val chips = buildList {
-                effectiveDue?.let { add(formatDue(it) to Accent) }
-                if (effectivePrio > 0) add(PRIORITIES.first { it.first == minOf(effectivePrio, 3) }.second to priorityColor(effectivePrio, extra.prioNone))
                 (tags + parsed?.labels.orEmpty()).distinct().forEach { add("#$it" to Accent) }
                 parsed?.list?.let { add("~$it" to Accent) }
             }
             if (chips.isNotEmpty()) {
-                LazyRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyRow(Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(chips) { (label, color) ->
                         Text(
                             label, fontSize = 12.sp, color = color,
@@ -147,37 +155,49 @@ fun QuickAddSheet(
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { showDate = true }) {
-                    Icon(Icons.Outlined.CalendarToday, "Date", tint = if (effectiveDue != null) Accent else extra.textSecondary)
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable { showDate = true }.padding(horizontal = 10.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.CalendarToday, "Date", tint = if (effectiveDue != null) Accent else p.textSecondary, modifier = Modifier.size(22.dp))
+                    if (effectiveDue != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(formatDueLong(effectiveDue), fontSize = 14.sp, color = Accent)
+                    }
                 }
                 Box {
                     IconButton(onClick = { showPrio = true }) {
                         Icon(
                             if (effectivePrio > 0) Icons.Filled.Flag else Icons.Outlined.Flag, "Priority",
-                            tint = priorityColor(effectivePrio, extra.textSecondary),
+                            tint = priorityColor(effectivePrio, p.textSecondary), modifier = Modifier.size(23.dp),
                         )
                     }
                     PriorityMenu(showPrio, effectivePrio, { priority = it }, { showPrio = false })
                 }
                 Box {
-                    IconButton(onClick = { showTags = true }) { Icon(Icons.Outlined.Sell, "Tags", tint = if (tags.isNotEmpty()) Accent else extra.textSecondary) }
+                    IconButton(onClick = { showTags = true }) { Icon(Icons.Outlined.Tag, "Tags", tint = if (tags.isNotEmpty()) Accent else p.textSecondary, modifier = Modifier.size(23.dp)) }
                     LabelMenu(showTags, labels, tags, { tags = it }, { showTags = false })
                 }
                 Box {
-                    IconButton(onClick = { showList = true }) { Icon(Icons.Outlined.Folder, "List", tint = extra.textSecondary) }
+                    val proj = projects.firstOrNull { it.id == projectId } ?: projects.firstOrNull { it.isInbox }
+                    Row(
+                        Modifier.clip(RoundedCornerShape(8.dp)).clickable { showList = true }.padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (proj == null || proj.isInbox) Icon(Icons.Outlined.Inbox, "List", tint = p.textSecondary, modifier = Modifier.size(22.dp))
+                        else ListIcon(proj.title, 20.dp, p.textSecondary)
+                        Spacer(Modifier.width(5.dp))
+                        Text(parsed?.list ?: splitEmoji(proj?.title ?: "Inbox").second, fontSize = 13.sp, color = p.textSecondary, maxLines = 1)
+                    }
                     ProjectMenu(showList, projects, projectId ?: projects.firstOrNull { it.isInbox }?.id, { projectId = it }, { showList = false })
                 }
-                val listName = projects.firstOrNull { it.id == projectId }?.title ?: projects.firstOrNull { it.isInbox }?.title ?: "Inbox"
-                Text(parsed?.list ?: listName, fontSize = 12.sp, color = extra.textTertiary, modifier = Modifier.weight(1f), maxLines = 1)
-                Spacer(Modifier.size(4.dp))
-                IconButton(
-                    onClick = { submit() },
-                    enabled = text.isNotBlank(),
-                    modifier = Modifier.padding(end = 4.dp).size(40.dp).clip(CircleShape)
-                        .background(if (text.isNotBlank()) Accent else extra.divider),
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).background(if (text.isNotBlank()) Accent else p.divider).clickable(enabled = text.isNotBlank()) { submit() },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, "Add", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.ArrowUpward, "Add", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
         }

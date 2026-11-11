@@ -75,6 +75,6 @@ class MainActivity : ComponentActivity() {
             return
         }
         intent.getLongExtra("open_task", 0).takeIf { it != 0L }?.let { vm.openTaskId.value = it; initialTab = Tab.TASKS }
-        if (intent.getStringExtra("open_tab") == "focus") initialTab = Tab.FOCUS
+        if (intent.getStringExtra("open_tab") == "focus") initialTab = Tab.POMO
     }
 }

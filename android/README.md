@@ -1,13 +1,14 @@
 # OpenTick for Android
 
-A native Android app (Kotlin, Jetpack Compose) with a TickTick-style UI:
+A native Android app (Kotlin, Jetpack Compose) that looks and works like TickTick's Android app:
 
-- **Tasks**: smart lists (Today, Tomorrow, Next 7 Days, Inbox, All, Completed), your lists and tags in the side drawer, date sections, swipe right to complete, swipe left to delete (with undo).
+- **Tasks**: list cards grouped by list (Today) or date (Next 7 Days), the list's emoji as its icon, its color as an accent bar, swipe right to complete and left to delete (with undo).
+- **Drawer**: Today, Inbox, Tags, folders and lists with counts, Completed and Trash. Smart lists can be shown or hidden in Settings → General.
 - **Quick add** with smart recognition: `Call mom tomorrow 5pm #family !high ~Personal`.
-- **Task details**: title, description, due date and time, priority, list, tags, won't do.
-- **Calendar** (month view), **Eisenhower Matrix**, **Focus** (Pomodoro) timer, light and dark theme.
-- **Reminders** as local notifications at the due time (all-day tasks at 9:00), with a Complete action.
-- **Share to OpenTick** from any app to create a task.
+- **Calendar** with TickTick's six views: List, Year, Month, Week (default), 3 Day and Day. Tasks with a start and end show as blocks; tap an empty slot to add a task there.
+- **Eisenhower Matrix**, **Pomodoro**, **Search**.
+- **Tab Bar**: pick and reorder the bottom tabs in Settings → Tab Bar, like TickTick.
+- **Reminders** as local notifications, **share to OpenTick** from other apps, light and dark theme.
 
 ## Offline first
 
@@ -60,6 +61,14 @@ your own phone. Updates must be signed with the same key as the installed app.
 ```sh
 ./gradlew testDebugUnitTest                                        # parser tests
 OPENTICK_TEST_SERVER=http://localhost:3456 ./gradlew testDebugUnitTest   # + end-to-end sync
+```
+
+Screenshots of the main screens, rendered on the JVM at a phone's size
+(1080x2340, 440 dpi, font scale 1.1) with sample data, for comparing the UI
+against TickTick:
+
+```sh
+./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots   # app/build/screenshots/*.png
 ```
 
 The sync tests register throwaway users on the given server, so the server
