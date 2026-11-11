@@ -29,7 +29,14 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DoNotDisturbOn
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import org.opentick.android.ui.components.AGENTS
+import org.opentick.android.ui.components.agentName
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -92,6 +99,7 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
     var showList by remember { mutableStateOf(false) }
     var showTags by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
 
     BackHandler(onBack = onClose)
 
@@ -138,11 +146,31 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
                             DropdownMenuItem(
                                 text = { Text(if (t.wontDo) "Reopen" else "Won't do") },
                                 leadingIcon = { Icon(Icons.Outlined.DoNotDisturbOn, null) },
-                                onClick = {
-                                    menu = false
-                                    vm.update(taskId) { if (it.wontDo) it.copy(done = false, wontDo = false, doneAt = null) else it.copy(done = true, wontDo = true, doneAt = System.currentTimeMillis()) }
-                                },
+                                onClick = { menu = false; vm.toggleWontDo(t) },
                             )
+                            DropdownMenuItem(
+                                text = { Text("Duplicate") },
+                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
+                                onClick = { menu = false; vm.duplicate(t) },
+                            )
+                            if (vm.agentsAvailable()) {
+                                for (a in AGENTS) DropdownMenuItem(
+                                    text = { Text("Send to ${agentName(a)}") },
+                                    leadingIcon = { Icon(Icons.Outlined.SmartToy, null) },
+                                    onClick = { menu = false; vm.agentSend.value = t.id to a },
+                                )
+                            }
+                            vm.webLink(t)?.let { link ->
+                                DropdownMenuItem(
+                                    text = { Text("Copy link") },
+                                    leadingIcon = { Icon(Icons.Outlined.Link, null) },
+                                    onClick = {
+                                        menu = false
+                                        clipboard.setText(AnnotatedString(link))
+                                        vm.message.value = "Link copied"
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Delete", color = PrioHigh) },
                                 leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = PrioHigh) },

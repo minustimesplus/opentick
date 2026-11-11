@@ -154,7 +154,7 @@ fun YearGrid(year: Int, first: DayOfWeek, data: Data, onMonth: (YearMonth) -> Un
 
 /** Upcoming days with tasks, each in a card. */
 @Composable
-fun AgendaList(data: Data, showCompleted: Boolean, onToggle: (Long) -> Unit, onTask: (Long) -> Unit) {
+fun AgendaList(data: Data, showCompleted: Boolean, onToggle: (Long) -> Unit, onTask: (Long) -> Unit, onLongTask: (Long) -> Unit = {}) {
     val p = LocalExtra.current
     val days = remember(data, showCompleted) {
         (0L until 90L).map { today().plusDays(it) }.map { it to itemsOn(it, data, showCompleted) }.filter { it.second.isNotEmpty() }
@@ -173,7 +173,7 @@ fun AgendaList(data: Data, showCompleted: Boolean, onToggle: (Long) -> Unit, onT
                         modifier = Modifier.padding(start = 18.dp, top = 15.dp, bottom = 6.dp),
                     )
                     for (it in items) {
-                        TaskRowContent(it.task, data.projectMap[it.task.projectId], it.task.labelIdList.mapNotNull { l -> data.labelMap[l] }, true, { onToggle(it.task.id) }, { onTask(it.task.id) })
+                        TaskRowContent(it.task, data.projectMap[it.task.projectId], it.task.labelIdList.mapNotNull { l -> data.labelMap[l] }, true, { onToggle(it.task.id) }, { onTask(it.task.id) }, { onLongTask(it.task.id) })
                     }
                     Spacer(Modifier.height(6.dp))
                 }

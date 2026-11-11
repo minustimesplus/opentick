@@ -16,6 +16,7 @@ import InviteDialog from './components/collab/InviteDialog.vue'
 import InviteBanner from './components/collab/InviteBanner.vue'
 import {pendingInviteToken} from './lib/inviteLink'
 import {useData} from './stores/data'
+import {startViewSync} from './stores/viewSync'
 import {prefs} from './lib/prefs'
 import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
@@ -37,6 +38,7 @@ watchEffect(() => {
 })
 
 const agents = useAgents()
+startViewSync()
 const showApp = computed(() => data.authed)
 
 // An opened invitation link waits here until the user is signed in.

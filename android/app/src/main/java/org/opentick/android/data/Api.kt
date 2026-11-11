@@ -34,7 +34,33 @@ data class ApiUser(
 data class ApiUserSettings(
     @SerialName("default_project_id") val defaultProjectId: Long = 0,
     @SerialName("week_start") val weekStart: Int = 0,
+    @SerialName("frontend_settings") val frontendSettings: JsonElement? = null,
+) {
+    /** frontend_settings.views, shared with the web app; empty if not set up yet. */
+    val views: JsonObject get() = ((frontendSettings as? JsonObject)?.get("views") as? JsonObject) ?: JsonObject(emptyMap())
+}
+
+@Serializable
+data class AgentConfig(
+    @SerialName("claude_fire_url") val claudeFireUrl: String = "",
+    @SerialName("claude_token_set") val claudeTokenSet: Boolean = false,
+    @SerialName("instinct_email") val instinctEmail: String = "",
+    @SerialName("mailer_enabled") val mailerEnabled: Boolean = false,
+) {
+    fun ready(agent: String) = if (agent == "claude") claudeFireUrl.isNotBlank() && claudeTokenSet else instinctEmail.isNotBlank() && mailerEnabled
+}
+
+@Serializable
+data class AgentDispatch(
+    val id: Long = 0,
+    val agent: String = "",
+    val status: String = "",
+    @SerialName("session_url") val sessionUrl: String = "",
+    val error: String = "",
 )
+
+@Serializable
+data class AgentPrompt(val prompt: String = "")
 
 @Serializable
 data class ApiProject(
@@ -372,6 +398,24 @@ class Api(private val prefs: Prefs) {
     fun emptyTrash() {
         send("POST", "/tasks/trash/empty", null, false)
     }
+
+    /** Merges into frontend_settings.views (JSON merge patch). */
+    fun patchViews(patch: JsonObject) {
+        send("PATCH", "/user/settings/general", buildJsonObject { put("frontend_settings", buildJsonObject { put("views", patch) }) }, true)
+    }
+
+    // ─── AI agents (Settings > AI features on the web) ─────────────────
+
+    fun agentConfig(): AgentConfig = json.decodeFromString(send("GET", "/agents/config", null, false))
+
+    fun agentPrompt(taskId: Long, extra: String): String {
+        val q = if (extra.isBlank()) "" else "?extra=" + java.net.URLEncoder.encode(extra, "UTF-8")
+        return json.decodeFromString<AgentPrompt>(send("GET", "/tasks/$taskId/agent-prompt$q", null, false)).prompt
+    }
+
+    fun sendToAgent(taskId: Long, agent: String, extra: String): AgentDispatch = json.decodeFromString(
+        send("POST", "/tasks/$taskId/agent-dispatches", buildJsonObject { put("agent", agent); put("extra_prompt", extra) }, false),
+    )
 
     fun logout() {
         runCatching { send("POST", "/logout", null, false) }

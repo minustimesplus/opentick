@@ -179,7 +179,7 @@ fun CalendarScreen(vm: MainViewModel) {
                     CalView.YEAR -> HorizontalPager(pager, key = { it }) { pg ->
                         YearGrid(anchor.year + (pg - MIDDLE), first, data) { m -> setView(CalView.MONTH, m.atDay(1)) }
                     }
-                    CalView.LIST -> AgendaList(data, showCompleted, onToggle = { id -> data.tasks.firstOrNull { it.id == id }?.let(vm::toggleDone) }, onTask = { vm.openTaskId.value = it })
+                    CalView.LIST -> AgendaList(data, showCompleted, onToggle = { id -> data.tasks.firstOrNull { it.id == id }?.let(vm::toggleDone) }, onTask = { vm.openTaskId.value = it }, onLongTask = { vm.actionsTaskId.value = it })
                 }
             }
         }

@@ -159,6 +159,37 @@ class Repository(
         changed()
     }
 
+    /** Copies a task into the same list, like the web app's Duplicate. */
+    suspend fun duplicateTask(id: Long): Long? = withContext(Dispatchers.IO) {
+        val t = tasks.get(id) ?: return@withContext null
+        val now = System.currentTimeMillis()
+        val copy = t.copy(
+            id = 0, serverId = null, syncedLabelServerIds = "", created = now, updated = now,
+            dirty = true, deleted = false, version = 0,
+        )
+        tasks.insert(copy).also { changed() }
+    }
+
+    /** Changes the synced view settings; they go to the server with the next sync. */
+    fun setViews(v: Views) {
+        prefs.setViews(v)
+        changed()
+    }
+
+    private suspend fun syncViews(remote: kotlinx.serialization.json.JsonObject) {
+        // Lists and tasks made offline have server ids now.
+        val ps = projects.all().associateBy { it.id }
+        val ts = tasks.all().associateBy { it.id }
+        val local = prefs.views.value.resolveIds(
+            project = { id -> ps[id]?.takeIf { !it.deleted }?.viewKey() },
+            task = { id -> ts[id]?.takeIf { !it.deleted }?.viewKey() },
+        )
+        val r = ViewSync.reconcile(local.json, prefs.viewsSnapshot, remote)
+        prefs.setViews(Views(r.values))
+        if (r.patch != null) apiClient.patchViews(r.patch)
+        prefs.viewsSnapshot = r.server
+    }
+
     /** Wipes everything on sign out. */
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         db.clearAllTables()
@@ -181,6 +212,7 @@ class Repository(
                 pushLabels()
                 pushTasks()
                 pullTasks()
+                syncViews(user.settings?.views ?: kotlinx.serialization.json.JsonObject(emptyMap()))
                 prefs.lastSync = System.currentTimeMillis()
                 _authExpired.value = false
                 _syncState.value = SyncState.Idle

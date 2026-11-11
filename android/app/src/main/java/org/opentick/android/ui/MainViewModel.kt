@@ -18,7 +18,10 @@ import org.opentick.android.data.AccountMode
 import org.opentick.android.data.ApiTask
 import org.opentick.android.data.LabelEntity
 import org.opentick.android.data.ProjectEntity
+import org.opentick.android.data.AgentConfig
+import org.opentick.android.data.AgentDispatch
 import org.opentick.android.data.TaskEntity
+import org.opentick.android.data.Views
 import org.opentick.android.data.joinIds
 import org.opentick.android.util.QuickAddParser
 import org.opentick.android.util.allDayMillis
@@ -42,6 +45,9 @@ enum class SmartList(val title: String) {
 
 /** How a list's tasks are split into cards. */
 enum class GroupMode { LIST, DATE, PRIORITY, NONE }
+
+/** A snackbar with an action button, e.g. Undo. */
+data class Snack(val text: String, val action: String? = null, val run: (() -> Unit)? = null)
 
 /** Full screen pages on top of the tabs. */
 enum class Page { SETTINGS, TAB_BAR, APPEARANCE, DATE_TIME, NOTIFICATIONS, POMO_SETTINGS, GENERAL, ACCOUNT, ABOUT, SEARCH, TRASH }
@@ -79,7 +85,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val selection = MutableStateFlow<ListSel>(ListSel.Smart(SmartList.TODAY))
     val openTaskId = MutableStateFlow<Long?>(null)
+    /** Task whose actions sheet is open (long press on a task). */
+    val actionsTaskId = MutableStateFlow<Long?>(null)
+    /** Task and agent ("claude" or "instinct") of the open send-to-agent dialog. */
+    val agentSend = MutableStateFlow<Pair<Long, String>?>(null)
+    /** View settings synced with the web and desktop apps. */
+    val views: StateFlow<Views> = prefs.views
     val message = MutableStateFlow<String?>(null)
+    val snack = MutableStateFlow<Snack?>(null)
     val pages = mutableStateListOf<Page>()
 
     fun open(page: Page) { pages.add(page) }
@@ -201,6 +214,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun undoDelete() = viewModelScope.launch { lastDeleted?.let { repo.restoreTask(it) }; lastDeleted = null }
+
+    fun updateViews(edit: (Views) -> Views) {
+        val next = edit(views.value)
+        if (next != views.value) repo.setViews(next)
+    }
+
+    fun toggleWontDo(task: TaskEntity) = update(task.id) {
+        if (it.done && it.wontDo) it.copy(done = false, wontDo = false, doneAt = null)
+        else it.copy(done = true, wontDo = true, doneAt = System.currentTimeMillis())
+    }
+
+    fun duplicate(task: TaskEntity) = viewModelScope.launch {
+        repo.duplicateTask(task.id)?.let { message.value = "Duplicated" }
+    }
+
+    // ─── AI agents (server accounts only) ──────────────────────────────
+
+    /** Agents are offered with a server account and the AI feature switched on (web Settings > Features). */
+    fun agentsAvailable(): Boolean = prefs.mode.value == AccountMode.SERVER && views.value.feature("ai")
+
+    suspend fun agentConfig(): AgentConfig = withContext(Dispatchers.IO) { ot.api.agentConfig() }
+
+    /** The server id of a task, syncing first if it was made offline. */
+    private suspend fun serverIdOf(taskId: Long): Long? {
+        val t = repo.getTask(taskId) ?: return null
+        if (t.serverId != null && !t.dirty) return t.serverId
+        repo.sync()
+        return repo.getTask(taskId)?.serverId
+    }
+
+    suspend fun agentPrompt(taskId: Long, extra: String): String {
+        val id = serverIdOf(taskId) ?: throw java.io.IOException("Connect to the internet to send this task.")
+        return withContext(Dispatchers.IO) { ot.api.agentPrompt(id, extra) }
+    }
+
+    suspend fun sendToAgent(taskId: Long, agent: String, extra: String): AgentDispatch {
+        val id = serverIdOf(taskId) ?: throw java.io.IOException("Connect to the internet to send this task.")
+        return withContext(Dispatchers.IO) { ot.api.sendToAgent(id, agent, extra) }
+    }
+
+    /** Link to the task in the web app. */
+    fun webLink(task: TaskEntity): String? {
+        val sid = task.serverId ?: return null
+        if (prefs.mode.value != AccountMode.SERVER) return null
+        val project = data.value.projectMap[task.projectId]?.serverId ?: return null
+        return "${prefs.serverUrl}/tasks/p$project/$sid"
+    }
 
     fun setLabels(taskId: Long, titles: List<String>) = viewModelScope.launch {
         val ids = titles.map { repo.ensureLabel(it) }

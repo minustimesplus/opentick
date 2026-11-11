@@ -84,7 +84,7 @@ fun SearchScreen(vm: MainViewModel) {
                 item(key = pid) {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.card).padding(bottom = 6.dp)) {
                         Text(splitEmoji(data.projectMap[pid]?.title ?: "Inbox").let { (e, n) -> listOfNotNull(e, n).joinToString(" ") }, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = p.text, modifier = Modifier.padding(start = 18.dp, top = 15.dp, bottom = 6.dp))
-                        for (t in list) TaskRowContent(t, data.projectMap[t.projectId], t.labelIdList.mapNotNull { data.labelMap[it] }, false, { vm.toggleDone(t) }, { vm.openTaskId.value = t.id })
+                        for (t in list) TaskRowContent(t, data.projectMap[t.projectId], t.labelIdList.mapNotNull { data.labelMap[it] }, false, { vm.toggleDone(t) }, { vm.openTaskId.value = t.id }, { vm.actionsTaskId.value = t.id })
                     }
                 }
             }

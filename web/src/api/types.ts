@@ -122,6 +122,8 @@ export interface UserSettings {
 	notify_shared_task_done?: boolean
 	notify_shared_task_created?: boolean
 	notify_shared_task_deleted?: boolean
+	/** Free-form client settings; `views` holds the prefs synced between devices (lib/viewSync.ts). */
+	frontend_settings?: Record<string, unknown> | null
 }
 
 export type Permission = 0 | 1 | 2

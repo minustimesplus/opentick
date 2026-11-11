@@ -4,7 +4,9 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -129,6 +131,22 @@ class ScreenshotTest {
             compose.onNodeWithContentDescription("Task").performClick()
             compose.onNodeWithContentDescription("Add task").performClick()
             shot("9_quick_add")
+        }
+    }
+
+    @Test
+    fun matrixAndTaskActions() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            compose.onNodeWithContentDescription("Eisenhower Matrix").performClick()
+            compose.onNodeWithContentDescription("Quadrant I options").performClick()
+            shot("10_matrix_quadrant_menu")
+            compose.onNodeWithText("List").performClick()
+            shot("11_matrix_grouped_by_list")
+            compose.onNodeWithContentDescription("Edit matrix").performClick()
+            shot("12_matrix_edit")
+            compose.onNodeWithText("Done").performClick()
+            compose.onNodeWithText("Email thesis advisor").performTouchInput { longClick() }
+            shot("13_task_actions")
         }
     }
 }
