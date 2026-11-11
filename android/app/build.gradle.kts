@@ -63,6 +63,10 @@ android {
         unitTests.all { test ->
             // The sync test talks to a running server; see SyncTest.
             System.getenv("OPENTICK_TEST_SERVER")?.let { test.environment("OPENTICK_TEST_SERVER", it) }
+            // ./gradlew testDebugUnitTest -Pscreenshots writes PNGs to app/build/screenshots.
+            test.systemProperty("roborazzi.test.record", project.hasProperty("screenshots").toString())
+            test.systemProperty("opentick.screenshots", project.hasProperty("screenshots").toString())
+            test.maxHeapSize = "3g"
         }
     }
     buildFeatures {
@@ -106,4 +110,9 @@ dependencies {
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // Screenshots of real screens on the JVM, compared with TickTick (see ScreenshotTest).
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.40.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.40.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
