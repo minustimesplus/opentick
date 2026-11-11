@@ -55,6 +55,24 @@ keyPassword=...
 Without it, release builds use the debug key, which is fine for installing on
 your own phone. Updates must be signed with the same key as the installed app.
 
+## Releases
+
+The `Desktop release` workflow builds the APK on every push to `main` and
+attaches `OpenTick-<version>.apk` to the same GitHub release as the desktop
+apps. It signs with the permanent release key from these repository secrets:
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | The keystore file, base64 encoded (`base64 -w0 opentick-release.jks`) |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Key alias |
+| `ANDROID_KEY_PASSWORD` | Key password |
+
+Without them the APK is signed with a throwaway debug key and the workflow
+warns. Keep a backup of the keystore: if it's lost, new versions can't update
+existing installs. The `versionCode` is the workflow run number, so every
+release installs over the previous one.
+
 ## Tests
 
 ```sh
