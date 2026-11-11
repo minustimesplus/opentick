@@ -75,6 +75,8 @@ const en = {
 	browserSignInFailed: 'Signing in through the browser failed: {message}',
 	oauthDesktopTitle: 'Sign in to the desktop app',
 	oauthDesktopRequest: 'The OpenTick desktop app on this computer wants to sign in to your account. Only continue if you started this from the app.',
+	oauthAndroidTitle: 'Sign in to the Android app',
+	oauthAndroidRequest: 'The OpenTick Android app wants to sign in to your account. Only continue if you started this from the app.',
 	oauthContinue: 'Continue',
 	useWithoutAccount: 'Use without an account',
 	useWithoutAccountHint: 'Your tasks stay in this browser. You can sign up or self-host later.',
