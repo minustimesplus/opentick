@@ -38,6 +38,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
@@ -68,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import org.opentick.android.BuildConfig
 import org.opentick.android.data.AccountMode
 import org.opentick.android.data.SyncState
+import org.opentick.android.data.SmartLists
 import org.opentick.android.ui.MainViewModel
 import org.opentick.android.ui.Page
 import org.opentick.android.ui.Tab
@@ -279,19 +282,40 @@ fun PomoSettings(vm: MainViewModel) {
     }
 }
 
+/** Smart lists the phone has, by web key (web Settings > Smart List). */
+private val PHONE_SMART_LISTS = listOf(
+    "all" to "All", "today" to "Today", "tomorrow" to "Tomorrow", "next7" to "Next 7 Days", "inbox" to "Inbox",
+    "tags" to "Tags", "completed" to "Completed", "wontDo" to "Won't Do", "trash" to "Trash",
+)
+
 @Composable
 fun GeneralSettings(vm: MainViewModel) {
-    val smart by vm.prefs.smartLists.collectAsState()
-    val showCompleted by vm.prefs.showCompleted.collectAsState()
+    // Synced with the web and desktop apps; recompose when they change.
+    vm.views.collectAsState().value
+    vm.prefs.smartLists.collectAsState().value
+    val smart = vm.smartLists()
+    var picking by remember { mutableStateOf<String?>(null) }
     SettingsPage("General", vm::back) {
         Label("Smart Lists")
         SettingsCard {
-            for ((key, name) in listOf("TODAY" to "Today", "TOMORROW" to "Tomorrow", "NEXT7" to "Next 7 Days", "INBOX" to "Inbox", "ALL" to "All", "TAGS" to "Tags", "COMPLETED" to "Completed", "TRASH" to "Trash")) {
-                SwitchRow(name, null, key in smart) { on -> vm.prefs.setSmartLists(if (on) smart + key else smart - key) }
+            for ((key, name) in PHONE_SMART_LISTS) {
+                Box {
+                    SettingsRow(null, Accent, name, value = smart[key]?.label, onClick = { picking = key })
+                    DropdownMenu(picking == key, { picking = null }, shape = RoundedCornerShape(16.dp), containerColor = LocalExtra.current.card) {
+                        for (v in SmartLists.modes(key)) {
+                            DropdownMenuItem(
+                                text = { Text(v.label, color = if (smart[key] == v) Accent else LocalExtra.current.text) },
+                                onClick = { vm.setSmartList(key, v); picking = null },
+                            )
+                        }
+                    }
+                }
             }
         }
-        Label("Lists")
-        SettingsCard { SwitchRow("Show Completed", "Show completed tasks at the bottom of lists", showCompleted) { vm.prefs.setShowCompleted(it) } }
+        Text(
+            "Shared with the web and desktop apps. Summary, Filters and Assigned to Me are set there.",
+            fontSize = 13.sp, color = LocalExtra.current.textTertiary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        )
     }
 }
 

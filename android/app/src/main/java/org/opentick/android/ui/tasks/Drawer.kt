@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DisabledByDefault
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -47,6 +48,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,9 +88,14 @@ val LIST_COLORS = listOf("", "e5484d", "f5a623", "f2c94c", "2bb673", "26a69a", "
 fun ListDrawer(vm: MainViewModel, onPicked: () -> Unit) {
     val data by vm.data.collectAsState()
     val sel by vm.selection.collectAsState()
-    val smart by vm.prefs.smartLists.collectAsState()
+    // Re-read when the synced or the phone's own smart list settings change.
+    val views by vm.views.collectAsState()
+    val legacy by vm.prefs.smartLists.collectAsState()
+    val trashFull by vm.trashNonEmpty.collectAsState()
     val p = LocalExtra.current
     val counts = vm.counts(data)
+    val smart = remember(views, legacy, data, counts, trashFull) { vm.visibleSmartLists(data, counts, trashFull) }
+    LaunchedEffect(views, legacy) { vm.probeTrash() }
     var editing by remember { mutableStateOf<ProjectEntity?>(null) }
     var creatingList by remember { mutableStateOf(false) }
     var creatingTag by remember { mutableStateOf(false) }
@@ -123,22 +130,22 @@ fun ListDrawer(vm: MainViewModel, onPicked: () -> Unit) {
             }
 
             LazyColumn(Modifier.weight(1f)) {
-                if ("TODAY" in smart) item {
+                if ("today" in smart) item {
                     DrawerItem({ CalendarDayIcon(Orange, size = 22.dp) }, "Today", counts[SmartList.TODAY], sel == ListSel.Smart(SmartList.TODAY)) { pick(ListSel.Smart(SmartList.TODAY)) }
                 }
-                if ("TOMORROW" in smart) item {
+                if ("tomorrow" in smart) item {
                     DrawerItem({ Icon(Icons.Filled.WbSunny, null, tint = Orange, modifier = Modifier.size(23.dp)) }, "Tomorrow", counts[SmartList.TOMORROW], sel == ListSel.Smart(SmartList.TOMORROW)) { pick(ListSel.Smart(SmartList.TOMORROW)) }
                 }
-                if ("NEXT7" in smart) item {
+                if ("next7" in smart) item {
                     DrawerItem({ Icon(Icons.Outlined.ViewWeek, null, tint = Color(0xFF9B6CFF), modifier = Modifier.size(23.dp)) }, "Next 7 Days", counts[SmartList.NEXT7], sel == ListSel.Smart(SmartList.NEXT7)) { pick(ListSel.Smart(SmartList.NEXT7)) }
                 }
-                if ("INBOX" in smart) item {
+                if ("inbox" in smart) item {
                     DrawerItem({ Icon(Icons.Filled.Inbox, null, tint = Orange, modifier = Modifier.size(24.dp)) }, "Inbox", counts[SmartList.INBOX], sel == ListSel.Smart(SmartList.INBOX)) { pick(ListSel.Smart(SmartList.INBOX)) }
                 }
-                if ("ALL" in smart) item {
+                if ("all" in smart) item {
                     DrawerItem({ Icon(Icons.Outlined.AllInbox, null, tint = Accent, modifier = Modifier.size(23.dp)) }, "All", counts[SmartList.ALL], sel == ListSel.Smart(SmartList.ALL)) { pick(ListSel.Smart(SmartList.ALL)) }
                 }
-                if ("TAGS" in smart) {
+                if ("tags" in smart) {
                     item {
                         DrawerItem(
                             { Icon(Icons.Filled.LocalOffer, null, tint = Cyan, modifier = Modifier.size(23.dp)) }, "Tags", null, false,
@@ -178,11 +185,14 @@ fun ListDrawer(vm: MainViewModel, onPicked: () -> Unit) {
                         item(key = "p${proj.id}") { ProjectItem(proj, counts, sel, false, menuFor, { menuFor = it }, { editing = it }, vm, ::pick) }
                     }
                 }
-                if ("COMPLETED" in smart || "TRASH" in smart) item { DrawerDivider() }
-                if ("COMPLETED" in smart) item {
+                if ("completed" in smart || "wontDo" in smart || "trash" in smart) item { DrawerDivider() }
+                if ("completed" in smart) item {
                     DrawerItem({ Icon(Icons.Filled.CheckBox, null, tint = Green, modifier = Modifier.size(25.dp)) }, "Completed", null, sel == ListSel.Smart(SmartList.COMPLETED)) { pick(ListSel.Smart(SmartList.COMPLETED)) }
                 }
-                if ("TRASH" in smart) item {
+                if ("wontDo" in smart) item {
+                    DrawerItem({ Icon(Icons.Filled.DisabledByDefault, null, tint = p.count, modifier = Modifier.size(25.dp)) }, "Won't Do", null, sel == ListSel.Smart(SmartList.WONT_DO)) { pick(ListSel.Smart(SmartList.WONT_DO)) }
+                }
+                if ("trash" in smart) item {
                     DrawerItem({ Icon(Icons.Filled.Delete, null, tint = Accent, modifier = Modifier.size(25.dp)) }, "Trash", null, false) { page(Page.TRASH) }
                 }
                 item { Spacer(Modifier.height(12.dp)) }

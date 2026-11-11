@@ -21,7 +21,20 @@ import org.opentick.android.data.ProjectEntity
 import org.opentick.android.data.AgentConfig
 import org.opentick.android.data.AgentDispatch
 import org.opentick.android.data.TaskEntity
+import org.opentick.android.data.ListLayout
+import org.opentick.android.data.ListSort
+import org.opentick.android.data.TimelineScale
 import org.opentick.android.data.Views
+import org.opentick.android.data.Visibility
+import org.opentick.android.ui.tasks.DatePatch
+import org.opentick.android.ui.tasks.KanbanBucket
+import org.opentick.android.ui.tasks.POSITION_STEP
+import org.opentick.android.ui.tasks.Placement
+import org.opentick.android.ui.tasks.layoutProject
+import org.opentick.android.ui.tasks.listKey
+import org.opentick.android.ui.tasks.sortTasks
+import org.opentick.android.ui.tasks.topPosition
+import org.opentick.android.ui.tasks.withDates
 import org.opentick.android.data.joinIds
 import org.opentick.android.util.QuickAddParser
 import org.opentick.android.util.allDayMillis
@@ -39,8 +52,10 @@ sealed interface ListSel {
     data class Label(val id: Long) : ListSel
 }
 
-enum class SmartList(val title: String) {
-    TODAY("Today"), TOMORROW("Tomorrow"), NEXT7("Next 7 Days"), INBOX("Inbox"), ALL("All"), COMPLETED("Completed"),
+/** [key] is the list's segment in the web app's /tasks/:list route, which keys its synced settings. */
+enum class SmartList(val title: String, val key: String) {
+    TODAY("Today", "today"), TOMORROW("Tomorrow", "tomorrow"), NEXT7("Next 7 Days", "week"), INBOX("Inbox", "inbox"),
+    ALL("All", "all"), COMPLETED("Completed", "completed"), WONT_DO("Won't Do", "wontdo"),
 }
 
 /** How a list's tasks are split into cards. */
@@ -115,7 +130,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun groupMode(sel: ListSel): GroupMode = when (sel) {
         is ListSel.Smart -> when (sel.kind) {
             SmartList.TODAY, SmartList.TOMORROW, SmartList.ALL -> GroupMode.LIST
-            SmartList.NEXT7, SmartList.COMPLETED -> GroupMode.DATE
+            SmartList.NEXT7, SmartList.COMPLETED, SmartList.WONT_DO -> GroupMode.DATE
             SmartList.INBOX -> GroupMode.NONE
         }
         is ListSel.Project -> if (data.value.children.containsKey(sel.id)) GroupMode.LIST else GroupMode.NONE
@@ -141,7 +156,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 SmartList.INBOX -> d.tasks.filter { it.projectId == d.inbox?.id }
                 SmartList.ALL -> d.tasks
-                SmartList.COMPLETED -> d.tasks.filter { it.done }.sortedByDescending { it.doneAt ?: 0 }
+                SmartList.COMPLETED -> d.tasks.filter { it.done && !it.wontDo }.sortedByDescending { it.doneAt ?: 0 }
+                SmartList.WONT_DO -> d.tasks.filter { it.done && it.wontDo }.sortedByDescending { it.doneAt ?: 0 }
             }
             is ListSel.Project -> {
                 // A folder shows the tasks of all its lists.
@@ -219,6 +235,180 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val next = edit(views.value)
         if (next != views.value) repo.setViews(next)
     }
+
+    // ─── Per-list settings, synced with the web app ────────────────────
+
+    fun listSort(sel: ListSel, d: Data = data.value): ListSort = listKey(sel, d)?.let { views.value.listSort(it) } ?: ListSort.DATE
+    fun setListSort(sel: ListSel, v: ListSort) = listKey(sel, data.value)?.let { k -> updateViews { it.withListSort(k, v) } }
+
+    fun showCompleted(sel: ListSel, d: Data = data.value): Boolean = listKey(sel, d)?.let { views.value.listShowCompleted(it) } ?: true
+    fun setShowCompleted(sel: ListSel, on: Boolean) = listKey(sel, data.value)?.let { k -> updateViews { it.withListShowCompleted(k, on) } }
+
+    /** Kanban and timeline exist for lists only; everything else is a plain list. */
+    fun layout(sel: ListSel, d: Data = data.value): ListLayout =
+        if (layoutProject(sel, d) == null) ListLayout.LIST else listKey(sel, d)?.let { views.value.listLayout(it) } ?: ListLayout.LIST
+    fun setLayout(sel: ListSel, v: ListLayout) = listKey(sel, data.value)?.let { k -> updateViews { it.withListLayout(k, v) } }
+
+    fun setTimelineScale(v: TimelineScale) = updateViews { it.withTimelineScale(v) }
+
+    /** Open tasks of a list in its synced sort order. */
+    fun sorted(sel: ListSel, tasks: List<TaskEntity>, d: Data = data.value): List<TaskEntity> {
+        val sort = listSort(sel, d)
+        val positions = if (sort == ListSort.CUSTOM) layoutProject(sel, d)?.let { this.positions.value[it] } else null
+        return sortTasks(tasks, sort, sel, positions)
+    }
+
+    // ─── Smart lists (web Settings > Smart List) ───────────────────────
+
+    fun smartLists(): Map<String, Visibility> = views.value.smartLists(prefs.smartLists.value)
+
+    fun setSmartList(key: String, v: Visibility) = updateViews { it.withSmartList(key, v, prefs.smartLists.value) }
+
+    /** Whether the trash has anything in it, asked from the server for "show if not empty". */
+    val trashNonEmpty = MutableStateFlow(false)
+
+    fun probeTrash() {
+        if (smartLists()["trash"] != Visibility.AUTO || prefs.mode.value != AccountMode.SERVER) return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { ot.api.trashNonEmpty() } }.onSuccess { trashNonEmpty.value = it }
+        }
+    }
+
+    /** Smart lists the drawer shows, by web key. "Show if not empty" is decided like on the web. */
+    fun visibleSmartLists(d: Data, counts: Map<Any, Int>, trashFull: Boolean): Set<String> {
+        fun nonEmpty(key: String): Boolean = when (key) {
+            "today" -> (counts[SmartList.TODAY] ?: 0) > 0
+            "tomorrow" -> (counts[SmartList.TOMORROW] ?: 0) > 0
+            "next7" -> (counts[SmartList.NEXT7] ?: 0) > 0
+            "inbox" -> (counts[SmartList.INBOX] ?: 0) > 0
+            "all" -> (counts[SmartList.ALL] ?: 0) > 0
+            "tags" -> d.labels.isNotEmpty()
+            "completed" -> d.tasks.any { it.done && !it.wontDo }
+            "wontDo" -> d.tasks.any { it.done && it.wontDo }
+            "trash" -> trashFull
+            else -> false
+        }
+        return smartLists().filter { (k, v) -> v == Visibility.SHOW || (v == Visibility.AUTO && nonEmpty(k)) }.keys
+    }
+
+    // ─── Manual order (Custom sort), from the list's list view on the server ──
+
+    /** Per list (local id): task server id → position. Loaded when a list is sorted by Custom. */
+    val positions = MutableStateFlow<Map<Long, Map<Long, Double>>>(emptyMap())
+
+    fun loadPositions(projectId: Long) {
+        if (prefs.mode.value != AccountMode.SERVER) return
+        val sid = data.value.projectMap[projectId]?.serverId ?: return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val view = ot.api.projectViews(sid).let { vs -> vs.firstOrNull { it.viewKind == "list" } ?: vs.firstOrNull() } ?: return@withContext null
+                    ot.api.viewTasks(sid, view.id, "done = false").associate { it.id to it.position }
+                }
+            }.getOrNull()?.let { map -> positions.value = positions.value + (projectId to map) }
+        }
+    }
+
+    // ─── Kanban (online: sections live on the server) ──────────────────
+
+    data class Kanban(
+        val projectId: Long,
+        val loading: Boolean = true,
+        val error: String? = null,
+        val viewId: Long = 0,
+        val buckets: List<KanbanBucket> = emptyList(),
+        val placement: Map<Long, Placement> = emptyMap(),
+        val defaultBucket: Long = 0,
+        val doneBucket: Long = 0,
+    )
+
+    val kanban = MutableStateFlow<Kanban?>(null)
+
+    private fun projectServerId(projectId: Long) = data.value.projectMap[projectId]?.serverId
+
+    fun loadKanban(projectId: Long) = viewModelScope.launch {
+        val prev = kanban.value?.takeIf { it.projectId == projectId }
+        kanban.value = (prev ?: Kanban(projectId)).copy(loading = true, error = null)
+        if (prefs.mode.value != AccountMode.SERVER) {
+            kanban.value = Kanban(projectId, loading = false, error = "Kanban sections are stored on the server. Sign in to an OpenTick server to use them.")
+            return@launch
+        }
+        if (projectServerId(projectId) == null) repo.sync()
+        val sid = projectServerId(projectId)
+        if (sid == null) {
+            kanban.value = Kanban(projectId, loading = false, error = "Connect to the internet to see this list's sections.")
+            return@launch
+        }
+        kanban.value = try {
+            withContext(Dispatchers.IO) {
+                val view = ot.api.projectViews(sid).firstOrNull { it.viewKind == "kanban" }
+                    ?: return@withContext Kanban(projectId, loading = false, error = "This list has no kanban view.")
+                val detail = ot.api.projectView(sid, view.id)
+                val buckets = ot.api.bucketsWithTasks(sid, view.id)
+                Kanban(
+                    projectId, loading = false, viewId = view.id,
+                    buckets = buckets.map { KanbanBucket(it.id, it.title, it.position) },
+                    placement = buckets.flatMap { b -> b.tasks.orEmpty().map { it.id to Placement(b.id, it.position) } }.toMap(),
+                    defaultBucket = detail.defaultBucketId, doneBucket = detail.doneBucketId,
+                )
+            }
+        } catch (e: Exception) {
+            (prev ?: Kanban(projectId)).copy(loading = false, error = if (e is java.io.IOException && e !is org.opentick.android.data.ApiException) "Connect to the internet to see this list's sections." else e.message ?: "Couldn't load sections")
+        }
+    }
+
+    private fun kanbanAction(block: suspend (Kanban, Long) -> Unit) = viewModelScope.launch {
+        val k = kanban.value ?: return@launch
+        val sid = projectServerId(k.projectId) ?: return@launch
+        try {
+            withContext(Dispatchers.IO) { block(k, sid) }
+        } catch (e: Exception) {
+            message.value = if (e is java.io.IOException && e !is org.opentick.android.data.ApiException) "Connect to the internet to change sections." else e.message ?: "Something went wrong"
+            loadKanban(k.projectId)
+        }
+    }
+
+    /** Moves a card to the top of another section. */
+    fun moveToBucket(task: TaskEntity, bucket: Long, column: List<TaskEntity>) = kanbanAction { k, sid ->
+        val id = serverIdOf(task.id) ?: throw java.io.IOException("offline")
+        val position = topPosition(column, k.placement, except = task.id)
+        kanban.value = k.copy(placement = k.placement + (id to Placement(bucket, position)))
+        ot.api.moveToBucket(sid, k.viewId, bucket, id)
+        ot.api.setPosition(id, k.viewId, position)
+        // Entering or leaving the done bucket changes whether the task is done.
+        if (k.doneBucket != 0L && (bucket == k.doneBucket) != task.done) repo.sync()
+    }
+
+    /** Adds a task (quick add syntax) at the top of a section. */
+    fun addToBucket(text: String, bucket: Long, column: List<TaskEntity>) = kanbanAction { k, sid ->
+        val p = QuickAddParser.parse(text)
+        if (p.title.isBlank()) return@kanbanAction
+        val due = p.date?.let { date -> p.time?.let { atTimeMillis(date, it) } ?: allDayMillis(date) }
+        val local = repo.createTask(title = p.title, projectId = k.projectId, dueDate = due, priority = p.priority ?: 0, labelTitles = p.labels)
+        val id = serverIdOf(local) ?: return@kanbanAction // stays in the default section until online
+        val position = topPosition(column, k.placement)
+        kanban.value = kanban.value?.let { it.copy(placement = it.placement + (id to Placement(bucket, position))) }
+        ot.api.moveToBucket(sid, k.viewId, bucket, id)
+        ot.api.setPosition(id, k.viewId, position)
+    }
+
+    fun addSection(title: String) = kanbanAction { k, sid ->
+        val b = ot.api.createBucket(sid, k.viewId, title, (k.buckets.lastOrNull()?.position ?: 0.0) + POSITION_STEP)
+        kanban.value = kanban.value?.let { it.copy(buckets = it.buckets + KanbanBucket(b.id, b.title.ifBlank { title }, b.position)) }
+    }
+
+    fun renameSection(bucket: KanbanBucket, title: String) = kanbanAction { k, sid ->
+        kanban.value = k.copy(buckets = k.buckets.map { if (it.id == bucket.id) it.copy(title = title) else it })
+        ot.api.updateBucket(sid, k.viewId, bucket.id, title, bucket.position)
+    }
+
+    fun deleteSection(bucket: KanbanBucket) = kanbanAction { k, sid ->
+        ot.api.deleteBucket(sid, k.viewId, bucket.id)
+        loadKanban(k.projectId)
+    }
+
+    /** Sets a task's dates (timeline drag). */
+    fun setDates(taskId: Long, p: DatePatch) = update(taskId) { it.withDates(p) }
 
     fun toggleWontDo(task: TaskEntity) = update(task.id) {
         if (it.done && it.wontDo) it.copy(done = false, wontDo = false, doneAt = null)

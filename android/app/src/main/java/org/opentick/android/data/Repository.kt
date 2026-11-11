@@ -180,9 +180,11 @@ class Repository(
         // Lists and tasks made offline have server ids now.
         val ps = projects.all().associateBy { it.id }
         val ts = tasks.all().associateBy { it.id }
+        val ls = labels.all().associateBy { it.id }
         val local = prefs.views.value.resolveIds(
             project = { id -> ps[id]?.takeIf { !it.deleted }?.viewKey() },
             task = { id -> ts[id]?.takeIf { !it.deleted }?.viewKey() },
+            label = { id -> ls[id]?.takeIf { !it.deleted }?.viewKey() },
         )
         val r = ViewSync.reconcile(local.json, prefs.viewsSnapshot, remote)
         prefs.setViews(Views(r.values))
