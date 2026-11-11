@@ -140,6 +140,8 @@ const en = {
 	onbSummaryLists: '{n} lists created',
 	onbTip: 'Tip: press N anywhere to add a task, and / to search.',
 	localUnavailable: 'This needs an OpenTick server. Sign up or self-host to use it.',
+	offlineUnavailable: 'You are offline. This needs a connection to your server.',
+	offlineDiscarded: 'Changes made offline were not synced: you are signed in to another account now.',
 	localAccount: 'No account',
 	localTitle: 'Sync across your devices',
 	localIntro: 'You are using OpenTick without an account, so your tasks are saved only in this browser.',

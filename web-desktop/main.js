@@ -19,6 +19,8 @@ const PREFERRED_PORT = 45780
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000
 // Idle time (no bytes either way) before a proxied API request is given up.
 const UPSTREAM_TIMEOUT = 15 * 1000
+// How long connecting to the server may take before it counts as unreachable.
+const CONNECT_TIMEOUT = 6 * 1000
 const REPO = {owner: 'minustimesplus', repo: 'opentick'}
 // First-party OAuth client id for signing in through the system browser.
 const OAUTH_CLIENT_ID = 'opentick-desktop'
@@ -149,13 +151,80 @@ function proxyApi(req, res) {
 	// Fail requests to an unreachable server instead of leaving the page
 	// waiting forever: the login screen needs /info to let the user switch servers.
 	upstream.setTimeout(UPSTREAM_TIMEOUT, () => upstream.destroy(new Error('timed out')))
+	let connected = false
+	const connectTimer = setTimeout(() => {
+		if (!connected) upstream.destroy(new Error('timed out'))
+	}, CONNECT_TIMEOUT)
+	upstream.on('socket', socket => {
+		const onConnect = () => {
+			connected = true
+			clearTimeout(connectTimer)
+		}
+		// Reused keep-alive sockets are connected already.
+		if (!socket.connecting) onConnect()
+		else socket.once(target.protocol === 'https:' ? 'secureConnect' : 'connect', onConnect)
+	})
+	upstream.on('close', () => clearTimeout(connectTimer))
 	upstream.on('error', err => {
 		if (!res.headersSent) {
-			res.writeHead(502, {'Content-Type': 'application/json'})
+			// Tells the page's offline mode (web/src/api/offline) that the server
+			// was not reached: "unreachable" means the request never got there,
+			// "lost" that the connection broke after it may have arrived.
+			res.writeHead(502, {'Content-Type': 'application/json', 'X-OpenTick-Offline': connected ? 'lost' : 'unreachable'})
 		}
 		res.end(JSON.stringify({message: `Could not reach ${config.serverUrl}: ${err.message}`}))
 	})
 	req.pipe(upstream)
+}
+
+// ─── Offline storage ─────────────────────────────────────────────────
+// The page keeps a copy of the account's data and the changes made while
+// offline (web/src/api/offline). They live in files rather than localStorage,
+// which is too small for large accounts.
+
+const OFFLINE_NAME = /^[a-z][a-z0-9-]{0,40}$/
+const offlineDir = () => path.join(app.getPath('userData'), 'offline')
+const offlineFile = name => path.join(offlineDir(), name + '.json')
+/** Writes per file, in order, so an older snapshot never lands after a newer one. */
+const offlineWrites = new Map()
+
+function readOffline(name) {
+	if (!OFFLINE_NAME.test(name)) return null
+	try {
+		return fs.readFileSync(offlineFile(name), 'utf8')
+	} catch {
+		return null
+	}
+}
+
+function writeOffline(name, text) {
+	if (!OFFLINE_NAME.test(name) || typeof text !== 'string') return Promise.resolve()
+	const run = async () => {
+		await fs.promises.mkdir(offlineDir(), {recursive: true})
+		const tmp = offlineFile(name) + '.tmp'
+		await fs.promises.writeFile(tmp, text)
+		await fs.promises.rename(tmp, offlineFile(name))
+	}
+	const next = (offlineWrites.get(name) ?? Promise.resolve()).then(run, run)
+	offlineWrites.set(name, next.catch(err => console.warn(`Failed to save ${name}:`, err.message)))
+	return offlineWrites.get(name)
+}
+
+function writeOfflineSync(name, text) {
+	if (!OFFLINE_NAME.test(name) || typeof text !== 'string') return
+	try {
+		fs.mkdirSync(offlineDir(), {recursive: true})
+		const tmp = offlineFile(name) + '.tmp'
+		fs.writeFileSync(tmp, text)
+		fs.renameSync(tmp, offlineFile(name))
+	} catch (err) {
+		console.warn(`Failed to save ${name}:`, err.message)
+	}
+}
+
+async function clearOffline() {
+	await Promise.all([...offlineWrites.values()])
+	await fs.promises.rm(offlineDir(), {recursive: true, force: true})
 }
 
 function startServer() {
@@ -427,6 +496,15 @@ ipcMain.handle('auth:browser-sign-in', async () => {
 })
 
 ipcMain.on('auth:cancel-browser-sign-in', cancelBrowserSignIn)
+
+ipcMain.handle('offline:read', (_event, name) => readOffline(name))
+ipcMain.handle('offline:write', (_event, name, text) => writeOffline(name, text))
+// Used while the page unloads, when an async write might not finish.
+ipcMain.on('offline:write-sync', (event, name, text) => {
+	writeOfflineSync(name, text)
+	event.returnValue = true
+})
+ipcMain.handle('offline:clear', () => clearOffline())
 
 ipcMain.on('theme:set', (_event, theme) => {
 	// Color series send their frame color; older pages send 'dark' / 'light'.
