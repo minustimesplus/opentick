@@ -2,7 +2,9 @@ package org.opentick.android.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,6 +97,7 @@ fun TaskRow(
     onToggle: () -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = {
@@ -124,10 +127,11 @@ fun TaskRow(
             }
         },
     ) {
-        TaskRowContent(task, project, labels, showProject, onToggle, onClick)
+        TaskRowContent(task, project, labels, showProject, onToggle, onClick, onLongClick)
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TaskRowContent(
     task: TaskEntity,
@@ -136,13 +140,14 @@ fun TaskRowContent(
     showProject: Boolean,
     onToggle: () -> Unit,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val p = LocalExtra.current
     Row(
         Modifier
             .fillMaxWidth()
             .background(p.card)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .heightIn(min = 48.dp)
             .padding(start = 8.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

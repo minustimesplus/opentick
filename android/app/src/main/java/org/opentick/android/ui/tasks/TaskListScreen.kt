@@ -244,6 +244,7 @@ private fun LazyListScope.taskCard(
                                     onToggle = { vm.toggleDone(t) },
                                     onClick = { vm.openTaskId.value = t.id },
                                     onDelete = { onDelete(t) },
+                                    onLongClick = { vm.actionsTaskId.value = t.id },
                                 )
                             }
                         }

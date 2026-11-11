@@ -3,6 +3,8 @@ package org.opentick.android.data
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /** What the app is signed in to. */
 enum class AccountMode { NONE, LOCAL, SERVER }
@@ -100,6 +102,19 @@ class Prefs(context: Context) {
     val smartLists: StateFlow<Set<String>> = _smartLists
     fun setSmartLists(v: Set<String>) { sp.edit().putStringSet("smart_lists", v).apply(); _smartLists.value = v }
 
+    /** View settings shared with the other devices (see [ViewSync]). */
+    private val _views = MutableStateFlow(Views(readJson("views") ?: JsonObject(emptyMap())))
+    val views: StateFlow<Views> = _views
+    fun setViews(v: Views) { sp.edit().putString("views", v.json.toString()).apply(); _views.value = v }
+
+    /** The server's views as of the last sync, to tell local edits from remote ones. */
+    var viewsSnapshot: JsonObject?
+        get() = readJson("views_snapshot")
+        set(v) = sp.edit().putString("views_snapshot", v?.toString()).apply()
+
+    private fun readJson(key: String): JsonObject? =
+        sp.getString(key, null)?.let { runCatching { Json.parseToJsonElement(it) as JsonObject }.getOrNull() }
+
     /** Ids of reminder alarms currently scheduled, so they can be cancelled. */
     var scheduledReminders: Set<String>
         get() = sp.getStringSet("scheduled_reminders", emptySet()) ?: emptySet()
@@ -113,7 +128,9 @@ class Prefs(context: Context) {
         sp.edit()
             .remove("server_url").remove("access_token").remove("refresh_token")
             .remove("username").remove("display_name").remove("last_sync")
+            .remove("views").remove("views_snapshot")
             .apply()
+        _views.value = Views()
         setMode(AccountMode.NONE)
     }
 }

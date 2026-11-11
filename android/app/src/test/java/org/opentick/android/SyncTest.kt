@@ -17,7 +17,15 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.opentick.android.data.AccountMode
+import org.opentick.android.data.MatrixGroup
+import org.opentick.android.data.MatrixSort
+import org.opentick.android.data.QuadrantView
+import org.opentick.android.data.Views
+import org.opentick.android.data.viewKey
 import org.opentick.android.data.Api
 import org.opentick.android.data.AppDatabase
 import org.opentick.android.data.Prefs
@@ -127,6 +135,44 @@ class SyncTest {
         assertNull(db.tasks().get(a))
         assertNull(db.tasks().byServerId(created.id))
         assertFalse(api.tasks("done = false").any { it.id == aRemote.id })
+    }
+
+    @Test
+    fun viewSettingsFollowTheDesktopThenSyncBothWays() = runBlocking {
+        signIn()
+        assertTrue(repo.sync())
+        val inbox = db.projects().inbox()!!.serverId!!
+        // Nothing set up anywhere yet: the phone doesn't seed the server.
+        assertTrue(api.user().settings!!.views.isEmpty())
+
+        // The desktop app seeds the server first.
+        api.patchViews(Json.parseToJsonElement(
+            """{"matrixLists":[$inbox],"matrixShowDone":true,"matrixView":{"1":{"group":"list","sort":"title"}},"listView":{"p1":"kanban"},"rev":1}""",
+        ) as JsonObject)
+        assertTrue(repo.sync())
+        val v = prefs.views.value
+        assertEquals(listOf(inbox), v.matrixLists)
+        assertTrue(v.matrixShowDone)
+        assertEquals(QuadrantView(MatrixGroup.LIST, MatrixSort.TITLE), v.quadrant(1))
+
+        // Edits on the phone, including a list made offline, go up and keep the rest.
+        val listId = repo.createProject("Phone list")
+        val local = db.projects().get(listId)!!
+        repo.setViews(v.withMatrixLists(v.matrixLists + local.viewKey()).resetQuadrant(1).withQuadrant(2, QuadrantView(MatrixGroup.DATE, MatrixSort.PRIORITY)))
+        assertTrue(repo.sync())
+        val remote = Views(api.user().settings!!.views)
+        val phoneList = db.projects().get(listId)!!.serverId!!
+        assertEquals(listOf(inbox, phoneList), remote.matrixLists)
+        assertEquals(QuadrantView(), remote.quadrant(1))
+        assertEquals(QuadrantView(MatrixGroup.DATE, MatrixSort.PRIORITY), remote.quadrant(2))
+        assertTrue(remote.matrixShowDone)
+        assertEquals("kanban", (remote.json["listView"] as JsonObject)["p1"]!!.jsonPrimitive.content)
+
+        // A later desktop change comes down.
+        api.patchViews(Json.parseToJsonElement("""{"matrixShowDone":false,"rev":${System.currentTimeMillis() + 1000}}""") as JsonObject)
+        assertTrue(repo.sync())
+        assertFalse(prefs.views.value.matrixShowDone)
+        assertEquals(listOf(inbox, phoneList), prefs.views.value.matrixLists)
     }
 
     @Test

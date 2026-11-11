@@ -24,7 +24,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
+import org.opentick.android.ui.components.AgentSendSheet
+import org.opentick.android.ui.components.TaskActionsSheet
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -130,6 +133,15 @@ fun MainScreen(vm: MainViewModel, initialTab: Tab?, oauthError: String?, onOAuth
         }
     }
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.message.value = null } }
+    val snack by vm.snack.collectAsState()
+    LaunchedEffect(snack) {
+        val s = snack ?: return@LaunchedEffect
+        vm.snack.value = null
+        val r = snackbar.showSnackbar(s.text, s.action, withDismissAction = s.action != null, duration = SnackbarDuration.Short)
+        if (r == SnackbarResult.ActionPerformed) s.run?.invoke()
+    }
+    val actionsTask by vm.actionsTaskId.collectAsState()
+    val agentSend by vm.agentSend.collectAsState()
     // A browser sign in that started from Settings comes back here.
     LaunchedEffect(oauthError) { if (oauthError != null) signingIn = true }
 
@@ -181,6 +193,9 @@ fun MainScreen(vm: MainViewModel, initialTab: Tab?, oauthError: String?, onOAuth
             val id = remember(openTask) { openTask } ?: return@AnimatedVisibility
             TaskDetailScreen(vm, id) { vm.openTaskId.value = null }
         }
+
+        actionsTask?.let { id -> TaskActionsSheet(vm, id) { vm.actionsTaskId.value = null } }
+        agentSend?.let { (id, agent) -> AgentSendSheet(vm, id, agent) { vm.agentSend.value = null } }
 
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 70.dp))
 
