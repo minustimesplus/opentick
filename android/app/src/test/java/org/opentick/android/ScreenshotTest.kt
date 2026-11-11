@@ -2,6 +2,8 @@ package org.opentick.android
 
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.longClick
@@ -147,6 +149,48 @@ class ScreenshotTest {
             compose.onNodeWithText("Done").performClick()
             compose.onNodeWithText("Email thesis advisor").performTouchInput { longClick() }
             shot("13_task_actions")
+        }
+    }
+
+    @Test
+    fun listSortAndLayouts() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            compose.onNodeWithContentDescription("Open lists").performClick()
+            compose.onAllNodesWithText("University").onLast().performClick()
+            compose.onNodeWithContentDescription("Sort by").performClick()
+            shot("14_list_sort_menu")
+            compose.onNodeWithText("Title").performClick()
+            shot("15_list_sorted_by_title")
+            compose.onNodeWithContentDescription("More").performClick()
+            shot("16_list_menu")
+            compose.onNodeWithText("Timeline").performClick()
+            shot("17_timeline")
+            compose.onNodeWithText("Day").performClick()
+            shot("18_timeline_day")
+            compose.onNodeWithContentDescription("More").performClick()
+            compose.onNodeWithText("Kanban").performClick()
+            compose.waitForIdle()
+            // Sections come from the server; stand in for it.
+            it.onActivity { a ->
+                val vm = androidx.lifecycle.ViewModelProvider(a)[org.opentick.android.ui.MainViewModel::class.java]
+                val project = vm.selection.value as org.opentick.android.ui.ListSel.Project
+                val tasks = vm.data.value.tasks.filter { t -> t.projectId == project.id }
+                vm.kanban.value = org.opentick.android.ui.MainViewModel.Kanban(
+                    project.id, loading = false, viewId = 1,
+                    buckets = listOf(
+                        org.opentick.android.ui.tasks.KanbanBucket(1, "To Do", 1.0),
+                        org.opentick.android.ui.tasks.KanbanBucket(2, "In Progress", 2.0),
+                        org.opentick.android.ui.tasks.KanbanBucket(3, "Done", 3.0),
+                    ),
+                    defaultBucket = 1, doneBucket = 3,
+                )
+                assumeTrue(tasks.isNotEmpty())
+            }
+            shot("19_kanban")
+            it.onActivity { a -> a.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithContentDescription("Open lists").performClick()
+            compose.onNodeWithContentDescription("Manage lists").performClick()
+            shot("20_smart_list_settings")
         }
     }
 }

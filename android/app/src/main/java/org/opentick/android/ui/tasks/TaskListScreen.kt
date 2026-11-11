@@ -21,7 +21,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.outlined.AddBox
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.ViewTimeline
+import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowRight
@@ -40,6 +46,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -58,6 +65,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import org.opentick.android.data.ListLayout
+import org.opentick.android.data.ListSort
 import org.opentick.android.data.SyncState
 import org.opentick.android.data.TaskEntity
 import org.opentick.android.ui.Data
@@ -88,17 +97,28 @@ fun TaskListScreen(vm: MainViewModel, snackbar: SnackbarHostState, onMenu: () ->
     val data by vm.data.collectAsState()
     val sel by vm.selection.collectAsState()
     val sync by vm.syncState.collectAsState()
-    val showCompleted by vm.prefs.showCompleted.collectAsState()
+    // Sort, layout and show completed are synced per list; read them again when they change.
+    vm.views.collectAsState().value
+    vm.positions.collectAsState().value
     var adding by remember { mutableStateOf(false) }
     var groupOverride by rememberSaveable { mutableStateOf<GroupMode?>(null) }
     var menu by remember { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var addingSection by remember { mutableStateOf(false) }
     val collapsed = remember { mutableStateMapOf<String, Boolean>() }
     val scope = rememberCoroutineScope()
     val p = LocalExtra.current
 
     val all = vm.tasksFor(sel, data)
     val mode = groupOverride ?: vm.groupMode(sel)
-    val isCompletedList = sel == ListSel.Smart(SmartList.COMPLETED)
+    val isCompletedList = isClosedList(sel)
+    val showCompleted = vm.showCompleted(sel, data)
+    val sort = vm.listSort(sel, data)
+    val layout = vm.layout(sel, data)
+    val listProject = layoutProject(sel, data)
+    LaunchedEffect(listProject, sort, sync is SyncState.Idle) {
+        if (sort == ListSort.CUSTOM && listProject != null) vm.loadPositions(listProject)
+    }
 
     fun delete(t: TaskEntity) {
         vm.delete(t)
@@ -114,15 +134,38 @@ fun TaskListScreen(vm: MainViewModel, snackbar: SnackbarHostState, onMenu: () ->
                 onMenu = onMenu,
                 titleExtra = { Spacer(Modifier.width(8.dp)); SyncIndicator(sync) },
                 actions = {
+                    if (layout == ListLayout.LIST && !isCompletedList) Box {
+                        IconButton(onClick = { sortMenu = true }) { Icon(Icons.Outlined.SwapVert, "Sort by", tint = p.icon, modifier = Modifier.size(25.dp)) }
+                        DropdownMenu(sortMenu, { sortMenu = false }, shape = RoundedCornerShape(20.dp), containerColor = p.card) {
+                            Text("Sort by", fontSize = 13.sp, color = p.textTertiary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                            for (s in ListSort.entries) {
+                                DropdownMenuItem(
+                                    text = { Text(s.label, color = if (sort == s) Accent else p.text) },
+                                    trailingIcon = { if (sort == s) Icon(Icons.Outlined.Check, null, tint = Accent) },
+                                    onClick = { vm.setListSort(sel, s); sortMenu = false },
+                                )
+                            }
+                        }
+                    }
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More", tint = p.icon, modifier = Modifier.size(26.dp)) }
                         DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(20.dp), containerColor = p.card) {
-                            DropdownMenuItem(
+                            if (listProject != null) {
+                                Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    for (l in ListLayout.entries) LayoutChip(l, l == layout) { vm.setLayout(sel, l); menu = false }
+                                }
+                            }
+                            if (!isCompletedList) DropdownMenuItem(
                                 text = { Text(if (showCompleted) "Hide Completed" else "Show Completed") },
                                 leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) },
-                                onClick = { vm.prefs.setShowCompleted(!showCompleted); menu = false },
+                                onClick = { vm.setShowCompleted(sel, !showCompleted); menu = false },
                             )
-                            for ((m, name) in listOf(GroupMode.LIST to "Group by List", GroupMode.DATE to "Group by Date", GroupMode.PRIORITY to "Group by Priority", GroupMode.NONE to "No Grouping")) {
+                            if (layout == ListLayout.KANBAN) DropdownMenuItem(
+                                text = { Text("Add Section") },
+                                leadingIcon = { Icon(Icons.Outlined.AddBox, null) },
+                                onClick = { addingSection = true; menu = false },
+                            )
+                            if (layout == ListLayout.LIST) for ((m, name) in listOf(GroupMode.LIST to "Group by List", GroupMode.DATE to "Group by Date", GroupMode.PRIORITY to "Group by Priority", GroupMode.NONE to "No Grouping")) {
                                 DropdownMenuItem(
                                     text = { Text(name, color = if (mode == m) Accent else p.text) },
                                     leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, null, tint = if (mode == m) Accent else p.textSecondary) },
@@ -137,10 +180,14 @@ fun TaskListScreen(vm: MainViewModel, snackbar: SnackbarHostState, onMenu: () ->
             PullToRefreshBox(isRefreshing = sync is SyncState.Running, onRefresh = { vm.sync() }, modifier = Modifier.fillMaxSize()) {
                 val open = all.filter { !it.done }
                 val done = all.filter { it.done }.sortedByDescending { it.doneAt ?: it.updated }
-                if (all.isEmpty() || (open.isEmpty() && !showCompleted && !isCompletedList)) {
+                if (layout == ListLayout.KANBAN && listProject != null) {
+                    KanbanBoard(vm, listProject, data, showCompleted, addingSection, onSectionDialogDone = { addingSection = false })
+                } else if (layout == ListLayout.TIMELINE) {
+                    TimelineView(vm, data, if (showCompleted) all else open)
+                } else if (all.isEmpty() || (open.isEmpty() && !showCompleted && !isCompletedList)) {
                     EmptyState("No tasks", "Tap + to add one. Try \"Call mom tomorrow 5pm #family !high\".")
                 } else {
-                    val groups = if (isCompletedList) groupTasks(done, GroupMode.DATE, data, completed = true) else groupTasks(sortFor(sel, open), mode, data)
+                    val groups = if (isCompletedList) groupTasks(done, GroupMode.DATE, data, completed = true) else groupTasks(vm.sorted(sel, open, data), mode, data)
                     LazyColumn(
                         Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
@@ -171,13 +218,24 @@ fun TaskListScreen(vm: MainViewModel, snackbar: SnackbarHostState, onMenu: () ->
     }
 }
 
-/** Today in TickTick lists the most recent dates first; other lists go by date. */
-private fun sortFor(sel: ListSel, tasks: List<TaskEntity>): List<TaskEntity> =
-    if (sel == ListSel.Smart(SmartList.TODAY)) {
-        tasks.sortedWith(compareByDescending<TaskEntity> { it.dueDate ?: 0 }.thenBy { it.created }.thenBy { it.id })
-    } else {
-        tasks.sortedWith(compareBy<TaskEntity> { it.dueDate ?: Long.MAX_VALUE }.thenByDescending { it.priority }.thenBy { it.created })
+/** One of List, Kanban and Timeline at the top of the list menu, like TickTick's view switcher. */
+@Composable
+private fun LayoutChip(l: ListLayout, selected: Boolean, onClick: () -> Unit) {
+    val p = LocalExtra.current
+    val icon = when (l) {
+        ListLayout.LIST -> Icons.AutoMirrored.Outlined.ViewList
+        ListLayout.KANBAN -> Icons.Outlined.ViewWeek
+        ListLayout.TIMELINE -> Icons.Outlined.ViewTimeline
     }
+    Column(
+        Modifier.width(72.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) Accent.copy(alpha = 0.12f) else p.page).clickable(onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, l.label, tint = if (selected) Accent else p.textSecondary, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(2.dp))
+        Text(l.label, fontSize = 12.sp, color = if (selected) Accent else p.textSecondary)
+    }
+}
 
 private fun groupTasks(tasks: List<TaskEntity>, mode: GroupMode, d: Data, completed: Boolean = false): List<Group> = when (mode) {
     GroupMode.NONE -> listOf(Group("all", null, null, null, null, tasks))

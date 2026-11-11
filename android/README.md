@@ -3,7 +3,8 @@
 A native Android app (Kotlin, Jetpack Compose) that looks and works like TickTick's Android app:
 
 - **Tasks**: list cards grouped by list (Today) or date (Next 7 Days), the list's emoji as its icon, its color as an accent bar, swipe right to complete and left to delete (with undo).
-- **Drawer**: Today, Inbox, Tags, folders and lists with counts, Completed and Trash. Smart lists can be shown or hidden in Settings → General.
+- **Drawer**: Today, Inbox, Tags, folders and lists with counts, Completed, Won't Do and Trash. Smart lists are set to Show, Hide or Show if not empty in Settings → General, shared with the web and desktop apps.
+- **Per list** (shared with the web and desktop apps): sort by date, priority, title, created time or the web's custom order; show or hide completed tasks; and for lists, a **List**, **Kanban** or **Timeline** layout. Kanban sections live on the server, so the board needs a connection. On the timeline, long press a bar and drag to move it, or drag its ends to change its dates.
 - **Quick add** with smart recognition: `Call mom tomorrow 5pm #family !high ~Personal`.
 - **Calendar** with TickTick's six views: List, Year, Month, Week (default), 3 Day and Day. Tasks with a start and end show as blocks; tap an empty slot to add a task there.
 - **Eisenhower Matrix**, **Pomodoro**, **Search**.

@@ -74,6 +74,27 @@ data class ApiProject(
 )
 
 @Serializable
+data class ApiProjectView(
+    val id: Long,
+    val title: String = "",
+    @SerialName("view_kind") val viewKind: String = "",
+    val position: Double = 0.0,
+    @SerialName("bucket_configuration_mode") val bucketMode: String = "",
+    @SerialName("default_bucket_id") val defaultBucketId: Long = 0,
+    @SerialName("done_bucket_id") val doneBucketId: Long = 0,
+)
+
+/** A kanban column ("section" in TickTick). */
+@Serializable
+data class ApiBucket(
+    val id: Long,
+    val title: String = "",
+    val position: Double = 0.0,
+    val count: Long = 0,
+    val tasks: List<ApiTask>? = null,
+)
+
+@Serializable
 data class ApiLabel(
     val id: Long,
     val title: String = "",
@@ -98,6 +119,8 @@ data class ApiTask(
     @SerialName("repeat_mode") val repeatMode: Int = 0,
     @SerialName("repeat_rule") val repeatRule: String = "",
     @SerialName("related_tasks") val relatedTasks: Map<String, List<ApiRelated>?>? = null,
+    /** Position in the view it was fetched through; 0 elsewhere. */
+    val position: Double = 0.0,
     val created: String? = null,
     val updated: String? = null,
 )
@@ -399,6 +422,56 @@ class Api(private val prefs: Prefs) {
         send("POST", "/tasks/trash/empty", null, false)
     }
 
+    /** Whether the trash has anything in it, for a smart list set to "show if not empty". */
+    fun trashNonEmpty(): Boolean =
+        json.decodeFromString<Paginated<ApiTask>>(send("GET", "/tasks/trash?page=1&per_page=1", null, false)).items.orEmpty().isNotEmpty()
+
+    // ─── Project views: manual order and kanban ────────────────────────
+
+    fun projectViews(projectId: Long): List<ApiProjectView> = getAll("/projects/$projectId/views")
+
+    fun projectView(projectId: Long, viewId: Long): ApiProjectView =
+        json.decodeFromString(send("GET", "/projects/$projectId/views/$viewId", null, false))
+
+    /** Tasks of a view with their position in it. */
+    fun viewTasks(projectId: Long, viewId: Long, filter: String): List<ApiTask> =
+        getAll("/projects/$projectId/views/$viewId/tasks", "filter=" + java.net.URLEncoder.encode(filter, "UTF-8"), maxPages = 10)
+
+    /** A kanban view's buckets with their tasks. Pages apply to the tasks inside each bucket. */
+    fun bucketsWithTasks(projectId: Long, viewId: Long): List<ApiBucket> {
+        val byId = LinkedHashMap<Long, ApiBucket>()
+        for (page in 1..20) {
+            val text = send("GET", "/projects/$projectId/views/$viewId/buckets/tasks?page=$page", null, false)
+            val items = json.decodeFromString<Paginated<ApiBucket>>(text).items.orEmpty()
+            for (b in items) {
+                val have = byId[b.id]
+                byId[b.id] = if (have == null) b.copy(tasks = b.tasks.orEmpty()) else have.copy(tasks = have.tasks.orEmpty() + b.tasks.orEmpty())
+            }
+            if (items.none { b -> b.tasks.orEmpty().isNotEmpty() && byId[b.id]!!.tasks!!.size < b.count }) break
+        }
+        return byId.values.sortedBy { it.position }
+    }
+
+    fun moveToBucket(projectId: Long, viewId: Long, bucketId: Long, taskId: Long) {
+        send("PUT", "/projects/$projectId/views/$viewId/buckets/$bucketId/tasks", buildJsonObject { put("task_id", taskId) }, false)
+    }
+
+    fun setPosition(taskId: Long, viewId: Long, position: Double) {
+        send("PUT", "/tasks/$taskId/position", buildJsonObject { put("position", position); put("project_view_id", viewId) }, false)
+    }
+
+    fun createBucket(projectId: Long, viewId: Long, title: String, position: Double): ApiBucket = json.decodeFromString(
+        send("POST", "/projects/$projectId/views/$viewId/buckets", buildJsonObject { put("title", title); put("position", position) }, false),
+    )
+
+    fun updateBucket(projectId: Long, viewId: Long, bucketId: Long, title: String, position: Double) {
+        send("PUT", "/projects/$projectId/views/$viewId/buckets/$bucketId", buildJsonObject { put("title", title); put("position", position) }, false)
+    }
+
+    fun deleteBucket(projectId: Long, viewId: Long, bucketId: Long) {
+        send("DELETE", "/projects/$projectId/views/$viewId/buckets/$bucketId", null, false)
+    }
+
     /** Merges into frontend_settings.views (JSON merge patch). */
     fun patchViews(patch: JsonObject) {
         send("PATCH", "/user/settings/general", buildJsonObject { put("frontend_settings", buildJsonObject { put("views", patch) }) }, true)
@@ -435,6 +508,9 @@ fun TaskEntity.toApiFields(projectServerId: Long): JsonObject = buildJsonObject 
     put("done", done)
     put("wont_do", done && wontDo)
     put("due_date", formatServerDate(dueDate))
+    // The timeline edits date ranges; the calendar shows them as blocks.
+    put("start_date", formatServerDate(startDate))
+    put("end_date", formatServerDate(endDate))
     put("priority", priority)
     put("project_id", projectServerId)
 }
