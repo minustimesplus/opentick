@@ -1,8 +1,9 @@
 name: Desktop release
 
 # Builds the web/ frontend into the Electron shell in web-desktop/ for Linux
-# (x64 + arm64), Windows and macOS, then publishes one GitHub release with all
-# packages and the latest*.yml feeds for electron-updater on every push to main.
+# (x64 + arm64), Windows and macOS, plus the Android app in android/, then
+# publishes one GitHub release with all packages and the latest*.yml feeds for
+# electron-updater on every push to main.
 # The server image for the same version goes to ghcr.io/<owner>/opentick.
 #
 # Standard GitHub-hosted runners (including macOS, Windows and Linux arm64)
@@ -84,6 +85,56 @@ jobs:
             web-desktop/dist/*.blockmap
             web-desktop/dist/latest*.yml
 
+  # The APK is signed with the permanent release key from the ANDROID_* secrets,
+  # so each release installs as an update over the last one. Without them it
+  # falls back to a throwaway debug key and says so in the release notes.
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Write signing config
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with a debug key and can't update earlier installs."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PversionCode="${{ github.run_number }}" -PversionName="$VERSION"
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/OpenTick-$VERSION.apk"
+          rm -f keystore.properties "$RUNNER_TEMP/release.jks"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-apk
+          if-no-files-found: error
+          path: android/dist/*.apk
+
   # Publishes the server image for the same version, so a desktop release never
   # exists without a matching server. Self-hosted updaters only install images
   # whose keyless cosign signature comes from this workflow on main.
@@ -124,7 +175,7 @@ jobs:
           cosign sign --yes "$IMAGE@$digest"
 
   release:
-    needs: [build, server-image]
+    needs: [build, android, server-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -138,6 +189,11 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: android-apk
+          path: dist
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -149,6 +205,7 @@ jobs:
             echo "### Downloads"
             echo "- **Linux:** \`.deb\` or \`.AppImage\` (x64 / arm64)"
             echo "- **Windows:** \`.exe\` installer (x64, also runs on Windows on ARM). Unsigned: click \"More info\" → \"Run anyway\" if SmartScreen warns."
+            echo "- **Android:** \`.apk\` (Android 8.0+). Open it on your phone and allow installing from your browser or file manager when asked."
             echo "- **macOS:** \`.dmg\` (x64 for Intel, arm64 for Apple Silicon). The app is unsigned: right-click → Open on first launch, or run \`xattr -cr /Applications/OpenTick.app\`."
             echo
             echo "### Changes"

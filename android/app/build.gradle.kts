@@ -8,8 +8,9 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// Release signing comes from keystore.properties (not committed). Without it,
-// release builds are signed with the debug key so they still install.
+// Release signing comes from keystore.properties (not committed; CI writes it
+// from secrets). Without it, release builds are signed with the debug key so
+// they still install, but can't update an app signed with the release key.
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -23,8 +24,9 @@ android {
         applicationId = "org.opentick.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes -PversionCode / -PversionName so every release can update the last one.
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
     }
 
     signingConfigs {
