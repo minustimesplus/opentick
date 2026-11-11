@@ -44,6 +44,7 @@ data class ApiProject(
     val position: Double = 0.0,
     @SerialName("is_archived") val isArchived: Boolean = false,
     @SerialName("is_favorite") val isFavorite: Boolean = false,
+    @SerialName("parent_project_id") val parentProjectId: Long = 0,
 )
 
 @Serializable
@@ -62,6 +63,8 @@ data class ApiTask(
     @SerialName("done_at") val doneAt: String? = null,
     @SerialName("wont_do") val wontDo: Boolean = false,
     @SerialName("due_date") val dueDate: String? = null,
+    @SerialName("start_date") val startDate: String? = null,
+    @SerialName("end_date") val endDate: String? = null,
     val priority: Int = 0,
     @SerialName("project_id") val projectId: Long = 0,
     val labels: List<ApiLabel>? = null,
@@ -353,6 +356,21 @@ class Api(private val prefs: Prefs) {
 
     fun removeLabel(taskId: Long, labelId: Long) {
         send("DELETE", "/tasks/$taskId/labels/$labelId", null, false)
+    }
+
+    /** Deleted tasks the server keeps for a while (online only). */
+    fun trash(): List<ApiTask> = getAll("/tasks/trash", "format=markdown", maxPages = 10)
+
+    fun restoreFromTrash(id: Long) {
+        send("POST", "/tasks/trash/$id/restore", null, false)
+    }
+
+    fun deleteForever(id: Long) {
+        send("DELETE", "/tasks/trash/$id", null, false)
+    }
+
+    fun emptyTrash() {
+        send("POST", "/tasks/trash/empty", null, false)
     }
 
     fun logout() {

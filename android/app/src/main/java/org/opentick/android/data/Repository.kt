@@ -27,7 +27,7 @@ sealed interface SyncState {
  */
 class Repository(
     private val db: AppDatabase,
-    private val api: Api,
+    private val apiClient: Api,
     private val prefs: Prefs,
     /** Asks the background scheduler for a sync soon (debounced). */
     private val requestSync: () -> Unit,
@@ -172,7 +172,7 @@ class Repository(
         syncMutex.withLock {
             _syncState.value = SyncState.Running
             try {
-                val user = api.user()
+                val user = apiClient.user()
                 prefs.username = user.username
                 prefs.displayName = user.name
                 pullProjects(user.settings?.defaultProjectId ?: 0)
@@ -205,15 +205,15 @@ class Repository(
     }
 
     private suspend fun pullProjects(defaultProjectId: Long) {
-        val remote = api.projects().filter { it.id > 0 && !it.isArchived }
+        val remote = apiClient.projects().filter { it.id > 0 && !it.isArchived }
         val remoteIds = remote.map { it.id }.toSet()
         db.withTransaction {
             for (r in remote) {
                 val local = projects.byServerId(r.id)
                 if (local == null) {
-                    projects.insert(ProjectEntity(serverId = r.id, title = r.title, hexColor = r.hexColor, position = r.position, isFavorite = r.isFavorite))
+                    projects.insert(ProjectEntity(serverId = r.id, title = r.title, hexColor = r.hexColor, position = r.position, isFavorite = r.isFavorite, parentServerId = r.parentProjectId.takeIf { it > 0 }))
                 } else if (!local.dirty) {
-                    projects.update(local.copy(title = r.title, hexColor = r.hexColor, position = r.position, isFavorite = r.isFavorite))
+                    projects.update(local.copy(title = r.title, hexColor = r.hexColor, position = r.position, isFavorite = r.isFavorite, parentServerId = r.parentProjectId.takeIf { it > 0 }))
                 }
             }
             // Projects removed (or archived) on the server.
@@ -241,7 +241,7 @@ class Repository(
     }
 
     private suspend fun pullLabels() {
-        val remote = api.labels()
+        val remote = apiClient.labels()
         db.withTransaction {
             for (r in remote) {
                 val local = labels.byServerId(r.id)
@@ -265,18 +265,18 @@ class Repository(
             try {
                 when {
                     p.deleted -> {
-                        p.serverId?.let { ignoreNotFound { api.deleteProject(it) } }
+                        p.serverId?.let { ignoreNotFound { apiClient.deleteProject(it) } }
                         tasks.all().filter { it.projectId == p.id }.forEach { tasks.hardDelete(it.id) }
                         projects.hardDelete(p.id)
                     }
                     p.serverId == null -> {
-                        val created = api.createProject(p.title, p.hexColor)
+                        val created = apiClient.createProject(p.title, p.hexColor)
                         val cur = projects.get(p.id) ?: continue
                         projects.update(cur.copy(serverId = created.id))
                         projects.markClean(p.id, p.version)
                     }
                     p.dirty -> {
-                        api.updateProject(p.serverId, p.title, p.hexColor)
+                        apiClient.updateProject(p.serverId, p.title, p.hexColor)
                         projects.markClean(p.id, p.version)
                     }
                 }
@@ -292,11 +292,11 @@ class Repository(
             try {
                 when {
                     l.deleted -> {
-                        l.serverId?.let { ignoreNotFound { api.deleteLabel(it) } }
+                        l.serverId?.let { ignoreNotFound { apiClient.deleteLabel(it) } }
                         labels.hardDelete(l.id)
                     }
                     l.serverId == null -> {
-                        val created = api.createLabel(l.title, l.hexColor)
+                        val created = apiClient.createLabel(l.title, l.hexColor)
                         val cur = labels.get(l.id) ?: continue
                         labels.update(cur.copy(serverId = created.id))
                         labels.markClean(l.id, l.version)
@@ -316,7 +316,7 @@ class Repository(
         for (t in tasks.pending()) {
             try {
                 if (t.deleted) {
-                    t.serverId?.let { ignoreNotFound { api.deleteTask(it) } }
+                    t.serverId?.let { ignoreNotFound { apiClient.deleteTask(it) } }
                     tasks.hardDelete(t.id)
                     continue
                 }
@@ -324,16 +324,16 @@ class Repository(
                 val projectServerId = project?.serverId ?: continue // project not on the server yet
                 val wantedLabels = t.labelIdList.mapNotNull { labels.get(it)?.serverId }.toSet()
                 val response = if (t.serverId == null) {
-                    val created = api.createTask(projectServerId, t.toApiFields(projectServerId))
+                    val created = apiClient.createTask(projectServerId, t.toApiFields(projectServerId))
                     // Store the server id right away so a failure below can't duplicate the task.
                     tasks.get(t.id)?.let { tasks.update(it.copy(serverId = created.id)) }
-                    if (t.done) api.updateTask(created.id, t.toApiFields(projectServerId)) else created
+                    if (t.done) apiClient.updateTask(created.id, t.toApiFields(projectServerId)) else created
                 } else {
-                    api.updateTask(t.serverId, t.toApiFields(projectServerId))
+                    apiClient.updateTask(t.serverId, t.toApiFields(projectServerId))
                 }
                 val had = parseIds(t.syncedLabelServerIds).toSet()
-                for (add in wantedLabels - had) runCatching { api.addLabel(response.id, add) }
-                for (rm in had - wantedLabels) ignoreNotFound { api.removeLabel(response.id, rm) }
+                for (add in wantedLabels - had) runCatching { apiClient.addLabel(response.id, add) }
+                for (rm in had - wantedLabels) ignoreNotFound { apiClient.removeLabel(response.id, rm) }
 
                 db.withTransaction {
                     val cur = tasks.get(t.id) ?: return@withTransaction
@@ -355,8 +355,8 @@ class Repository(
 
     private suspend fun pullTasks() {
         val since = Instant.now().minus(14, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS)
-        val open = api.tasks("done = false")
-        val recentDone = api.tasks("done = true && done_at > \"$since\"", maxPages = 4)
+        val open = apiClient.tasks("done = false")
+        val recentDone = apiClient.tasks("done = true && done_at > \"$since\"", maxPages = 4)
         val remote = (open + recentDone).distinctBy { it.id }
         val seen = HashSet<Long>()
         db.withTransaction {
@@ -392,6 +392,8 @@ class Repository(
         doneAt = parseServerDate(r.doneAt),
         wontDo = r.wontDo,
         dueDate = parseServerDate(r.dueDate),
+        startDate = parseServerDate(r.startDate),
+        endDate = parseServerDate(r.endDate),
         priority = r.priority,
         repeatAfter = r.repeatAfter,
         repeatMode = r.repeatMode,

@@ -21,6 +21,8 @@ data class ProjectEntity(
     val position: Double = 0.0,
     val isInbox: Boolean = false,
     val isFavorite: Boolean = false,
+    /** The parent list on the server; lists with children show as folders. */
+    val parentServerId: Long? = null,
     val dirty: Boolean = false,
     val deleted: Boolean = false,
     val version: Int = 0,
@@ -52,6 +54,9 @@ data class TaskEntity(
     val wontDo: Boolean = false,
     /** Epoch millis. All-day tasks are due at 23:59 local time, like the web app. */
     val dueDate: Long? = null,
+    /** Scheduled time range from the server; the calendar draws these as blocks. */
+    val startDate: Long? = null,
+    val endDate: Long? = null,
     /** Vikunja 0-5; the app shows 0 none, 1 low, 2 medium, 3+ high. */
     val priority: Int = 0,
     /** Local label ids, comma separated. */
