@@ -28,6 +28,7 @@ while you set up.
 - [Installing](#installing)
 	- [Docker](#docker)
 	- [Desktop app (Linux)](#desktop-app-linux)
+	- [Android app](#android-app)
 - [Building from source](#building-from-source)
 - [Development setup](#development-setup)
 - [Contributing](#contributing)
@@ -67,6 +68,12 @@ Every push to `main` publishes a GitHub release with a `.deb` and an AppImage.
 Download one from the [releases page](https://github.com/minustimesplus/vikunja-ticktick/releases),
 install it, and enter the URL of your OpenTick server on the login screen.
 The app updates itself in the background.
+
+### Android app
+
+A native Android app lives in [`android/`](android/README.md). It works
+offline and syncs with OpenTick Cloud or your own server. Build the APK with
+`cd android && ./gradlew assembleRelease` and install it on your phone.
 
 ## Building from source
 

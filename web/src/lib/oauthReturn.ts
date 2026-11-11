@@ -6,6 +6,10 @@ export const OAUTH_AUTHORIZE_PATH = '/oauth/authorize'
 const KEY = 'tt.oauthReturn'
 /** First-party client id the desktop app signs in with through the browser. */
 export const DESKTOP_CLIENT_ID = 'opentick-desktop'
+/** First-party client id the Android app signs in with through the browser. */
+export const ANDROID_CLIENT_ID = 'opentick-android'
+/** The only redirect the Android app accepts; the server allows vikunja-* schemes. */
+export const ANDROID_REDIRECT_URI = 'vikunja-opentick://oauth/callback'
 
 if (window.location.pathname === OAUTH_AUTHORIZE_PATH) {
 	try {

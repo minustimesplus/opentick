@@ -3,11 +3,11 @@ import {computed, onMounted, ref} from 'vue'
 import {useRoute} from 'vue-router'
 import {api} from '@/api/client'
 import {t, type MessageKey} from '@/lib/i18n'
-import {DESKTOP_CLIENT_ID, takeOAuthReturn} from '@/lib/oauthReturn'
+import {ANDROID_CLIENT_ID, ANDROID_REDIRECT_URI, DESKTOP_CLIENT_ID, takeOAuthReturn} from '@/lib/oauthReturn'
 
 // The OAuth authorization endpoint for clients registered via dynamic client
 // registration, e.g. Claude connecting to the MCP server, and for the desktop
-// app signing in through the browser. The backend checks everything again;
+// and Android apps signing in through the browser. The backend checks everything again;
 // this page only asks the user.
 
 interface ClientInfo {
@@ -39,8 +39,10 @@ const error = ref('')
 const loading = ref(true)
 const busy = ref(false)
 const preset = ref<Preset>('typed')
-// The desktop app gets a full session (first-party client), so no presets.
+// The desktop and Android apps get a full session (first-party clients), so no presets.
 const desktopClient = computed(() => query.value.clientId === DESKTOP_CLIENT_ID)
+const androidClient = computed(() => query.value.clientId === ANDROID_CLIENT_ID)
+const firstPartyClient = computed(() => desktopClient.value || androidClient.value)
 
 /** The desktop app listens on a loopback port for the code (RFC 8252). */
 function isLoopback(uri: string) {
@@ -74,8 +76,9 @@ onMounted(async () => {
 		if (q.responseType !== 'code' || !q.clientId || !q.redirectUri || !q.codeChallenge || q.codeChallengeMethod !== 'S256') {
 			throw new Error(t('oauthInvalidRequest'))
 		}
-		if (desktopClient.value) {
-			if (!isLoopback(q.redirectUri)) throw new Error(t('oauthInvalidRequest'))
+		if (desktopClient.value || androidClient.value) {
+			const validRedirect = desktopClient.value ? isLoopback(q.redirectUri) : q.redirectUri === ANDROID_REDIRECT_URI
+			if (!validRedirect) throw new Error(t('oauthInvalidRequest'))
 			client.value = {client_id: q.clientId, client_name: 'OpenTick', redirect_uris: [q.redirectUri]}
 			return
 		}
@@ -111,7 +114,7 @@ async function allow() {
 			code_challenge: q.codeChallenge,
 			code_challenge_method: q.codeChallengeMethod,
 			resource: q.resource || undefined,
-			permissions: desktopClient.value ? undefined : preset.value,
+			permissions: firstPartyClient.value ? undefined : preset.value,
 		}})
 		redirect({code: resp.code})
 	} catch (e) {
@@ -144,9 +147,9 @@ function deny() {
 				<p class="error">{{ error }}</p>
 			</div>
 
-			<form v-else-if="desktopClient" class="card" @submit.prevent="allow">
-				<h1>{{ t('oauthDesktopTitle') }}</h1>
-				<p class="hint">{{ t('oauthDesktopRequest') }}</p>
+			<form v-else-if="firstPartyClient" class="card" @submit.prevent="allow">
+				<h1>{{ t(androidClient ? 'oauthAndroidTitle' : 'oauthDesktopTitle') }}</h1>
+				<p class="hint">{{ t(androidClient ? 'oauthAndroidRequest' : 'oauthDesktopRequest') }}</p>
 				<p v-if="error" class="error">{{ error }}</p>
 
 				<button class="submit" type="submit" :disabled="busy">{{ t('oauthContinue') }}</button>
