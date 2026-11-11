@@ -33,6 +33,17 @@ interface DesktopBridge {
 	minimizeWindow?(): void
 	toggleMaximizeWindow?(): void
 	closeWindow?(): void
+	/**
+	 * Files for the offline copy of the account (src/api/offline), kept in the
+	 * app's user data folder. Missing in builds before offline mode.
+	 */
+	offlineStore?: {
+		read(name: string): Promise<string | null>
+		write(name: string, text: string): Promise<void>
+		/** Blocks until written; for saving while the page unloads. */
+		writeSync(name: string, text: string): void
+		clear(): Promise<void>
+	}
 }
 
 declare global {

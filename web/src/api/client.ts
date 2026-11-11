@@ -1,8 +1,10 @@
 // Thin fetch wrapper around the Vikunja /api/v2 REST API.
 // Without an account (and in the demo build) requests go to the in-browser
-// backend in ./local instead, which is only downloaded when used.
+// backend in ./local instead, which is only downloaded when used. The desktop
+// app keeps working without a connection through ./offline.
 
 import {isLocal} from '@/lib/localMode'
+import {offlineApi, offlineEnabled} from './offline'
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api/v2'
 const TOKEN_KEY = 'tt.token'
@@ -34,6 +36,18 @@ export class ApiError extends Error {
 		super(message)
 		this.status = status
 		this.code = code
+	}
+}
+
+/**
+ * The server could not be reached. `delivered` is false when the request
+ * certainly never arrived, so it is safe to send again later.
+ */
+export class NetworkError extends Error {
+	delivered: boolean
+	constructor(message: string, delivered: boolean) {
+		super(message)
+		this.delivered = delivered
 	}
 }
 
@@ -86,7 +100,46 @@ async function tryRefresh(): Promise<boolean> {
 	return refreshing
 }
 
+/**
+ * Turns failures to reach the server into NetworkErrors. The desktop app's
+ * proxy answers them with an X-OpenTick-Offline header (web-desktop/main.js).
+ */
 async function send(method: string, path: string, opts: RequestOptions): Promise<Response> {
+	let res: Response
+	try {
+		res = await sendRaw(method, path, opts)
+	} catch (e) {
+		// fetch() only rejects when no response arrived at all.
+		throw new NetworkError(String((e as Error).message), method !== 'GET')
+	}
+	const offline = res.headers.get('X-OpenTick-Offline')
+	if (offline) {
+		let message = res.statusText
+		try {
+			message = ((await res.json()) as {message?: string}).message || message
+		} catch {
+			// non-JSON body
+		}
+		throw new NetworkError(message, offline !== 'unreachable')
+	}
+	// A reverse proxy (or CDN) in front of a server that is down. The API's
+	// own 502s (a calendar feed or import source failing) carry a JSON error.
+	if ((res.status === 502 || res.status === 504) && !await isApiError(res)) {
+		throw new NetworkError(`${res.status} ${res.statusText}`.trim(), method !== 'GET')
+	}
+	return res
+}
+
+async function isApiError(res: Response): Promise<boolean> {
+	try {
+		const body = await res.clone().json() as Record<string, unknown> | null
+		return !!body && typeof body === 'object' && ('code' in body || 'detail' in body || 'message' in body)
+	} catch {
+		return false
+	}
+}
+
+async function sendRaw(method: string, path: string, opts: RequestOptions): Promise<Response> {
 	const headers: Record<string, string> = {Accept: opts.blob ? '*/*' : 'application/json'}
 	if (opts.auth !== false && token) headers.Authorization = `Bearer ${token}`
 	let body: BodyInit | undefined
@@ -115,6 +168,12 @@ export async function api<T = unknown>(method: string, path: string, opts: Reque
 		const {localApi} = await import('./local/backend')
 		return localApi<T>(method, path, opts)
 	}
+	if (offlineEnabled()) return offlineApi<T>(method, path, opts)
+	return serverApi<T>(method, path, opts)
+}
+
+/** Sends a request to the server, whatever the offline mode thinks of the connection. */
+export async function serverApi<T = unknown>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
 	// Access tokens are short-lived (10 min); renew them before they lapse.
 	if (opts.auth !== false && tokenExpiresSoon()) await tryRefresh()
 	let res = await send(method, path, opts)

@@ -7,7 +7,7 @@
 import type {Countdown, FocusSession, FocusStats, Habit, HabitStats, Label, Project, RelatedTasks, Task, UserStatistics} from '../types'
 import type {RequestOptions} from '../client'
 import {ApiError} from '../client'
-import {getDB, nextId, now, save, type DB, type StoredHabit, type StoredTask} from './db'
+import {getDB, nextId, now, save, withDB, type DB, type StoredHabit, type StoredTask} from './db'
 import {compileFilter} from './filter'
 import {parseRepeat} from '@/lib/repeat'
 import {t} from '@/lib/i18n'
@@ -92,20 +92,52 @@ function listViewOf(db: DB, projectId: number): number | undefined {
 	return db.projects.find(p => p.id === projectId)?.views?.find(v => v.view_kind === 'list')?.id
 }
 
+interface Index {
+	byId: Map<number, StoredTask>
+	subs: Map<number, number[]>
+	parents: Map<number, number[]>
+	comments: Map<number, number>
+}
+
+/**
+ * Lookups for present(), built once per request: large accounts (the offline
+ * copy of a server account, see src/api/offline) have thousands of tasks.
+ * Requests change the data before they present tasks, never after.
+ */
+let index: Index | null = null
+
+function indexOf(db: DB): Index {
+	if (index) return index
+	const push = (m: Map<number, number[]>, k: number, v: number) => {
+		const list = m.get(k)
+		if (list) list.push(v)
+		else m.set(k, [v])
+	}
+	const out: Index = {byId: new Map(), subs: new Map(), parents: new Map(), comments: new Map()}
+	for (const t of db.tasks) if (!t.deleted_at) out.byId.set(t.id, t)
+	for (const r of db.relations) {
+		push(out.subs, r.task_id, r.other_task_id)
+		push(out.parents, r.other_task_id, r.task_id)
+	}
+	for (const c of db.comments) out.comments.set(c.task_id, (out.comments.get(c.task_id) ?? 0) + 1)
+	index = out
+	return out
+}
+
 function present(db: DB, s: StoredTask, viewId?: number): Task {
 	const related: RelatedTasks = {}
-	const byId = new Map(db.tasks.filter(t => !t.deleted_at).map(t => [t.id, t]))
-	const subs = db.relations.filter(r => r.task_id === s.id).map(r => byId.get(r.other_task_id)).filter(Boolean) as StoredTask[]
-	const parents = db.relations.filter(r => r.other_task_id === s.id).map(r => byId.get(r.task_id)).filter(Boolean) as StoredTask[]
+	const idx = indexOf(db)
+	const subs = (idx.subs.get(s.id) ?? []).map(id => idx.byId.get(id)).filter(Boolean) as StoredTask[]
+	const parents = (idx.parents.get(s.id) ?? []).map(id => idx.byId.get(id)).filter(Boolean) as StoredTask[]
 	if (subs.length) related.subtask = subs.map(x => snapshot(db, x))
 	if (parents.length) related.parenttask = parents.map(x => snapshot(db, x))
 	const view = viewId ?? listViewOf(db, s.project_id)
 	return {
 		...snapshot(db, s),
 		related_tasks: related,
-		comment_count: db.comments.filter(c => c.task_id === s.id).length,
-		created_by: db.user,
-		identifier: `#${s.index ?? s.id}`,
+		comment_count: s.comment_count ?? idx.comments.get(s.id) ?? 0,
+		created_by: s.created_by ?? db.user,
+		identifier: s.identifier || `#${s.index ?? s.id}`,
 		position: (view !== undefined ? db.positions[view]?.[s.id] : undefined) ?? (s.index ?? s.id) * STEP,
 	}
 }
@@ -403,6 +435,7 @@ function tasksRoute(db: DB, c: Ctx): unknown {
 				const stamp = now()
 				const comment = {id: nextId(), task_id: task.id, comment: String(c.body.comment ?? ''), author: db.user, created: stamp, updated: stamp}
 				db.comments.push(comment)
+				if (task.comment_count !== undefined) task.comment_count++
 				return comment
 			}
 		}
@@ -414,6 +447,7 @@ function tasksRoute(db: DB, c: Ctx): unknown {
 		}
 		if (m === 'DELETE') {
 			db.comments = db.comments.filter(x => x !== comment)
+			if (task.comment_count) task.comment_count--
 			return {}
 		}
 	}
@@ -430,6 +464,7 @@ function tasksRoute(db: DB, c: Ctx): unknown {
 // ---------- projects ----------
 
 function filterProject(f: DB['filters'][number]): Project {
+	if (f.project) return {...f.project, title: f.title}
 	const id = -f.id - 1
 	return {
 		id,
@@ -983,14 +1018,29 @@ function route(db: DB, c: Ctx): unknown {
 	unavailable()
 }
 
-export async function localApi<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
-	const db = getDB()
+/**
+ * Answers a request from `db`. Synchronous: the offline mode
+ * (src/api/offline) relies on nothing else touching `db` meanwhile.
+ */
+export function answer<T>(db: DB, method: string, path: string, opts: RequestOptions = {}): T {
 	const url = new URL(path, 'http://local')
 	const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
 	// JSON round trips also unwrap the reactive proxies callers may pass.
 	const body = opts.body instanceof FormData || opts.body === undefined ? {} : JSON.parse(JSON.stringify(opts.body)) as Body
-	const result = route(db, {method: method.toUpperCase(), parts, query: opts.query ?? {}, body})
-	if (method.toUpperCase() !== 'GET') save()
-	// Callers mutate what they get back; never hand out the stored objects.
-	return (result === undefined ? undefined : JSON.parse(JSON.stringify(result))) as T
+	try {
+		const result = withDB(db, () => route(db, {method: method.toUpperCase(), parts, query: opts.query ?? {}, body}))
+		// Callers mutate what they get back; never hand out the stored objects.
+		return (result === undefined ? undefined : JSON.parse(JSON.stringify(result))) as T
+	} finally {
+		index = null
+	}
+}
+
+export async function localApi<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
+	const db = getDB()
+	try {
+		return answer<T>(db, method, path, opts)
+	} finally {
+		if (method.toUpperCase() !== 'GET') save()
+	}
 }

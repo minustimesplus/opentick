@@ -25,6 +25,7 @@ import {ownWindowControls} from './lib/desktop'
 import {applyTheme} from './lib/theme'
 import {background, clearBackground, loadBackground} from './lib/background'
 import {onboardingPending} from './lib/onboarding'
+import {onReconnect, remapText} from './api/offline'
 
 const OnboardingFlow = defineAsyncComponent(() => import('./components/onboarding/OnboardingFlow.vue'))
 
@@ -138,6 +139,12 @@ function onKey(e: KeyboardEvent) {
 		window.addEventListener('keydown', next, true)
 	}
 }
+
+// A task or list created offline that is open right now has a server id now.
+onReconnect(ids => {
+	const path = remapText(route.fullPath, ids)
+	if (path !== route.fullPath) router.replace(path)
+})
 
 onMounted(() => {
 	if (data.authed) refresh()

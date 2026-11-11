@@ -1,6 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, reactive, ref, shallowRef, watch} from 'vue'
 import {api, ApiError, fetchAll, getToken, onUnauthorized, setToken, type Paginated} from '@/api/client'
+import {checkConnection, clearOfflineData, onReconnect, remapIds} from '@/api/offline'
 import type {AppNotification, Attachment, CurrentUser, Label, Project, ProjectInvitation, RelationKind, Task, User, UserSettings} from '@/api/types'
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
@@ -76,6 +77,20 @@ export const useData = defineStore('data', () => {
 		reset()
 	})
 
+	// Back online after working offline (desktop app): the changes made
+	// meanwhile are on the server now, under the ids the server gave them.
+	onReconnect(ids => {
+		if (ids.size) {
+			for (const [key, value] of Object.entries(prefs)) {
+				const next = remapIds(value, ids)
+				if (JSON.stringify(next) !== JSON.stringify(value)) (prefs as Record<string, unknown>)[key] = next
+			}
+		}
+		// A sync running now may have been answered offline: start a fresh one after it.
+		const sync = () => authed.value ? loadAll() : Promise.resolve()
+		;(inflight ?? Promise.resolve()).catch(() => {}).then(sync).catch(() => {})
+	})
+
 	function reset() {
 		user.value = null
 		projects.value = []
@@ -147,6 +162,8 @@ export const useData = defineStore('data', () => {
 		// An unreachable server must not trap the user in their session (e.g.
 		// to switch to another server): give it a moment, then log out locally.
 		const giveUp = new Promise(resolve => setTimeout(resolve, LOGOUT_TIMEOUT))
+		// Changes made offline go out while the session still works.
+		await Promise.race([checkConnection().catch(() => {}), giveUp])
 		try {
 			await Promise.race([api('POST', '/user/logout'), giveUp])
 		} catch {
@@ -155,6 +172,8 @@ export const useData = defineStore('data', () => {
 		setToken(null)
 		authed.value = false
 		reset()
+		// What was kept for offline use belongs to the account signed out of.
+		await Promise.race([clearOfflineData().catch(() => {}), giveUp])
 		await Promise.race([signOutOfClerk(), giveUp])
 	}
 

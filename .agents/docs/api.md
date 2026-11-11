@@ -21,6 +21,7 @@
 - Response types are hand-written in `web/src/api/types.ts`. When a v2 route or schema the frontend uses changes, update them there.
 - Failed responses throw an `ApiError` carrying `status` and the server's `code`; transport failures throw plain `Error`s, so tell them apart with `instanceof ApiError`.
 - Paginated lists: use `fetchAll()` only when the client needs the whole set, and drive paging from the response, never from the page size you asked for. The server silently caps `per_page` at `max_items_per_page`.
+- In the desktop app, `api()` goes through the offline mode (`web/src/api/offline/`): online it calls the server and copies responses into a local replica; offline it answers from the replica with the in-browser backend (`web/src/api/local/`) and replays queued changes later. A new route the app uses offline must be handled by the in-browser backend and listed in `MODELED` there; anything else fails offline with "needs a connection" (reads fall back to the last cached response).
 - Id lookups must handle pseudo projects: `-1` is Favorites and other negative ids are saved filters. They only exist in the project list and have no detail endpoint.
 
 ## OpenAPI
