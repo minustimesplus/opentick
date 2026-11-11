@@ -2,24 +2,30 @@ package org.opentick.android.ui
 
 import android.app.Application
 import android.net.Uri
+import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.opentick.android.OpenTickApp
+import org.opentick.android.data.AccountMode
+import org.opentick.android.data.ApiTask
 import org.opentick.android.data.LabelEntity
 import org.opentick.android.data.ProjectEntity
 import org.opentick.android.data.TaskEntity
+import org.opentick.android.data.joinIds
 import org.opentick.android.util.QuickAddParser
 import org.opentick.android.util.allDayMillis
 import org.opentick.android.util.atTimeMillis
 import org.opentick.android.util.isOverdue
-import org.opentick.android.util.today
 import org.opentick.android.util.toLocalDate
+import org.opentick.android.util.today
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -30,7 +36,15 @@ sealed interface ListSel {
     data class Label(val id: Long) : ListSel
 }
 
-enum class SmartList(val title: String) { TODAY("Today"), TOMORROW("Tomorrow"), NEXT7("Next 7 Days"), INBOX("Inbox"), ALL("All"), COMPLETED("Completed") }
+enum class SmartList(val title: String) {
+    TODAY("Today"), TOMORROW("Tomorrow"), NEXT7("Next 7 Days"), INBOX("Inbox"), ALL("All"), COMPLETED("Completed"),
+}
+
+/** How a list's tasks are split into cards. */
+enum class GroupMode { LIST, DATE, PRIORITY, NONE }
+
+/** Full screen pages on top of the tabs. */
+enum class Page { SETTINGS, TAB_BAR, APPEARANCE, DATE_TIME, NOTIFICATIONS, POMO_SETTINGS, GENERAL, ACCOUNT, ABOUT, SEARCH, TRASH }
 
 data class Data(
     val projects: List<ProjectEntity> = emptyList(),
@@ -41,6 +55,13 @@ data class Data(
     val labelMap = labels.associateBy { it.id }
     val inbox = projects.firstOrNull { it.isInbox }
     val open = tasks.filter { !it.done }
+    private val byServerId = projects.filter { it.serverId != null }.associateBy { it.serverId }
+    /** Lists inside a folder, keyed by the folder's local id. */
+    val children: Map<Long, List<ProjectEntity>> = projects
+        .filter { it.parentServerId != null && byServerId[it.parentServerId] != null }
+        .groupBy { byServerId[it.parentServerId]!!.id }
+    /** Top level lists (and folders), without the inbox. */
+    val topLevel = projects.filter { !it.isInbox && (it.parentServerId == null || byServerId[it.parentServerId] == null) }
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -59,10 +80,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val selection = MutableStateFlow<ListSel>(ListSel.Smart(SmartList.TODAY))
     val openTaskId = MutableStateFlow<Long?>(null)
     val message = MutableStateFlow<String?>(null)
+    val pages = mutableStateListOf<Page>()
+
+    fun open(page: Page) { pages.add(page) }
+    fun back() { if (pages.isNotEmpty()) pages.removeAt(pages.lastIndex) }
 
     init {
         viewModelScope.launch {
-            prefs.mode.collect { if (it != org.opentick.android.data.AccountMode.NONE && data.value.inbox == null) repo.ensureInbox() }
+            prefs.mode.collect { if (it != AccountMode.NONE && data.value.inbox == null) repo.ensureInbox() }
         }
     }
 
@@ -72,6 +97,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         is ListSel.Smart -> sel.kind.title
         is ListSel.Project -> d.projectMap[sel.id]?.title ?: "List"
         is ListSel.Label -> d.labelMap[sel.id]?.let { "#" + it.title } ?: "Tag"
+    }
+
+    fun groupMode(sel: ListSel): GroupMode = when (sel) {
+        is ListSel.Smart -> when (sel.kind) {
+            SmartList.TODAY, SmartList.TOMORROW, SmartList.ALL -> GroupMode.LIST
+            SmartList.NEXT7, SmartList.COMPLETED -> GroupMode.DATE
+            SmartList.INBOX -> GroupMode.NONE
+        }
+        is ListSel.Project -> if (data.value.children.containsKey(sel.id)) GroupMode.LIST else GroupMode.NONE
+        is ListSel.Label -> GroupMode.LIST
     }
 
     /** Tasks that belong to a list, including completed ones. */
@@ -95,7 +130,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 SmartList.ALL -> d.tasks
                 SmartList.COMPLETED -> d.tasks.filter { it.done }.sortedByDescending { it.doneAt ?: 0 }
             }
-            is ListSel.Project -> d.tasks.filter { it.projectId == sel.id }
+            is ListSel.Project -> {
+                // A folder shows the tasks of all its lists.
+                val ids = setOf(sel.id) + d.children[sel.id].orEmpty().map { it.id }
+                d.tasks.filter { it.projectId in ids }
+            }
             is ListSel.Label -> d.tasks.filter { sel.id in it.labelIdList }
         }
     }
@@ -109,6 +148,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             m[task.projectId] = (m[task.projectId] ?: 0) + 1
             for (l in task.labelIdList) m["l$l"] = (m["l$l"] ?: 0) + 1
         }
+        for ((folder, kids) in d.children) m[folder] = (m[folder] ?: 0) + kids.sumOf { m[it.id] ?: 0 }
         return m
     }
 
@@ -131,20 +171,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         datePicked: Boolean,
         priority: Int,
         labels: List<String>,
-        smartParse: Boolean = true,
+        description: String = "",
     ) {
         if (text.isBlank()) return
         viewModelScope.launch {
-            val p = if (smartParse) QuickAddParser.parse(text) else null
-            val parsedDue = p?.date?.let { date -> p.time?.let { atTimeMillis(date, it) } ?: allDayMillis(date) }
+            val p = QuickAddParser.parse(text)
+            val parsedDue = p.date?.let { date -> p.time?.let { atTimeMillis(date, it) } ?: allDayMillis(date) }
             val due = if (datePicked) pickedDue else parsedDue ?: pickedDue
-            val listId = p?.list?.let { name -> data.value.projects.firstOrNull { it.title.equals(name, true) }?.id } ?: projectId
+            val listId = p.list?.let { name -> data.value.projects.firstOrNull { it.title.equals(name, true) || org.opentick.android.util.splitEmoji(it.title).second.equals(name, true) }?.id } ?: projectId
             repo.createTask(
-                title = p?.title ?: text.trim(),
+                title = p.title,
                 projectId = listId,
                 dueDate = due,
-                priority = p?.priority?.takeIf { priority == 0 } ?: priority,
-                labelTitles = (labels + p?.labels.orEmpty()).distinct(),
+                priority = p.priority?.takeIf { priority == 0 } ?: priority,
+                labelTitles = (labels + p.labels).distinct(),
+                description = description,
             )
         }
     }
@@ -163,7 +204,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setLabels(taskId: Long, titles: List<String>) = viewModelScope.launch {
         val ids = titles.map { repo.ensureLabel(it) }
-        repo.updateTask(taskId) { it.copy(labelIds = org.opentick.android.data.joinIds(ids)) }
+        repo.updateTask(taskId) { it.copy(labelIds = joinIds(ids)) }
     }
 
     fun createProject(title: String, color: String) = viewModelScope.launch {
@@ -185,6 +226,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         selection.value = ListSel.Smart(SmartList.TODAY)
     }
 
+    // ─── Trash (server side, online only) ──────────────────────────────
+
+    sealed interface TrashState {
+        data object Loading : TrashState
+        data class Loaded(val tasks: List<ApiTask>) : TrashState
+        data class Failed(val message: String) : TrashState
+    }
+
+    val trash = MutableStateFlow<TrashState>(TrashState.Loading)
+
+    fun loadTrash() = viewModelScope.launch {
+        if (prefs.mode.value != AccountMode.SERVER) {
+            trash.value = TrashState.Failed("Deleted tasks are removed right away when you use OpenTick without an account.")
+            return@launch
+        }
+        trash.value = TrashState.Loading
+        trash.value = try {
+            TrashState.Loaded(withContext(Dispatchers.IO) { ot.api.trash() })
+        } catch (e: Exception) {
+            TrashState.Failed("Connect to the internet to see deleted tasks.")
+        }
+    }
+
+    fun trashAction(action: suspend () -> Unit) = viewModelScope.launch {
+        try {
+            withContext(Dispatchers.IO) { action() }
+            repo.sync()
+        } catch (e: Exception) {
+            message.value = e.message ?: "Something went wrong"
+        }
+        loadTrash()
+    }
+
+    fun restoreFromTrash(id: Long) = trashAction { ot.api.restoreFromTrash(id) }
+    fun deleteForever(id: Long) = trashAction { ot.api.deleteForever(id) }
+    fun emptyTrash() = trashAction { ot.api.emptyTrash() }
+
     fun handleOAuthCallback(uri: Uri, onResult: (String?) -> Unit) = viewModelScope.launch {
         try {
             auth.handleCallback(uri)
@@ -196,6 +274,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun signOut() = viewModelScope.launch {
         auth.signOut()
+        pages.clear()
         selection.value = ListSel.Smart(SmartList.TODAY)
     }
 }

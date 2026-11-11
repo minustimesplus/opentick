@@ -1,6 +1,7 @@
 package org.opentick.android.ui.focus
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,22 +109,15 @@ fun FocusScreen(vm: MainViewModel) {
         FocusAlarm.cancel(context)
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                title = { Text("Focus", fontWeight = FontWeight.Bold) },
-            )
-        },
-    ) { pad ->
+    Column(Modifier.fillMaxSize().background(extra.page)) {
+        org.opentick.android.ui.components.PageHeader("Pomodoro")
         Column(
-            Modifier.padding(pad).fillMaxSize().padding(24.dp),
+            Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             SingleChoiceSegmentedButtonRow {
-                SegmentedButton(!s.isBreak, { reset(false) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Pomo") }
-                SegmentedButton(s.isBreak, { reset(true) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Break") }
+                SegmentedButton(!s.isBreak, { reset(false) }, SegmentedButtonDefaults.itemShape(0, 2), colors = SegmentedButtonDefaults.colors(activeContainerColor = Accent.copy(alpha = 0.12f), activeContentColor = Accent, inactiveContainerColor = extra.card)) { Text("Pomo") }
+                SegmentedButton(s.isBreak, { reset(true) }, SegmentedButtonDefaults.itemShape(1, 2), colors = SegmentedButtonDefaults.colors(activeContainerColor = Accent.copy(alpha = 0.12f), activeContentColor = Accent, inactiveContainerColor = extra.card)) { Text("Break") }
             }
             Spacer(Modifier.weight(1f))
             Box(Modifier.size(280.dp), contentAlignment = Alignment.Center) {

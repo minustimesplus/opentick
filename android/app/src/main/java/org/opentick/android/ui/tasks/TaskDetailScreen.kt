@@ -83,6 +83,7 @@ import org.opentick.android.util.isOverdue
 fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
     val task by remember(taskId) { vm.repo.task(taskId) }.collectAsState(null)
     val data by vm.data.collectAsState()
+    val mode by vm.prefs.mode.collectAsState()
     val extra = LocalExtra.current
     var title by remember { mutableStateOf<String?>(null) }
     var desc by remember { mutableStateOf<String?>(null) }
@@ -116,15 +117,15 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
     val tagTitles = t.labelIdList.mapNotNull { data.labelMap[it]?.title }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = extra.card,
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = extra.card),
                 navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 title = {
                     Box {
                         Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { showList = true }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(project?.title ?: "Inbox", fontSize = 16.sp, color = extra.textSecondary)
+                            Text(project?.title ?: "Inbox", fontSize = 16.sp, color = extra.textSecondary, maxLines = 1)
                             Icon(Icons.Filled.KeyboardArrowDown, null, tint = extra.textTertiary)
                         }
                         ProjectMenu(showList, data.projects, t.projectId, { pid -> vm.update(taskId) { it.copy(projectId = pid) } }, { showList = false })
@@ -133,7 +134,7 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
                 actions = {
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
-                        DropdownMenu(menu, { menu = false }) {
+                        DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(20.dp), containerColor = extra.card) {
                             DropdownMenuItem(
                                 text = { Text(if (t.wontDo) "Reopen" else "Won't do") },
                                 leadingIcon = { Icon(Icons.Outlined.DoNotDisturbOn, null) },
@@ -162,12 +163,12 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
                 ) {
                     val c = when {
                         t.dueDate == null -> extra.textTertiary
-                        !t.done && isOverdue(t.dueDate) -> PrioHigh
+                        !t.done && isOverdue(t.dueDate) -> org.opentick.android.ui.theme.Overdue
                         else -> Accent
                     }
                     Icon(Icons.Outlined.CalendarToday, null, tint = c, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(t.dueDate?.let { formatDue(it) } ?: "Due date", color = c, fontSize = 14.sp)
+                    Text(t.dueDate?.let { org.opentick.android.util.formatDueLong(it) } ?: "Date & Reminder", color = c, fontSize = 15.sp)
                     if (t.isRepeating) {
                         Spacer(Modifier.width(6.dp))
                         Icon(Icons.Outlined.Repeat, "Repeats", tint = c, modifier = Modifier.size(16.dp))
@@ -220,7 +221,7 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
             Spacer(Modifier.size(24.dp))
             Text(
                 when {
-                    vm.prefs.mode.value == org.opentick.android.data.AccountMode.LOCAL -> "Saved on this device"
+                    mode == org.opentick.android.data.AccountMode.LOCAL -> "Saved on this device"
                     t.serverId == null || t.dirty -> "Saved on this device, syncs when online"
                     else -> "Synced"
                 },
@@ -231,6 +232,6 @@ fun TaskDetailScreen(vm: MainViewModel, taskId: Long, onClose: () -> Unit) {
     }
 
     if (showDate) {
-        DueDateSheet(t.dueDate, { d -> vm.update(taskId) { it.copy(dueDate = d) }; showDate = false }, { showDate = false })
+        DueDateSheet(t.dueDate, { d -> vm.update(taskId) { it.copy(dueDate = d) }; showDate = false }, { showDate = false }, repeatLabel = if (t.isRepeating) "Repeats" else null)
     }
 }

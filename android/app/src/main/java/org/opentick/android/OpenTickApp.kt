@@ -26,6 +26,7 @@ class OpenTickApp : Application(), Configuration.Provider {
     lateinit var repo: Repository
     lateinit var auth: AuthManager
     lateinit var reminders: Reminders
+    lateinit var db: AppDatabase
     val scope = CoroutineScope(SupervisorJob())
 
     override val workManagerConfiguration: Configuration
@@ -36,7 +37,7 @@ class OpenTickApp : Application(), Configuration.Provider {
         super.onCreate()
         prefs = Prefs(this)
         api = Api(prefs)
-        val db = AppDatabase.create(this)
+        db = AppDatabase.create(this)
         repo = Repository(db, api, prefs) { SyncWorker.requestSoon(this) }
         auth = AuthManager(this, prefs, api, repo)
         reminders = Reminders(this, prefs)

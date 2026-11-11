@@ -77,10 +77,37 @@ class Prefs(context: Context) {
         get() = sp.getInt("break_minutes", 5)
         set(v) = sp.edit().putInt("break_minutes", v).apply()
 
+    private fun stringFlow(key: String, default: String): MutableStateFlow<String> =
+        MutableStateFlow(sp.getString(key, default) ?: default)
+
+    /** Bottom tabs in order, e.g. "TASKS,MATRIX,CALENDAR,POMO" (Settings → Tab Bar). */
+    private val _tabs = stringFlow("tabs", "TASKS,MATRIX,CALENDAR,POMO")
+    val tabs: StateFlow<String> = _tabs
+    fun setTabs(v: String) { sp.edit().putString("tabs", v).apply(); _tabs.value = v }
+
+    /** LIST, YEAR, MONTH, WEEK, THREE_DAY or DAY */
+    private val _calendarView = stringFlow("calendar_view", "WEEK")
+    val calendarView: StateFlow<String> = _calendarView
+    fun setCalendarView(v: String) { sp.edit().putString("calendar_view", v).apply(); _calendarView.value = v }
+
+    /** 0 = from the locale, otherwise java.time.DayOfWeek value (1 Monday … 7 Sunday). */
+    private val _weekStart = MutableStateFlow(sp.getInt("week_start", 0))
+    val weekStart: StateFlow<Int> = _weekStart
+    fun setWeekStart(v: Int) { sp.edit().putInt("week_start", v).apply(); _weekStart.value = v }
+
+    /** Smart lists shown in the drawer (Settings → General). */
+    private val _smartLists = MutableStateFlow(sp.getStringSet("smart_lists", null) ?: DEFAULT_SMART_LISTS)
+    val smartLists: StateFlow<Set<String>> = _smartLists
+    fun setSmartLists(v: Set<String>) { sp.edit().putStringSet("smart_lists", v).apply(); _smartLists.value = v }
+
     /** Ids of reminder alarms currently scheduled, so they can be cancelled. */
     var scheduledReminders: Set<String>
         get() = sp.getStringSet("scheduled_reminders", emptySet()) ?: emptySet()
         set(v) = sp.edit().putStringSet("scheduled_reminders", v).apply()
+
+    companion object {
+        val DEFAULT_SMART_LISTS = setOf("TODAY", "INBOX", "TAGS", "COMPLETED", "TRASH")
+    }
 
     fun clearAccount() {
         sp.edit()
