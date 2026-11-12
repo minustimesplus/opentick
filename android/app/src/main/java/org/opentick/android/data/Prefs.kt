@@ -106,6 +106,14 @@ class Prefs(context: Context) {
     val calendarView: StateFlow<String> = _calendarView
     fun setCalendarView(v: String) { sp.edit().putString("calendar_view", v).apply(); _calendarView.value = v }
 
+    /**
+     * Whether the Week, 3 Day and Day views show the night hours in full.
+     * Collapsed by default, like the web app; this phone's own setting.
+     */
+    private val _calendarExpandNight = MutableStateFlow(sp.getBoolean("calendar_expand_night", false))
+    val calendarExpandNight: StateFlow<Boolean> = _calendarExpandNight
+    fun setCalendarExpandNight(v: Boolean) { sp.edit().putBoolean("calendar_expand_night", v).apply(); _calendarExpandNight.value = v }
+
     /** Subscribed calendars hidden from the calendar tab, by subscription id. */
     private val _hiddenCalendars = MutableStateFlow(parseIds(sp.getString("hidden_calendars", "")))
     val hiddenCalendars: StateFlow<Set<Long>> = _hiddenCalendars

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -124,6 +125,9 @@ class ScreenshotTest {
             shot("5_matrix")
             compose.onNodeWithContentDescription("Calendar").performClick()
             shot("6_calendar_week")
+            compose.onNodeWithText("- 06", substring = true).performClick()
+            shot("6b_calendar_week_all_hours")
+            compose.onNodeWithText("⌃").performScrollTo().performClick()
             compose.onNodeWithContentDescription("Calendar view").performClick()
             shot("7_calendar_menu")
             compose.onNodeWithText("Month").performClick()
