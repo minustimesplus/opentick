@@ -60,7 +60,7 @@ class Prefs(context: Context) {
         _theme.value = v
     }
 
-    private val _showCompleted = MutableStateFlow(sp.getBoolean("show_completed", true))
+    private val _showCompleted = MutableStateFlow(sp.getBoolean("show_completed", false))
     val showCompleted: StateFlow<Boolean> = _showCompleted
     fun setShowCompleted(v: Boolean) {
         sp.edit().putBoolean("show_completed", v).apply()

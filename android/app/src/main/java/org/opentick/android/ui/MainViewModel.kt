@@ -252,7 +252,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun listSort(sel: ListSel, d: Data = data.value): ListSort = listKey(sel, d)?.let { views.value.listSort(it) } ?: ListSort.DATE
     fun setListSort(sel: ListSel, v: ListSort) = listKey(sel, data.value)?.let { k -> updateViews { it.withListSort(k, v) } }
 
-    fun showCompleted(sel: ListSel, d: Data = data.value): Boolean = listKey(sel, d)?.let { views.value.listShowCompleted(it) } ?: true
+    fun showCompleted(sel: ListSel, d: Data = data.value): Boolean = listKey(sel, d)?.let { views.value.listShowCompleted(it) } ?: false
     fun setShowCompleted(sel: ListSel, on: Boolean) = listKey(sel, data.value)?.let { k -> updateViews { it.withListShowCompleted(k, on) } }
 
     /** Kanban and timeline exist for lists only; everything else is a plain list. */

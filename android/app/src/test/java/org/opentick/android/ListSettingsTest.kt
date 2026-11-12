@@ -58,7 +58,8 @@ class ListSettingsTest {
         assertEquals(ListSort.PRIORITY, v.listSort("p20"))
         assertEquals(ListSort.DATE, v.listSort("today"))
         assertFalse(v.listShowCompleted("p20"))
-        assertTrue(v.listShowCompleted("today"))
+        // Lists without a setting hide completed tasks.
+        assertFalse(v.listShowCompleted("today"))
         assertEquals(ListLayout.KANBAN, v.listLayout("p20"))
         assertEquals(ListLayout.LIST, v.listLayout("inbox"))
         assertEquals(TimelineScale.MONTH, v.timelineScale)

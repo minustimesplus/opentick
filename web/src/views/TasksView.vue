@@ -171,7 +171,8 @@ interface Section {
 }
 
 const showCompleted = computed({
-	get: () => prefs.listShowCompleted[listKey.value] ?? true,
+	// Completed tasks are hidden unless the list was set to show them.
+	get: () => prefs.listShowCompleted[listKey.value] ?? false,
 	set: v => { prefs.listShowCompleted[listKey.value] = v },
 })
 
@@ -639,10 +640,10 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					<div v-if="view.kind === 'wontdo' && !doneTasks.length" class="empty-state">
 						<div class="sub">{{ t('noWontDoTasks') }}</div>
 					</div>
-					<div v-else-if="view.kind === 'assigned' && isEmpty && !(completedSection?.length)" class="empty-state">
+					<div v-else-if="view.kind === 'assigned' && isEmpty && !(showCompleted && completedSection?.length)" class="empty-state">
 						<div class="sub">{{ t('noAssignedTasks') }}</div>
 					</div>
-					<div v-else-if="isEmpty && !CLOSED.has(view.kind) && !archived && !(completedSection?.length)" class="empty-state">
+					<div v-else-if="isEmpty && !CLOSED.has(view.kind) && !archived && !(showCompleted && completedSection?.length)" class="empty-state">
 						<svg width="150" height="120" viewBox="0 0 150 120" fill="none">
 							<path d="M30 70c-6-26 18-48 44-46 30 2 50 18 48 42-2 26-30 40-58 36-18-3-30-14-34-32z" fill="var(--bg-hover)" />
 							<path d="M58 66l12 12 26-28" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
