@@ -75,6 +75,25 @@ warns. Keep a backup of the keystore: if it's lost, new versions can't update
 existing installs. The `versionCode` is the workflow run number, so every
 release installs over the previous one.
 
+## Updates
+
+The app updates itself from GitHub releases (`update/Updater.kt`). Signed
+releases carry `latest-android.json` (version, APK URL, SHA-256), which the app
+reads from `releases/latest/download/latest-android.json`:
+
+- It checks every 6 hours and when the app opens (at most every 6 hours), and from Settings → About → Check for Updates.
+- Before installing, it checks the APK's hash, package name, version and that it's signed with the installed app's key.
+- With **Install updates automatically** on (default) and Android 12+, updates
+  install in the background without a prompt once OpenTick is the app's
+  installer of record, i.e. after the first update installed through the app.
+  That first update, and every update on Android 8–11, shows a notification
+  and Android's install prompt. Android 14+ waits until the app isn't in use;
+  Android 12–13 only installs while the app is in the background.
+- Installing needs "Install unknown apps" allowed for OpenTick; Android asks the first time.
+
+Debug builds don't check for updates. Releases signed with the debug key have
+no feed, so installs never see them.
+
 ## Tests
 
 ```sh

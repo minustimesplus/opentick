@@ -126,14 +126,30 @@ jobs:
           ./gradlew assembleRelease --no-daemon \
             -PversionCode="${{ github.run_number }}" -PversionName="$VERSION"
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/OpenTick-$VERSION.apk"
+          apk="OpenTick-$VERSION.apk"
+          cp app/build/outputs/apk/release/app-release.apk "dist/$apk"
+          # Feed for the app's updater (android/.../update/Updater.kt). Only for
+          # APKs signed with the release key: others can't update installs.
+          if [ -f keystore.properties ]; then
+            jq -n \
+              --argjson versionCode "${{ github.run_number }}" \
+              --arg versionName "$VERSION" \
+              --arg url "https://github.com/${{ github.repository }}/releases/download/desktop-v$VERSION/$apk" \
+              --arg sha256 "$(sha256sum "dist/$apk" | cut -d' ' -f1)" \
+              --argjson size "$(stat -c%s "dist/$apk")" \
+              '{versionCode: $versionCode, versionName: $versionName, url: $url, sha256: $sha256, size: $size}' \
+              > dist/latest-android.json
+            cat dist/latest-android.json
+          fi
           rm -f keystore.properties "$RUNNER_TEMP/release.jks"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-apk
           if-no-files-found: error
-          path: android/dist/*.apk
+          path: |
+            android/dist/*.apk
+            android/dist/latest-android.json
 
   # Publishes the server image for the same version, so a desktop release never
   # exists without a matching server. Self-hosted updaters only install images
@@ -205,7 +221,7 @@ jobs:
             echo "### Downloads"
             echo "- **Linux:** \`.deb\` or \`.AppImage\` (x64 / arm64)"
             echo "- **Windows:** \`.exe\` installer (x64, also runs on Windows on ARM). Unsigned: click \"More info\" → \"Run anyway\" if SmartScreen warns."
-            echo "- **Android:** \`.apk\` (Android 8.0+). Open it on your phone and allow installing from your browser or file manager when asked."
+            echo "- **Android:** \`.apk\` (Android 8.0+). Open it on your phone and allow installing from your browser or file manager when asked. After that the app updates itself (Settings → About)."
             echo "- **macOS:** \`.dmg\` (x64 for Intel, arm64 for Apple Silicon). The app is unsigned: right-click → Open on first launch, or run \`xattr -cr /Applications/OpenTick.app\`."
             echo
             echo "### Changes"

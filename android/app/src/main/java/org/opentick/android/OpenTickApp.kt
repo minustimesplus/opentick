@@ -19,6 +19,8 @@ import org.opentick.android.data.Prefs
 import org.opentick.android.data.Repository
 import org.opentick.android.reminders.Reminders
 import org.opentick.android.sync.SyncWorker
+import org.opentick.android.update.UpdateWorker
+import org.opentick.android.update.Updater
 
 class OpenTickApp : Application(), Configuration.Provider {
     lateinit var prefs: Prefs
@@ -27,6 +29,7 @@ class OpenTickApp : Application(), Configuration.Provider {
     lateinit var auth: AuthManager
     lateinit var reminders: Reminders
     lateinit var db: AppDatabase
+    lateinit var updater: Updater
     val scope = CoroutineScope(SupervisorJob())
 
     override val workManagerConfiguration: Configuration
@@ -41,8 +44,10 @@ class OpenTickApp : Application(), Configuration.Provider {
         repo = Repository(db, api, prefs) { SyncWorker.requestSoon(this) }
         auth = AuthManager(this, prefs, api, repo)
         reminders = Reminders(this, prefs)
+        updater = Updater(this, prefs)
 
         if (prefs.mode.value == AccountMode.SERVER) SyncWorker.schedulePeriodic(this)
+        UpdateWorker.schedulePeriodic(this)
 
         // Keep reminder alarms in step with the tasks.
         scope.launch {
@@ -55,6 +60,7 @@ class OpenTickApp : Application(), Configuration.Provider {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 if (prefs.mode.value == AccountMode.SERVER) scope.launch { repo.sync() }
+                UpdateWorker.checkIfDue(this@OpenTickApp, prefs.lastUpdateCheck)
             }
         })
     }
