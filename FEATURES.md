@@ -73,6 +73,7 @@ Legend: ✅ implemented · ❌ not implemented
 | Background sync every minute and on window focus | ✅ |
 | CSV backup export and import | ✅ |
 | MCP server settings and API tokens for AI clients | ✅ |
+| Email commands for AI agents without MCP (add, change, complete, delete or skip repeating tasks by mailing a private address; read over IMAP) | ✅ |
 | Basic keyboard shortcuts (`n` new task, `/` search, `g` + key to jump between views) | ✅ |
 | Focus timer desktop notifications | ✅ |
 | Language picker (setting is UI only) | ❌ |

@@ -65,6 +65,34 @@ the share dialog still shows the invitation link once, to send by hand.
 
 Use Neon's direct connection string, not the `-pooler` one.
 
+### Email commands for AI agents (optional)
+
+Agents that can't use MCP, like Instinct, change tasks by emailing a private
+address. The server reads one mailbox over IMAP and gives every user an
+address in it with a `+tag`, so any mailbox with plus-addressing works, for
+example a free Gmail account made for this. Replies telling the agent what
+was done go out through the mailer above.
+
+| Variable | Value |
+|---|---|
+| `VIKUNJA_INBOUNDMAIL_ENABLED` | `true` |
+| `VIKUNJA_INBOUNDMAIL_HOST` | IMAP host, e.g. `imap.gmail.com` |
+| `VIKUNJA_INBOUNDMAIL_PORT` | `993` |
+| `VIKUNJA_INBOUNDMAIL_USERNAME` | The mailbox, e.g. `opentick.inbox@gmail.com` |
+| `VIKUNJA_INBOUNDMAIL_PASSWORD` | Its password; for Gmail an app password |
+| `VIKUNJA_INBOUNDMAIL_ADDRESS` | The address mail is sent to, usually the same as the username |
+
+For Gmail, turn on 2-step verification for the account, then create an app
+password at <https://myaccount.google.com/apppasswords>. IMAP is on by default.
+
+Don't read the mailbox by hand: the server picks up unread mail, so a mail
+opened in Gmail first is skipped. Run a single dyno, which is the default
+setup; a second one would also read the mailbox (it can't apply a mail twice,
+but both would keep a connection open).
+
+Each user then finds their address under *Settings > AI features > Email to
+OpenTick*. Sending `help` to it replies with every command.
+
 ## Clerk settings
 
 - **Email**: allow sign up with email, require email verification by code, allow password sign in.
