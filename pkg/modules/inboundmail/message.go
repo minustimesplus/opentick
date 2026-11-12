@@ -43,6 +43,11 @@ type inbound struct {
 	Recipients []string
 	Text       string
 	// Automatic is set for auto-replies, bounces and list mail, which never get an answer.
+	// Mail marked "Auto-Submitted: auto-generated" doesn't count: that is how AI agents
+	// such as Instinct send, and only senders the user allowed get this far anyway.
+	// Answering "auto-replied" mail (out-of-office and the like) is what causes loops,
+	// and OpenTick's own replies are marked auto-replied, so a well-behaved agent
+	// never answers them in turn.
 	Automatic bool
 	// SpoofedFrom is set when the receiving server reports a failed DMARC check of the sender.
 	SpoofedFrom bool
@@ -81,7 +86,7 @@ func parseMessage(raw []byte) (*inbound, error) {
 
 	autoSubmitted := strings.ToLower(strings.TrimSpace(h.Get("Auto-Submitted")))
 	precedence := strings.ToLower(strings.TrimSpace(h.Get("Precedence")))
-	in.Automatic = (autoSubmitted != "" && autoSubmitted != "no") ||
+	in.Automatic = (autoSubmitted != "" && autoSubmitted != "no" && autoSubmitted != "auto-generated") ||
 		precedence == "bulk" || precedence == "list" || precedence == "junk" ||
 		h.Get("List-Id") != "" || strings.HasPrefix(strings.ToLower(in.From), "mailer-daemon@")
 

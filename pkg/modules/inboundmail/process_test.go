@@ -327,4 +327,28 @@ func TestProcess_Refused(t *testing.T) {
 		assert.Len(t, h.replies, before)
 		h.taskByTitle("Auto")
 	})
+	t.Run("agent mail marked auto-generated is answered", func(t *testing.T) {
+		// Instinct sends every mail with Auto-Submitted: auto-generated.
+		raw := append([]byte("Auto-Submitted: auto-generated\r\nX-Auto-Response-Suppress: All\r\n"),
+			rawMail("instinct@example.com", address(0), "help", "help")...)
+		before := len(h.replies)
+		require.NoError(t, Process(raw))
+		require.Len(t, h.replies, before+1)
+		assert.Contains(t, h.replies[before].Message, models.InboundCommandReferenceMarker)
+	})
+	t.Run("auto-generated list or bulk mail still gets no answer", func(t *testing.T) {
+		raw := append([]byte("Auto-Submitted: auto-generated\r\nPrecedence: bulk\r\n"),
+			rawMail("instinct@example.com", address(0), "", "add: Bulk")...)
+		before := len(h.replies)
+		require.NoError(t, Process(raw))
+		assert.Len(t, h.replies, before)
+	})
+	t.Run("auto-generated mail from a stranger is still ignored", func(t *testing.T) {
+		raw := append([]byte("Auto-Submitted: auto-generated\r\n"),
+			rawMail("robot@example.org", address(0), "", "add: Robot")...)
+		before := len(h.replies)
+		require.NoError(t, Process(raw))
+		assert.Len(t, h.replies, before)
+		db.AssertMissing(t, "tasks", map[string]any{"title": "Robot"})
+	})
 }
