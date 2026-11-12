@@ -19,8 +19,11 @@ package webtests
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/db"
 	"code.vikunja.io/api/pkg/models"
 
@@ -125,4 +128,40 @@ func TestHumaAgents(t *testing.T) {
 		_, err = stranger.serve(http.MethodGet, "/api/v2/tasks/1/agent-dispatches", "")
 		require.Error(t, err)
 	})
+}
+
+// mailer_enabled is computed from the server config, so turning the mailer on
+// must change the ETag; otherwise a client that cached the config earlier keeps
+// getting 304s and still says Instinct can't be reached.
+func TestHumaAgents_ConfigETagFollowsMailer(t *testing.T) {
+	e, err := setupTestEnv()
+	require.NoError(t, err)
+	token := humaTokenFor(t, &testuser1)
+
+	old := config.MailerEnabled.GetBool()
+	t.Cleanup(func() { config.MailerEnabled.Set(old) })
+
+	config.MailerEnabled.Set(false)
+	rec := humaRequest(t, e, http.MethodGet, "/api/v2/agents/config", "", token, "")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"mailer_enabled":false`)
+	etag := rec.Header().Get("ETag")
+	require.NotEmpty(t, etag)
+
+	conditionalGet := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v2/agents/config", strings.NewReader(""))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("If-None-Match", etag)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec
+	}
+
+	require.Equal(t, http.StatusNotModified, conditionalGet().Code)
+
+	config.MailerEnabled.Set(true)
+	rec = conditionalGet()
+	require.Equal(t, http.StatusOK, rec.Code, "a mailer change must not be answered with 304")
+	assert.Contains(t, rec.Body.String(), `"mailer_enabled":true`)
+	assert.NotEqual(t, etag, rec.Header().Get("ETag"))
 }

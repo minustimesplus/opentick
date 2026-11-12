@@ -139,7 +139,10 @@ func agentsConfigRead(ctx context.Context, in *struct {
 	if err != nil {
 		return nil, translateDomainError(err)
 	}
-	return conditionalReadResponse(&in.Params, cfg, cfg.Updated, maxPermission)
+	// mailer_enabled comes from the server config, not the row: without it in
+	// the ETag, a client that cached the config while the mailer was off keeps
+	// getting 304s and says Instinct can't be reached after the mailer is set up.
+	return conditionalReadResponseWithState(&in.Params, cfg, cfg.Updated, maxPermission, fmt.Sprintf("m%t", cfg.MailerEnabled))
 }
 
 func agentsConfigUpdate(ctx context.Context, in *struct {

@@ -87,7 +87,18 @@ type singleReadBody[T any] struct {
 
 // permission is folded into the ETag so a share/role change invalidates the cache.
 func conditionalReadResponse[T any](p *conditional.Params, body *T, modified time.Time, permission int) (*singleReadBody[T], error) {
+	return conditionalReadResponseWithState(p, body, modified, permission, "")
+}
+
+// conditionalReadResponseWithState is conditionalReadResponse for bodies that
+// also carry values computed from server state rather than the row (config
+// flags, for example). state is folded into the ETag so a change there
+// invalidates cached copies even though the row's timestamp didn't move.
+func conditionalReadResponseWithState[T any](p *conditional.Params, body *T, modified time.Time, permission int, state string) (*singleReadBody[T], error) {
 	e := fmt.Sprintf("%d-%d", modified.UnixNano(), permission)
+	if state != "" {
+		e += "-" + state
+	}
 	if p.HasConditionalParams() {
 		if err := p.PreconditionFailed(e, modified); err != nil {
 			return nil, err
