@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.GridOn
@@ -79,6 +80,9 @@ fun CalendarScreen(vm: MainViewModel) {
     val viewName by vm.prefs.calendarView.collectAsState()
     val weekPref by vm.prefs.weekStart.collectAsState()
     val showCompleted by vm.prefs.showCompleted.collectAsState()
+    val events by vm.feeds.events.collectAsState()
+    val hiddenCalendars by vm.prefs.hiddenCalendars.collectAsState()
+    val mode by vm.prefs.mode.collectAsState()
     val view = runCatching { CalView.valueOf(viewName) }.getOrDefault(CalView.WEEK)
     val first = weekStartDay(weekPref)
     val p = LocalExtra.current
@@ -89,6 +93,9 @@ fun CalendarScreen(vm: MainViewModel) {
     var viewMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     var addAt by remember { mutableStateOf<Pair<LocalDate, LocalTime?>?>(null) }
+    var openEvent by remember { mutableStateOf<ExtEvent?>(null) }
+    var calendarsSheet by remember { mutableStateOf(false) }
+    val onItem: (CalItem) -> Unit = { item -> item.task?.let { vm.openTaskId.value = it.id } ?: item.event?.let { openEvent = it } }
     val pager = rememberPagerState(initialPage = MIDDLE) { PAGES }
     LaunchedEffect(view, anchor) { pager.scrollToPage(MIDDLE) }
 
@@ -104,6 +111,17 @@ fun CalendarScreen(vm: MainViewModel) {
     fun monthOf(page: Int) = YearMonth.from(anchor).plusMonths((page - MIDDLE).toLong())
 
     val page = pager.currentPage
+
+    // Load subscribed calendars' events for what's on screen and the pages next to it.
+    LaunchedEffect(view, anchor, page, first, hiddenCalendars, mode) {
+        val months = when (view) {
+            CalView.WEEK, CalView.THREE_DAY, CalView.DAY -> CalendarFeeds.monthsOf((page - 1..page + 1).flatMap { daysOf(it) })
+            CalView.MONTH -> (-1L..1L).map { monthOf(page).plusMonths(it) }.toSet()
+            CalView.LIST -> CalendarFeeds.monthsOf((0L until AGENDA_DAYS).map { today().plusDays(it) })
+            CalView.YEAR -> emptySet()
+        }
+        vm.feeds.show(months)
+    }
     val title = when (view) {
         CalView.YEAR -> "${anchor.year + (page - MIDDLE)}"
         CalView.MONTH -> monthTitle(monthOf(page))
@@ -155,6 +173,11 @@ fun CalendarScreen(vm: MainViewModel) {
                             leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) },
                             onClick = { vm.prefs.setShowCompleted(!showCompleted); moreMenu = false },
                         )
+                        if (mode == org.opentick.android.data.AccountMode.SERVER) DropdownMenuItem(
+                            text = { Text("Subscribed Calendars") },
+                            leadingIcon = { Icon(Icons.Outlined.EventNote, null) },
+                            onClick = { calendarsSheet = true; moreMenu = false },
+                        )
                         DropdownMenuItem(
                             text = { Text("Today") },
                             leadingIcon = { Icon(Icons.Outlined.Today, null) },
@@ -167,23 +190,28 @@ fun CalendarScreen(vm: MainViewModel) {
                 when (view) {
                     CalView.WEEK, CalView.THREE_DAY, CalView.DAY -> HorizontalPager(pager, beyondViewportPageCount = 0, key = { it }) { pg ->
                         Timeline(
-                            daysOf(pg), data, showCompleted, scroll,
-                            onTask = { vm.openTaskId.value = it },
+                            daysOf(pg), data, showCompleted, events, scroll,
+                            onItem = onItem,
                             onSlot = { d, t -> addAt = d to t },
                             onDay = { d -> if (view != CalView.DAY) setView(CalView.DAY, d) },
                         )
                     }
                     CalView.MONTH -> HorizontalPager(pager, key = { it }) { pg ->
-                        MonthGrid(monthOf(pg), first, data, showCompleted, onDay = { d -> setView(CalView.DAY, d) }, onTask = { vm.openTaskId.value = it })
+                        MonthGrid(monthOf(pg), first, data, showCompleted, events, onDay = { d -> setView(CalView.DAY, d) }, onItem = onItem)
                     }
                     CalView.YEAR -> HorizontalPager(pager, key = { it }) { pg ->
                         YearGrid(anchor.year + (pg - MIDDLE), first, data) { m -> setView(CalView.MONTH, m.atDay(1)) }
                     }
-                    CalView.LIST -> AgendaList(data, showCompleted, onToggle = { id -> data.tasks.firstOrNull { it.id == id }?.let(vm::toggleDone) }, onTask = { vm.openTaskId.value = it }, onLongTask = { vm.actionsTaskId.value = it })
+                    CalView.LIST -> AgendaList(data, showCompleted, events, onToggle = { id -> data.tasks.firstOrNull { it.id == id }?.let(vm::toggleDone) }, onTask = { vm.openTaskId.value = it }, onEvent = { openEvent = it }, onLongTask = { vm.actionsTaskId.value = it })
                 }
             }
         }
         OtFab({ addAt = (if (view == CalView.DAY) daysOf(pager.currentPage).first() else today()) to null }, Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 22.dp))
+    }
+
+    openEvent?.let { EventSheet(it) { openEvent = null } }
+    if (calendarsSheet) {
+        CalendarsSheet(vm.feeds, hiddenCalendars, onToggle = { id, hide -> vm.prefs.setCalendarHidden(id, hide) }, onDismiss = { calendarsSheet = false })
     }
 
     addAt?.let { (date, time) ->

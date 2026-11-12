@@ -87,14 +87,15 @@ fun Timeline(
     days: List<LocalDate>,
     data: Data,
     showCompleted: Boolean,
+    events: List<ExtEvent>,
     scroll: ScrollState,
-    onTask: (Long) -> Unit,
+    onItem: (CalItem) -> Unit,
     onSlot: (LocalDate, LocalTime) -> Unit,
     onDay: (LocalDate) -> Unit,
 ) {
     val p = LocalExtra.current
     val is24 = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
-    val items = remember(days, data, showCompleted) { days.associateWith { itemsOn(it, data, showCompleted) } }
+    val items = remember(days, data, showCompleted, events) { days.associateWith { itemsOn(it, data, showCompleted, events) } }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     val density = LocalDensity.current
@@ -116,10 +117,10 @@ fun Timeline(
                         for (it in shown) {
                             val (bg, fg) = eventColors(it.color, p.dark)
                             Text(
-                                it.task.title, fontSize = 12.sp, color = fg, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
-                                textDecoration = if (it.task.done) TextDecoration.LineThrough else null,
+                                it.title, fontSize = 12.sp, color = fg, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                                textDecoration = if (it.done) TextDecoration.LineThrough else null,
                                 modifier = Modifier.fillMaxWidth().height(19.dp).clip(RoundedCornerShape(4.dp)).background(bg)
-                                    .clickable { onTask(it.task.id) }.padding(horizontal = 4.dp).alpha(if (it.task.done) 0.6f else 1f),
+                                    .clickable { onItem(it) }.padding(horizontal = 4.dp).alpha(if (it.done) 0.6f else 1f),
                             )
                         }
                         if (list.size > rows && rows > 0) {
@@ -183,7 +184,7 @@ fun Timeline(
                         val w = colW / count
                         val top = HOUR_HEIGHT * (it.startMin!! / 60f)
                         val h = HOUR_HEIGHT * ((it.endMin!! - it.startMin) / 60f)
-                        TimelineBlock(it, Modifier.offset(x = colW * i + w * lane, y = top).width(w).height(h).padding(horizontal = 2.dp, vertical = 1.dp)) { onTask(it.task.id) }
+                        TimelineBlock(it, Modifier.offset(x = colW * i + w * lane, y = top).width(w).height(h).padding(horizontal = 2.dp, vertical = 1.dp)) { onItem(it) }
                     }
                 }
             }
@@ -195,16 +196,15 @@ fun Timeline(
 private fun TimelineBlock(item: CalItem, modifier: Modifier, onClick: () -> Unit) {
     val p = LocalExtra.current
     val (bg, fg) = eventColors(item.color, p.dark)
-    val t = item.task
     val time = fun(m: Int) = "%02d:%02d".format(m / 60 % 24, m % 60)
     Column(
-        modifier.clip(RoundedCornerShape(4.dp)).background(bg).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 3.dp).alpha(if (t.done) 0.55f else 1f),
+        modifier.clip(RoundedCornerShape(4.dp)).background(bg).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 3.dp).alpha(if (item.done) 0.55f else 1f),
     ) {
         Text(
-            t.title, fontSize = 10.sp, lineHeight = 12.sp, color = fg, overflow = TextOverflow.Clip,
-            textDecoration = if (t.done) TextDecoration.LineThrough else null,
+            item.title, fontSize = 10.sp, lineHeight = 12.sp, color = fg, overflow = TextOverflow.Clip,
+            textDecoration = if (item.done) TextDecoration.LineThrough else null,
         )
-        val range = if (t.startDate != null && t.endDate != null) "${time(item.startMin!!)}-${time(item.endMin!!)}" else time(item.startMin!!)
+        val range = if (item.hasEnd) "${time(item.startMin!!)}-${time(item.endMin!!)}" else time(item.startMin!!)
         Text(range, fontSize = 9.sp, lineHeight = 11.sp, color = fg.copy(alpha = 0.75f), maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
     }
 }

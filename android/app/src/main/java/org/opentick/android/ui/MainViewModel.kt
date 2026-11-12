@@ -90,6 +90,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val repo = ot.repo
     val prefs = ot.prefs
     val auth = ot.auth
+    /** Events of subscribed calendars for the calendar tab (online only, read-only). */
+    val feeds = org.opentick.android.ui.calendar.CalendarFeeds(ot.api, prefs, viewModelScope)
 
     val data: StateFlow<Data> = combine(repo.allProjects, repo.allLabels, repo.allTasks) { p, l, t -> Data(p, l, t) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Data())

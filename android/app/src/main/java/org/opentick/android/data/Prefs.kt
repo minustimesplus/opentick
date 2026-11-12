@@ -106,6 +106,16 @@ class Prefs(context: Context) {
     val calendarView: StateFlow<String> = _calendarView
     fun setCalendarView(v: String) { sp.edit().putString("calendar_view", v).apply(); _calendarView.value = v }
 
+    /** Subscribed calendars hidden from the calendar tab, by subscription id. */
+    private val _hiddenCalendars = MutableStateFlow(parseIds(sp.getString("hidden_calendars", "")))
+    val hiddenCalendars: StateFlow<Set<Long>> = _hiddenCalendars
+    fun setCalendarHidden(id: Long, hidden: Boolean) {
+        val next = if (hidden) _hiddenCalendars.value + id else _hiddenCalendars.value - id
+        sp.edit().putString("hidden_calendars", next.joinToString(",")).apply()
+        _hiddenCalendars.value = next
+    }
+    private fun parseIds(s: String?): Set<Long> = s.orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
+
     /** 0 = from the locale, otherwise java.time.DayOfWeek value (1 Monday … 7 Sunday). */
     private val _weekStart = MutableStateFlow(sp.getInt("week_start", 0))
     val weekStart: StateFlow<Int> = _weekStart
@@ -142,9 +152,10 @@ class Prefs(context: Context) {
         sp.edit()
             .remove("server_url").remove("access_token").remove("refresh_token")
             .remove("username").remove("display_name").remove("last_sync")
-            .remove("views").remove("views_snapshot")
+            .remove("views").remove("views_snapshot").remove("hidden_calendars")
             .apply()
         _views.value = Views()
+        _hiddenCalendars.value = emptySet()
         setMode(AccountMode.NONE)
     }
 }
