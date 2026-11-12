@@ -64,12 +64,15 @@ type RouteDetail struct {
 	Method string `json:"method"`
 }
 
-// sameRoute reports whether two details point at the same endpoint. Routes can be
-// collected more than once (each test server registers them again); a repeat must
-// overwrite its own entry instead of being filed as a second permission with a
-// method suffix.
-func sameRoute(a, b *RouteDetail) bool {
-	return a != nil && b != nil && a.Path == b.Path && a.Method == b.Method
+// routeKey returns the permission name for detail within group: key, or key with a
+// method suffix when key is already taken by a different endpoint. Routes can be
+// collected more than once (each test server registers them again); a repeat of
+// the same path and method keeps its own name instead of becoming a second permission.
+func routeKey(group APITokenRoute, key string, detail *RouteDetail) string {
+	if existing, has := group[key]; has && (existing.Path != detail.Path || existing.Method != detail.Method) {
+		return key + "_" + strings.ToLower(detail.Method)
+	}
+	return key
 }
 
 // isV2Path reports whether the given route path lives under /api/v2.
@@ -314,10 +317,7 @@ func CollectRoutesForAPITokenUsage(route echo.RouteInfo, requiresJWT bool) {
 
 			ensureAPITokenRoutesGroup(target, "other")
 
-			if existing, exists := target["other"][routeGroupName]; exists && !sameRoute(existing, routeDetail) {
-				routeGroupName += "_" + strings.ToLower(route.Method)
-			}
-			target["other"][routeGroupName] = routeDetail
+			target["other"][routeKey(target["other"], routeGroupName, routeDetail)] = routeDetail
 			return
 		}
 
@@ -327,11 +327,7 @@ func CollectRoutesForAPITokenUsage(route echo.RouteInfo, requiresJWT bool) {
 			target[routeParts[0]] = make(APITokenRoute)
 		}
 
-		if existing, has := target[routeParts[0]][subkey]; has && !sameRoute(existing, routeDetail) {
-			subkey += "_" + strings.ToLower(route.Method)
-		}
-
-		target[routeParts[0]][subkey] = routeDetail
+		target[routeParts[0]][routeKey(target[routeParts[0]], subkey, routeDetail)] = routeDetail
 
 		return
 	}
