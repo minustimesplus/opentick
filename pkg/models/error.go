@@ -730,6 +730,33 @@ func (err ErrInvalidTaskRepeatRule) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrTaskNotRepeating represents an error where an occurrence of a task that doesn't repeat should be skipped.
+type ErrTaskNotRepeating struct {
+	TaskID int64
+}
+
+// IsErrTaskNotRepeating checks if an error is ErrTaskNotRepeating.
+func IsErrTaskNotRepeating(err error) bool {
+	_, ok := err.(ErrTaskNotRepeating)
+	return ok
+}
+
+func (err ErrTaskNotRepeating) Error() string {
+	return fmt.Sprintf("Task does not repeat [TaskID: %d]", err.TaskID)
+}
+
+// ErrCodeTaskNotRepeating holds the unique world-error code of this error.
+const ErrCodeTaskNotRepeating = 4037
+
+// HTTPError holds the http error description.
+func (err ErrTaskNotRepeating) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeTaskNotRepeating,
+		Message:  "This task does not repeat, so it has no occurrence to skip. Delete it instead.",
+	}
+}
+
 // ErrInvalidBulkTaskCreationCount represents an error where a bulk task creation request has no tasks or more than the maximum.
 type ErrInvalidBulkTaskCreationCount struct {
 	Count int
