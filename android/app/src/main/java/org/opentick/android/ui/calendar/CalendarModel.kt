@@ -129,3 +129,42 @@ fun layoutLanes(items: List<CalItem>): Map<CalItem, Pair<Int, Int>> {
     if (cluster.isNotEmpty()) flush()
     return result
 }
+
+/** Hours before this (in minutes) fold into one band at the top of the timeline, like the web app. */
+const val DAY_START_MIN = 6 * 60
+/** Hours from this on fold into one band at the bottom. */
+const val DAY_END_MIN = 21 * 60
+/** Height of an hour, in dp. */
+const val HOUR_DP = 44f
+/** Height of a folded night band, in dp. */
+const val NIGHT_DP = 40f
+
+/**
+ * Maps minutes of the day to a y offset in dp on the timeline. When [collapsed],
+ * 0–6 and 21–24 each squeeze into a [NIGHT_DP] band and the day hours keep their height.
+ */
+data class HourScale(val collapsed: Boolean) {
+    private val dayDp = (DAY_END_MIN - DAY_START_MIN) / 60f * HOUR_DP
+
+    val totalDp: Float = if (collapsed) 2 * NIGHT_DP + dayDp else 24 * HOUR_DP
+
+    fun y(min: Int): Float = y(min.toFloat())
+
+    fun y(min: Float): Float = when {
+        !collapsed -> min / 60f * HOUR_DP
+        min <= DAY_START_MIN -> min / DAY_START_MIN * NIGHT_DP
+        min <= DAY_END_MIN -> NIGHT_DP + (min - DAY_START_MIN) / 60f * HOUR_DP
+        else -> NIGHT_DP + dayDp + (min - DAY_END_MIN) / (24 * 60f - DAY_END_MIN) * NIGHT_DP
+    }
+
+    /** Minutes of the day at [yDp], the inverse of [y]. */
+    fun minAt(yDp: Float): Int = when {
+        !collapsed -> yDp / HOUR_DP * 60
+        yDp <= NIGHT_DP -> yDp / NIGHT_DP * DAY_START_MIN
+        yDp <= NIGHT_DP + dayDp -> DAY_START_MIN + (yDp - NIGHT_DP) / HOUR_DP * 60
+        else -> DAY_END_MIN + (yDp - NIGHT_DP - dayDp) / NIGHT_DP * (24 * 60 - DAY_END_MIN)
+    }.toInt().coerceIn(0, 24 * 60 - 1)
+
+    /** Hours that get a line and a label: the day hours when collapsed, else 1–23. */
+    val hourLines: List<Int> = if (collapsed) (DAY_START_MIN / 60 + 1 until DAY_END_MIN / 60).toList() else (1 until 24).toList()
+}

@@ -56,7 +56,7 @@ import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
 
-val HOUR_HEIGHT = 44.dp
+val HOUR_HEIGHT = HOUR_DP.dp
 val GUTTER = 50.dp
 
 /** Weekday names over day numbers; today in a blue circle. */
@@ -92,7 +92,10 @@ fun Timeline(
     onItem: (CalItem) -> Unit,
     onSlot: (LocalDate, LocalTime) -> Unit,
     onDay: (LocalDate) -> Unit,
+    nightCollapsed: Boolean = false,
+    onNightCollapsed: (Boolean) -> Unit = {},
 ) {
+    val scale = remember(nightCollapsed) { HourScale(nightCollapsed) }
     val p = LocalExtra.current
     val is24 = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
     val items = remember(days, data, showCompleted, events) { days.associateWith { itemsOn(it, data, showCompleted, events) } }
@@ -134,43 +137,71 @@ fun Timeline(
             Spacer(Modifier.width(GUTTER))
             HorizontalDivider(color = p.gridLine)
         }
-        // Hours.
+        // Hours. When collapsed, 0–6 and 21–24 are a band each; tap one to show all hours.
+        val hourLabel = { h: Int ->
+            when {
+                h == 24 || h == 0 -> "00"
+                is24 -> "$h"
+                else -> "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
+            }
+        }
+        val bands = if (nightCollapsed) listOf(0 to DAY_START_MIN / 60, DAY_END_MIN / 60 to 24) else emptyList()
         Row(Modifier.fillMaxSize().verticalScroll(scroll)) {
-            Box(Modifier.width(GUTTER).height(HOUR_HEIGHT * 24 + 12.dp)) {
-                for (h in 1..24) {
-                    val label = when {
-                        h == 24 -> "00"
-                        is24 -> "$h"
-                        else -> "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "AM" else "PM"}"
-                    }
+            Box(Modifier.width(GUTTER).height(scale.totalDp.dp + 12.dp)) {
+                val labels = if (nightCollapsed) scale.hourLines else scale.hourLines + 24
+                for (h in labels) {
                     Text(
-                        label, fontSize = if (is24) 12.sp else 10.sp, color = p.textTertiary, maxLines = 1,
-                        modifier = Modifier.fillMaxWidth().offset(y = HOUR_HEIGHT * h - 8.dp).padding(end = 6.dp),
+                        hourLabel(h), fontSize = if (is24) 12.sp else 10.sp, color = p.textTertiary, maxLines = 1,
+                        modifier = Modifier.fillMaxWidth().offset(y = scale.y(h * 60).dp - 8.dp).padding(end = 6.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
+                for ((from, to) in bands) {
+                    val top = scale.y(from * 60)
+                    Box(
+                        Modifier.fillMaxWidth().offset(y = top.dp).height((scale.y(to * 60) - top).dp)
+                            .clickable(onClickLabel = "Show all hours") { onNightCollapsed(false) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (is24) "%02d\n- %02d".format(from, to % 24) else "${hourLabel(from)}\n- ${hourLabel(to)}", fontSize = 10.sp, lineHeight = 12.sp, color = p.textTertiary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(end = 6.dp),
+                        )
+                    }
+                }
+                if (!nightCollapsed) {
+                    Text(
+                        "⌃", fontSize = 14.sp, color = p.textTertiary, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().height(24.dp).clickable(onClickLabel = "Collapse night hours") { onNightCollapsed(true) }
+                            .padding(end = 6.dp, top = 2.dp),
+                    )
+                }
             }
-            BoxWithConstraints(Modifier.weight(1f).height(HOUR_HEIGHT * 24).background(p.gridBg)) {
+            BoxWithConstraints(Modifier.weight(1f).height(scale.totalDp.dp).background(p.gridBg)) {
                 val colW = maxWidth / days.size
-                val hourPx = with(density) { HOUR_HEIGHT.toPx() }
+                val dpPx = with(density) { 1.dp.toPx() }
                 Canvas(
-                    Modifier.fillMaxSize().pointerInput(days) {
+                    Modifier.fillMaxSize().pointerInput(days, scale) {
                         detectTapGestures { pos ->
                             val col = (pos.x / (size.width.toFloat() / days.size)).toInt().coerceIn(0, days.lastIndex)
-                            val minutes = ((pos.y / hourPx) * 60).toInt() / 30 * 30
+                            val minutes = scale.minAt(pos.y / dpPx) / 30 * 30
                             onSlot(days[col], LocalTime.of((minutes / 60).coerceAtMost(23), minutes % 60))
                         }
                     },
                 ) {
                     if (now < 0) return@Canvas // redraws the time line every minute
-                    for (h in 1 until 24) drawLine(p.gridLine, Offset(0f, h * hourPx), Offset(size.width, h * hourPx), 1f)
+                    for ((from, to) in bands) {
+                        val top = scale.y(from * 60) * dpPx
+                        drawRect(p.gridLine.copy(alpha = 0.5f), Offset(0f, top), androidx.compose.ui.geometry.Size(size.width, scale.y(to * 60) * dpPx - top))
+                    }
+                    for (h in scale.hourLines) drawLine(p.gridLine, Offset(0f, scale.y(h * 60) * dpPx), Offset(size.width, scale.y(h * 60) * dpPx), 1f)
                     val cw = size.width / days.size
                     for (i in 1 until days.size) drawLine(p.gridLine, Offset(i * cw, 0f), Offset(i * cw, size.height), 1f)
                     // Current time: faint across the week, solid in today's column.
                     val ti = days.indexOf(today())
                     if (ti >= 0) {
                         val t = java.time.LocalTime.now()
-                        val y = (t.hour * 60 + t.minute) / 60f * hourPx
+                        val y = scale.y(t.hour * 60 + t.minute) * dpPx
                         drawLine(NowRed.copy(alpha = 0.35f), Offset(0f, y), Offset(size.width, y), 2f)
                         drawLine(NowRed, Offset(ti * cw, y), Offset((ti + 1) * cw, y), 4f)
                         drawCircle(NowRed, 4.dp.toPx(), Offset(ti * cw, y))
@@ -182,15 +213,26 @@ fun Timeline(
                     for (it in timed) {
                         val (lane, count) = lanes[it] ?: (0 to 1)
                         val w = colW / count
-                        val top = HOUR_HEIGHT * (it.startMin!! / 60f)
-                        val h = HOUR_HEIGHT * ((it.endMin!! - it.startMin) / 60f)
-                        TimelineBlock(it, Modifier.offset(x = colW * i + w * lane, y = top).width(w).height(h).padding(horizontal = 2.dp, vertical = 1.dp)) { onItem(it) }
+                        val top = scale.y(it.startMin!!)
+                        // Blocks inside a folded band would be slivers; keep them tappable.
+                        val h = (scale.y(it.endMin!!) - top).coerceAtLeast(MIN_BLOCK_DP)
+                        TimelineBlock(it, Modifier.offset(x = colW * i + w * lane, y = top.dp).width(w).height(h.dp).padding(horizontal = 2.dp, vertical = 1.dp)) { onItem(it) }
                     }
                 }
             }
         }
     }
 }
+
+/** Smallest height of a block, so short ones and ones in a folded band stay tappable. */
+private const val MIN_BLOCK_DP = 16f
+
+/**
+ * Where the hours start scrolled: with all hours shown, so the current time sits in the
+ * upper part, like TickTick; with the night folded nearly everything fits, so the top.
+ */
+fun initialTimelineScrollDp(collapsed: Boolean, now: LocalTime = LocalTime.now()): Float =
+    if (collapsed) 0f else HourScale(false).y((now.hour - 4).coerceIn(0, 16) * 60)
 
 @Composable
 private fun TimelineBlock(item: CalItem, modifier: Modifier, onClick: () -> Unit) {

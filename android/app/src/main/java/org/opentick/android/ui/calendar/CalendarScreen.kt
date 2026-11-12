@@ -83,6 +83,7 @@ fun CalendarScreen(vm: MainViewModel) {
     val events by vm.feeds.events.collectAsState()
     val hiddenCalendars by vm.prefs.hiddenCalendars.collectAsState()
     val mode by vm.prefs.mode.collectAsState()
+    val expandNight by vm.prefs.calendarExpandNight.collectAsState()
     val view = runCatching { CalView.valueOf(viewName) }.getOrDefault(CalView.WEEK)
     val first = weekStartDay(weekPref)
     val p = LocalExtra.current
@@ -131,7 +132,11 @@ fun CalendarScreen(vm: MainViewModel) {
 
     // Scroll the hours so the current time sits in the upper part, like TickTick.
     val density = LocalDensity.current
-    val scroll = rememberScrollState(with(density) { (HOUR_HEIGHT * (java.time.LocalTime.now().hour - 4).coerceIn(0, 16)).roundToPx() })
+    val scroll = rememberScrollState(with(density) { initialTimelineScrollDp(!expandNight).dp.roundToPx() })
+    LaunchedEffect(expandNight) {
+        // Keep the current time in view when the night hours fold or unfold.
+        scroll.scrollTo(with(density) { initialTimelineScrollDp(!expandNight).dp.roundToPx() })
+    }
 
     fun setView(v: CalView, date: LocalDate = anchor) {
         anchor = date
@@ -194,6 +199,8 @@ fun CalendarScreen(vm: MainViewModel) {
                             onItem = onItem,
                             onSlot = { d, t -> addAt = d to t },
                             onDay = { d -> if (view != CalView.DAY) setView(CalView.DAY, d) },
+                            nightCollapsed = !expandNight,
+                            onNightCollapsed = { vm.prefs.setCalendarExpandNight(!it) },
                         )
                     }
                     CalView.MONTH -> HorizontalPager(pager, key = { it }) { pg ->
