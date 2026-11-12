@@ -34,13 +34,13 @@ export const CalendarIcon = createLucideIcon('rail-calendar', [
 	}],
 ])
 
-// A disc with a check mark cut out, ringed like a streak.
+// A streak flame: a solid flame with a smaller inner flame cut out.
 export const HabitIcon = createLucideIcon('rail-habit', [
 	['path', {
 		...solid,
-		key: 'disc',
-		d: 'M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19z'
-			+ 'M7.6 11.9 10.6 14.9l5.8-5.8a.9.9 0 0 1 1.3 1.3l-7.1 7.1-4.3-4.3a.9.9 0 0 1 1.3-1.3z',
+		key: 'flame',
+		d: 'M12.3 2.2c.5 2.7 2.2 4.3 3.9 6.1 1.8 1.9 3.3 3.9 3.3 6.6a7.5 7.5 0 0 1-15 0c0-2.5 1.1-4.5 2.8-6 .3 1.5 1 2.6 2.2 3.2-.1-3.6.8-7 2.8-9.9z'
+			+ 'M12 12.6c1.7 1.8 3.2 3.2 3.2 5.1a3.2 3.2 0 0 1-6.4 0c0-1.9 1.5-3.3 3.2-5.1z',
 	}],
 ])
 
