@@ -74,7 +74,16 @@ class MainActivity : ComponentActivity() {
             }
             return
         }
+        if (intent.getBooleanExtra(EXTRA_INSTALL_UPDATE, false)) {
+            intent.removeExtra(EXTRA_INSTALL_UPDATE)
+            vm.installUpdate()
+        }
         intent.getLongExtra("open_task", 0).takeIf { it != 0L }?.let { vm.openTaskId.value = it; initialTab = Tab.TASKS }
         if (intent.getStringExtra("open_tab") == "focus") initialTab = Tab.POMO
+    }
+
+    companion object {
+        /** From the "update available" notification: download and install it. */
+        const val EXTRA_INSTALL_UPDATE = "install_update"
     }
 }

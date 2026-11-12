@@ -79,6 +79,20 @@ class Prefs(context: Context) {
         get() = sp.getInt("break_minutes", 5)
         set(v) = sp.edit().putInt("break_minutes", v).apply()
 
+    /** Install app updates in the background when Android allows it (Settings → About). */
+    var autoUpdate: Boolean
+        get() = sp.getBoolean("auto_update", true)
+        set(v) = sp.edit().putBoolean("auto_update", v).apply()
+
+    var lastUpdateCheck: Long
+        get() = sp.getLong("last_update_check", 0)
+        set(v) = sp.edit().putLong("last_update_check", v).apply()
+
+    /** versionCode of the last "update available" notification, so each version notifies once. */
+    var notifiedUpdate: Int
+        get() = sp.getInt("notified_update", 0)
+        set(v) = sp.edit().putInt("notified_update", v).apply()
+
     private fun stringFlow(key: String, default: String): MutableStateFlow<String> =
         MutableStateFlow(sp.getString(key, default) ?: default)
 

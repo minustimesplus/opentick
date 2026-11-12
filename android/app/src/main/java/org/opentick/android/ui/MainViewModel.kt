@@ -121,6 +121,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun sync() = viewModelScope.launch { repo.sync() }
 
+    // ─── App updates (see Updater) ─────────────────────────────────────
+    val update = ot.updater.state
+    fun checkUpdate() = ot.scope.launch { ot.updater.check() }
+    /** Downloads and installs the latest version, with Android's install prompt. */
+    fun installUpdate() = ot.scope.launch {
+        val info = ot.updater.available ?: ot.updater.check() ?: return@launch
+        ot.updater.install(info, silent = false)
+    }
+
     fun title(sel: ListSel, d: Data): String = when (sel) {
         is ListSel.Smart -> sel.kind.title
         is ListSel.Project -> d.projectMap[sel.id]?.title ?: "List"

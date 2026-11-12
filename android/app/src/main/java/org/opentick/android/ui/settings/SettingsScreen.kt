@@ -84,6 +84,10 @@ import org.opentick.android.ui.theme.LocalExtra
 import org.opentick.android.ui.theme.MinusRed
 import org.opentick.android.ui.theme.PrioHigh
 import org.opentick.android.ui.theme.Yellow
+import org.opentick.android.update.UpdateState
+import org.opentick.android.update.Updater
+import android.os.Build
+import androidx.compose.material.icons.filled.SystemUpdate
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.roundToInt
@@ -150,7 +154,8 @@ fun SettingsScreen(vm: MainViewModel, onSignIn: () -> Unit) {
             SettingsRow(Icons.AutoMirrored.Filled.Help, Yellow, "Help & Feedback") {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/minustimesplus/opentick/issues")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            SettingsRow(Icons.Filled.Info, Accent, "About") { vm.open(Page.ABOUT) }
+            val update by vm.update.collectAsState()
+            SettingsRow(Icons.Filled.Info, Accent, "About", value = if (update is UpdateState.Available) "Update available" else null) { vm.open(Page.ABOUT) }
         }
     }
 }
@@ -356,11 +361,50 @@ fun AboutPage(vm: MainViewModel) {
             SettingsRow(null, Accent, "Version", value = BuildConfig.VERSION_NAME, onClick = null)
             SettingsRow(null, Accent, "Works with", value = "OpenTick Cloud and self-hosted", onClick = null)
         }
+        if (Updater.SUPPORTED) UpdateSettings(vm)
         if (mode == AccountMode.LOCAL) {
             SettingsCard { SettingsRow(Icons.AutoMirrored.Outlined.Logout, PrioHigh, "Delete Local Data", titleColor = PrioHigh, chevron = false) { confirm = true } }
         }
     }
     if (confirm) SignOutDialog(vm, 0) { confirm = false }
+}
+
+@Composable
+private fun UpdateSettings(vm: MainViewModel) {
+    val state by vm.update.collectAsState()
+    var auto by remember { mutableStateOf(vm.prefs.autoUpdate) }
+    SettingsCard {
+        val available = (state as? UpdateState.Available)?.info
+        SettingsRow(
+            Icons.Filled.SystemUpdate, Accent,
+            if (available != null) "Update to ${available.versionName}" else "Check for Updates",
+            subtitle = when (val s = state) {
+                UpdateState.Idle -> null
+                UpdateState.Checking -> "Checking…"
+                UpdateState.UpToDate -> "OpenTick is up to date"
+                is UpdateState.Available -> "Tap to download and install"
+                is UpdateState.Downloading -> "Downloading… ${s.percent}%"
+                is UpdateState.Installing -> "Installing…"
+                is UpdateState.Failed -> s.message
+            },
+            titleColor = if (available != null) Accent else null,
+            chevron = false,
+            onClick = when (state) {
+                UpdateState.Checking, is UpdateState.Downloading, is UpdateState.Installing -> null
+                is UpdateState.Available -> ({ vm.installUpdate() })
+                else -> ({ vm.checkUpdate() })
+            },
+        )
+        SwitchRow(
+            "Install updates automatically",
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                "Installs new versions in the background when you're not using the app. The first update asks once."
+            } else {
+                "Needs Android 12 or later. You'll get a notification when an update is available."
+            },
+            auto,
+        ) { auto = it; vm.prefs.autoUpdate = it }
+    }
 }
 
 @Composable
