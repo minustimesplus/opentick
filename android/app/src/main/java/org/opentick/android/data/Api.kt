@@ -128,6 +128,35 @@ data class ApiTask(
 @Serializable
 data class ApiRelated(val id: Long)
 
+/** A subscribed ICS calendar (web: Calendar → Subscribe). Read-only on the phone. */
+@Serializable
+data class ApiCalendarSubscription(
+    val id: Long = 0,
+    val title: String = "",
+    val url: String = "",
+    @SerialName("hex_color") val hexColor: String = "",
+)
+
+/** One occurrence of an event from a subscribed calendar. [end] is exclusive. */
+@Serializable
+data class ApiCalendarEvent(
+    val id: String = "",
+    val title: String = "",
+    val description: String = "",
+    val location: String = "",
+    val url: String = "",
+    val start: String = "",
+    val end: String = "",
+    @SerialName("all_day") val allDay: Boolean = false,
+    val recurring: Boolean = false,
+)
+
+@Serializable
+data class ApiCalendarEvents(
+    @SerialName("calendar_name") val calendarName: String = "",
+    val events: List<ApiCalendarEvent>? = null,
+)
+
 @Serializable
 data class Paginated<T>(
     val items: List<T>? = null,
@@ -475,6 +504,16 @@ class Api(private val prefs: Prefs) {
     /** Merges into frontend_settings.views (JSON merge patch). */
     fun patchViews(patch: JsonObject) {
         send("PATCH", "/user/settings/general", buildJsonObject { put("frontend_settings", buildJsonObject { put("views", patch) }) }, true)
+    }
+
+    // ─── Subscribed calendars ──────────────────────────────────────────
+
+    fun calendarSubscriptions(): List<ApiCalendarSubscription> = getAll("/calendar-subscriptions")
+
+    /** Event occurrences overlapping [from, to); all-day events are placed in [timezone]. */
+    fun calendarEvents(id: Long, from: Instant, to: Instant, timezone: String): ApiCalendarEvents {
+        fun enc(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
+        return json.decodeFromString(send("GET", "/calendar-subscriptions/$id/events?from=${enc(from.toString())}&to=${enc(to.toString())}&timezone=${enc(timezone)}", null, false))
     }
 
     // ─── AI agents (Settings > AI features on the web) ─────────────────

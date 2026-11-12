@@ -15,8 +15,24 @@ import java.util.Locale
 
 enum class CalView(val title: String) { LIST("List"), YEAR("Year"), MONTH("Month"), WEEK("Week"), THREE_DAY("3 Day"), DAY("Day") }
 
-/** A task placed on one day of the calendar. Minutes are from midnight; null means all day. */
-data class CalItem(val task: TaskEntity, val startMin: Int?, val endMin: Int?, val color: Color)
+/**
+ * A task or a subscribed calendar's event placed on one day of the calendar.
+ * Minutes are from midnight; null means all day.
+ */
+data class CalItem(
+    val startMin: Int?,
+    val endMin: Int?,
+    val color: Color,
+    val task: TaskEntity? = null,
+    val event: ExtEvent? = null,
+) {
+    constructor(task: TaskEntity, startMin: Int?, endMin: Int?, color: Color) : this(startMin, endMin, color, task = task)
+
+    val title: String get() = task?.title ?: event!!.title.ifBlank { "(No title)" }
+    val done: Boolean get() = task?.done == true
+    /** Whether the block shows its end time (date ranges and events) or just its start (due times). */
+    val hasEnd: Boolean get() = task == null || (task.startDate != null && task.endDate != null)
+}
 
 /** Tasks without an end show as a block this long. */
 const val DEFAULT_MINUTES = 60
@@ -37,7 +53,7 @@ fun taskColor(task: TaskEntity, d: Data): Color =
  * Everything on [day]: timed blocks from start/end dates or the due time,
  * and all-day items (all-day due dates, or ranges covering the whole day).
  */
-fun itemsOn(day: LocalDate, d: Data, showCompleted: Boolean): List<CalItem> {
+fun itemsOn(day: LocalDate, d: Data, showCompleted: Boolean, events: List<ExtEvent> = emptyList()): List<CalItem> {
     val out = ArrayList<CalItem>()
     for (t in d.tasks) {
         if (t.done && !showCompleted) continue
@@ -67,7 +83,27 @@ fun itemsOn(day: LocalDate, d: Data, showCompleted: Boolean): List<CalItem> {
             out += CalItem(t, start, minOf(start + DEFAULT_MINUTES, 24 * 60), color)
         }
     }
-    return out.sortedWith(compareBy<CalItem> { it.startMin ?: -1 }.thenBy { it.task.done }.thenBy { it.task.title })
+    for (e in events) eventItemOn(day, e)?.let { out += it }
+    return out.sortedWith(compareBy<CalItem> { it.startMin ?: -1 }.thenBy { it.done }.thenBy { it.event != null }.thenBy { it.title })
+}
+
+/**
+ * Where [e] goes on [day], like a task with a date range: all-day events and
+ * the middle days of long events in the all-day strip, timed parts as blocks.
+ * Ends are exclusive, so an event ending at midnight doesn't reach the next day.
+ */
+fun eventItemOn(day: LocalDate, e: ExtEvent): CalItem? {
+    val color = calendarColor(e.hexColor)
+    val first = e.start.toLocalDate()
+    val endsAtMidnight = e.end > e.start && e.end.toLocalTime() == java.time.LocalTime.MIDNIGHT
+    val last = if (endsAtMidnight) e.end.toLocalDate().minusDays(1) else e.end.toLocalDate()
+    if (day < first || day > last) return null
+    if (e.allDay) return CalItem(null, null, color, event = e)
+    val startMin = if (day == first) e.start.hour * 60 + e.start.minute else 0
+    val endMin = if (day == last && !endsAtMidnight) e.end.hour * 60 + e.end.minute else 24 * 60
+    // Days fully covered by a long event read better as all-day chips.
+    if (first != last && startMin == 0 && endMin == 24 * 60) return CalItem(null, null, color, event = e)
+    return CalItem(startMin, minOf(maxOf(endMin, startMin + 15), 24 * 60), color, event = e)
 }
 
 /** Side by side lanes for overlapping blocks: item to (lane, lanes in its cluster). */

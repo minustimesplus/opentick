@@ -53,7 +53,7 @@ import java.util.Locale
 
 /** Month grid with task titles inside the day cells, like TickTick's month view. */
 @Composable
-fun MonthGrid(month: YearMonth, first: DayOfWeek, data: Data, showCompleted: Boolean, onDay: (LocalDate) -> Unit, onTask: (Long) -> Unit) {
+fun MonthGrid(month: YearMonth, first: DayOfWeek, data: Data, showCompleted: Boolean, events: List<ExtEvent>, onDay: (LocalDate) -> Unit, onItem: (CalItem) -> Unit) {
     val p = LocalExtra.current
     val start = startOfWeek(month.atDay(1), first)
     val weeks = ((java.time.temporal.ChronoUnit.DAYS.between(start, month.atEndOfMonth()) + 1 + 6) / 7).toInt()
@@ -72,7 +72,7 @@ fun MonthGrid(month: YearMonth, first: DayOfWeek, data: Data, showCompleted: Boo
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     for (i in 0 until 7) {
                         val day = start.plusDays((w * 7 + i).toLong())
-                        MonthCell(day, day.month == month.month, itemsOn(day, data, showCompleted), Modifier.weight(1f), { onDay(day) }, onTask)
+                        MonthCell(day, day.month == month.month, itemsOn(day, data, showCompleted, events), Modifier.weight(1f), { onDay(day) }, onItem)
                         if (i < 6) Box(Modifier.width(1.dp).fillMaxHeight().background(p.gridLine))
                     }
                 }
@@ -82,7 +82,7 @@ fun MonthGrid(month: YearMonth, first: DayOfWeek, data: Data, showCompleted: Boo
 }
 
 @Composable
-private fun MonthCell(day: LocalDate, inMonth: Boolean, items: List<CalItem>, modifier: Modifier, onClick: () -> Unit, onTask: (Long) -> Unit) {
+private fun MonthCell(day: LocalDate, inMonth: Boolean, items: List<CalItem>, modifier: Modifier, onClick: () -> Unit, onItem: (CalItem) -> Unit) {
     val p = LocalExtra.current
     val isToday = day == today()
     BoxWithConstraints(modifier.fillMaxSize().clickable(onClick = onClick)) {
@@ -104,10 +104,10 @@ private fun MonthCell(day: LocalDate, inMonth: Boolean, items: List<CalItem>, mo
             for (it in shown) {
                 val (bg, fg) = eventColors(it.color, p.dark)
                 Text(
-                    it.task.title, fontSize = 10.sp, lineHeight = 12.sp, color = fg, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
-                    textDecoration = if (it.task.done) TextDecoration.LineThrough else null,
+                    it.title, fontSize = 10.sp, lineHeight = 12.sp, color = fg, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+                    textDecoration = if (it.done) TextDecoration.LineThrough else null,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp).height(chipH).clip(RoundedCornerShape(3.dp)).background(bg)
-                        .clickable { onTask(it.task.id) }.padding(horizontal = 3.dp, vertical = 1.dp),
+                        .clickable { onItem(it) }.padding(horizontal = 3.dp, vertical = 1.dp),
                 )
             }
             if (items.size > shown.size) Text("+${items.size - shown.size}", fontSize = 10.sp, color = p.textSecondary)
@@ -152,12 +152,23 @@ fun YearGrid(year: Int, first: DayOfWeek, data: Data, onMonth: (YearMonth) -> Un
     }
 }
 
-/** Upcoming days with tasks, each in a card. */
+/** How far ahead the List view looks. */
+const val AGENDA_DAYS = 90L
+
+/** Upcoming days with tasks and events, each in a card. */
 @Composable
-fun AgendaList(data: Data, showCompleted: Boolean, onToggle: (Long) -> Unit, onTask: (Long) -> Unit, onLongTask: (Long) -> Unit = {}) {
+fun AgendaList(
+    data: Data,
+    showCompleted: Boolean,
+    events: List<ExtEvent>,
+    onToggle: (Long) -> Unit,
+    onTask: (Long) -> Unit,
+    onEvent: (ExtEvent) -> Unit,
+    onLongTask: (Long) -> Unit = {},
+) {
     val p = LocalExtra.current
-    val days = remember(data, showCompleted) {
-        (0L until 90L).map { today().plusDays(it) }.map { it to itemsOn(it, data, showCompleted) }.filter { it.second.isNotEmpty() }
+    val days = remember(data, showCompleted, events) {
+        (0L until AGENDA_DAYS).map { today().plusDays(it) }.map { it to itemsOn(it, data, showCompleted, events) }.filter { it.second.isNotEmpty() }
     }
     if (days.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Nothing planned", color = p.textTertiary) }
@@ -173,11 +184,37 @@ fun AgendaList(data: Data, showCompleted: Boolean, onToggle: (Long) -> Unit, onT
                         modifier = Modifier.padding(start = 18.dp, top = 15.dp, bottom = 6.dp),
                     )
                     for (it in items) {
-                        TaskRowContent(it.task, data.projectMap[it.task.projectId], it.task.labelIdList.mapNotNull { l -> data.labelMap[l] }, true, { onToggle(it.task.id) }, { onTask(it.task.id) }, { onLongTask(it.task.id) })
+                        val t = it.task
+                        if (t != null) {
+                            TaskRowContent(t, data.projectMap[t.projectId], t.labelIdList.mapNotNull { l -> data.labelMap[l] }, true, { onToggle(t.id) }, { onTask(t.id) }, { onLongTask(t.id) })
+                        } else {
+                            EventRow(it, day) { onEvent(it.event!!) }
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                 }
             }
+        }
+    }
+}
+
+/** A subscribed calendar's event in the List view: a colored bar, the title and its time. */
+@Composable
+private fun EventRow(item: CalItem, day: LocalDate, onClick: () -> Unit) {
+    val p = LocalExtra.current
+    val e = item.event!!
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(4.dp).height(30.dp).clip(RoundedCornerShape(2.dp)).background(item.color))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item.title, fontSize = 15.sp, color = p.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                listOf(eventTimeOn(e, day), e.calendar).filter { it.isNotBlank() }.joinToString(" · "),
+                fontSize = 12.sp, color = p.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
