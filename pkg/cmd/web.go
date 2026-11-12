@@ -34,6 +34,7 @@ import (
 	"code.vikunja.io/api/pkg/initialize"
 	"code.vikunja.io/api/pkg/license"
 	"code.vikunja.io/api/pkg/log"
+	"code.vikunja.io/api/pkg/modules/inboundmail"
 	"code.vikunja.io/api/pkg/plugins"
 	"code.vikunja.io/api/pkg/routes"
 	"code.vikunja.io/api/pkg/utils"
@@ -156,6 +157,11 @@ var webCmd = &cobra.Command{
 			ReadHeaderTimeout: 10 * time.Second,
 		}
 
+		// Read the inbound mailbox, if one is configured
+		mailCtx, stopMail := context.WithCancel(context.Background())
+		defer stopMail()
+		inboundmail.Start(mailCtx)
+
 		// Start server
 		go func() {
 			if config.AutoTLSEnabled.GetBool() {
@@ -195,6 +201,7 @@ var webCmd = &cobra.Command{
 		if err := server.Shutdown(ctx); err != nil {
 			log.Fatalf("Server shutdown failed: %v", err)
 		}
+		stopMail()
 		cron.Stop()
 		license.Shutdown() // See the package comment in pkg/license/license.go before removing.
 		plugins.Shutdown()

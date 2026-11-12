@@ -4,5 +4,8 @@
   claude_token: sk-ant-oat01-test
   instinct_email: instinct@example.com
   system_prompt: ''
+  inbound_secret: abcdef123456
+  inbound_senders: ''
+  inbound_project_id: 0
   created: 2018-12-01 15:13:12
   updated: 2018-12-01 15:13:12

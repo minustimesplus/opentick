@@ -47,6 +47,7 @@ func GetTables() []interface{} {
 		&AgentConfig{},
 		&ProjectAgentSettings{},
 		&AgentDispatch{},
+		&InboundMailMessage{},
 		&ProjectAncestor{},
 		&Task{},
 		&ProjectTaskCounter{},

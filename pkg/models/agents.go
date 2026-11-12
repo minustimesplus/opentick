@@ -60,7 +60,7 @@ const DefaultAgentSystemPrompt = `You are an assistant working on a task handed 
 
 - Do the task described below as completely as you can on your own.
 - Follow the list context: it says how work for this list should be done (for example which language or tone to use).
-- If you can reach OpenTick (for example through its MCP connector), post a short summary of what you did as a comment on the task, using the task ID below. Mark the task as done only when it is fully finished.
+- If you can reach OpenTick (through its MCP connector, or by replying to this email when it explains how), post a short summary of what you did as a comment on the task, using the task ID below. Mark the task as done only when it is fully finished.
 - If something is unclear or needs the user's decision, ask in a task comment (or in your reply) instead of guessing.
 - Never take irreversible or outward-facing actions, such as sending messages, making payments or deleting data, without the user's explicit approval.`
 
@@ -84,6 +84,13 @@ type AgentConfig struct {
 	DefaultSystemPrompt string `xorm:"-" json:"default_system_prompt" readOnly:"true" doc:"The built-in system prompt used while system_prompt is empty."`
 
 	MailerEnabled bool `xorm:"-" json:"mailer_enabled" readOnly:"true" doc:"Whether this server can send email, which sending to Instinct needs."`
+
+	// The private part of the user's inbound address. Whoever knows it can change the user's tasks by email.
+	InboundSecret    string `xorm:"varchar(32) null INDEX 'inbound_secret'" json:"-"`
+	InboundAddress   string `xorm:"-" json:"inbound_address" readOnly:"true" doc:"The private address agents (and you) email commands to, to create, change and delete your tasks. Empty until the server reads a mailbox and an address was created."`
+	InboundEnabled   bool   `xorm:"-" json:"inbound_enabled" readOnly:"true" doc:"Whether this server reads a mailbox, which the inbound address needs."`
+	InboundSenders   string `xorm:"text null 'inbound_senders'" json:"inbound_senders" maxLength:"2000" doc:"Comma-separated addresses allowed to email the inbound address. Your account email and the Instinct address are always allowed. A domain like @example.com allows every address of it."`
+	InboundProjectID int64  `xorm:"bigint not null default 0 'inbound_project_id'" json:"inbound_project_id" doc:"The list tasks emailed without a list go to. 0 means your default list."`
 
 	Created time.Time `xorm:"created not null" json:"created" readOnly:"true" doc:"When the config was first saved."`
 	Updated time.Time `xorm:"updated not null" json:"updated" readOnly:"true" doc:"When the config was last saved."`
@@ -114,6 +121,11 @@ func (c *AgentConfig) fillComputed() {
 	c.ClaudeToken = ""
 	c.DefaultSystemPrompt = DefaultAgentSystemPrompt
 	c.MailerEnabled = config.MailerEnabled.GetBool()
+	c.InboundEnabled = InboundMailEnabled()
+	c.InboundAddress = ""
+	if c.InboundEnabled && c.InboundSecret != "" {
+		c.InboundAddress = InboundAddressFor(c.InboundSecret, 0)
+	}
 }
 
 func (c *AgentConfig) systemPrompt() string {
@@ -167,7 +179,7 @@ func (c *AgentConfig) ReadOne(s *xorm.Session, _ web.Auth) error {
 }
 
 // Update saves the authenticated user's agent config, creating it on first save.
-func (c *AgentConfig) Update(s *xorm.Session, _ web.Auth) error {
+func (c *AgentConfig) Update(s *xorm.Session, a web.Auth) error {
 	stored, err := getAgentConfig(s, c.UserID)
 	if err != nil {
 		return err
@@ -195,15 +207,39 @@ func (c *AgentConfig) Update(s *xorm.Session, _ web.Auth) error {
 	if strings.TrimSpace(c.SystemPrompt) == strings.TrimSpace(DefaultAgentSystemPrompt) {
 		c.SystemPrompt = ""
 	}
+	senders, err := normalizeInboundSenders(c.InboundSenders)
+	if err != nil {
+		return err
+	}
+	if c.InboundProjectID < 0 {
+		c.InboundProjectID = 0
+	}
+	if c.InboundProjectID != stored.InboundProjectID && c.InboundProjectID > 0 {
+		can, err := (&Project{ID: c.InboundProjectID}).CanWrite(s, a)
+		if err != nil {
+			return err
+		}
+		if !can {
+			return ErrGenericForbidden{}
+		}
+	}
+	if stored.InboundSecret == "" {
+		if stored.InboundSecret, err = newInboundSecret(); err != nil {
+			return err
+		}
+	}
 
 	stored.ClaudeFireURL = c.ClaudeFireURL
 	stored.ClaudeToken = token
 	stored.InstinctEmail = c.InstinctEmail
 	stored.SystemPrompt = c.SystemPrompt
+	stored.InboundSenders = senders
+	stored.InboundProjectID = c.InboundProjectID
 	if stored.ID == 0 {
 		_, err = s.Insert(stored)
 	} else {
-		_, err = s.ID(stored.ID).Cols("claude_fire_url", "claude_token", "instinct_email", "system_prompt").Update(stored)
+		_, err = s.ID(stored.ID).Cols("claude_fire_url", "claude_token", "instinct_email", "system_prompt",
+			"inbound_secret", "inbound_senders", "inbound_project_id").Update(stored)
 	}
 	if err != nil {
 		return err
@@ -419,12 +455,18 @@ func dispatchToAgent(s *xorm.Session, cfg *AgentConfig, task *Task, d *AgentDisp
 	case AgentClaude:
 		d.SessionURL, sendErr = FireClaudeRoutine(context.Background(), cfg.ClaudeFireURL, cfg.ClaudeToken, prompt)
 	case AgentInstinct:
-		sendErr = SendAgentMail(&vmail.Opts{
+		opts := &vmail.Opts{
 			To:          cfg.InstinctEmail,
 			Subject:     "OpenTick task: " + task.Title,
 			Message:     prompt,
 			ContentType: vmail.ContentTypePlain,
-		})
+		}
+		// With a mailbox to read, Instinct can answer by replying: the reply lands on this task.
+		if InboundMailEnabled() && cfg.InboundSecret != "" {
+			opts.ReplyTo = InboundAddressFor(cfg.InboundSecret, task.ID)
+			opts.Message += "\n\n" + InboundReplyInstructions(task.ID)
+		}
+		sendErr = SendAgentMail(opts)
 	}
 	d.Status = AgentDispatchSent
 	d.Error = ""
