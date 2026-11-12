@@ -64,6 +64,14 @@ type RouteDetail struct {
 	Method string `json:"method"`
 }
 
+// sameRoute reports whether two details point at the same endpoint. Routes can be
+// collected more than once (each test server registers them again); a repeat must
+// overwrite its own entry instead of being filed as a second permission with a
+// method suffix.
+func sameRoute(a, b *RouteDetail) bool {
+	return a != nil && b != nil && a.Path == b.Path && a.Method == b.Method
+}
+
 // isV2Path reports whether the given route path lives under /api/v2.
 func isV2Path(path string) bool {
 	return strings.HasPrefix(path, "/api/v2/") || path == "/api/v2"
@@ -306,8 +314,7 @@ func CollectRoutesForAPITokenUsage(route echo.RouteInfo, requiresJWT bool) {
 
 			ensureAPITokenRoutesGroup(target, "other")
 
-			_, exists := target["other"][routeGroupName]
-			if exists {
+			if existing, exists := target["other"][routeGroupName]; exists && !sameRoute(existing, routeDetail) {
 				routeGroupName += "_" + strings.ToLower(route.Method)
 			}
 			target["other"][routeGroupName] = routeDetail
@@ -320,7 +327,7 @@ func CollectRoutesForAPITokenUsage(route echo.RouteInfo, requiresJWT bool) {
 			target[routeParts[0]] = make(APITokenRoute)
 		}
 
-		if _, has := target[routeParts[0]][subkey]; has {
+		if existing, has := target[routeParts[0]][subkey]; has && !sameRoute(existing, routeDetail) {
 			subkey += "_" + strings.ToLower(route.Method)
 		}
 
