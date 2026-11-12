@@ -374,6 +374,14 @@ export interface AgentConfig {
 	system_prompt: string
 	default_system_prompt: string
 	mailer_enabled: boolean
+	/** Private address agents email task commands to; empty until created or while the server reads no mailbox. */
+	inbound_address: string
+	/** Whether the server reads a mailbox, which the inbound address needs. */
+	inbound_enabled: boolean
+	/** Extra senders allowed to use the inbound address, comma-separated; "@domain" allows a whole domain. */
+	inbound_senders: string
+	/** List emailed tasks without a list go to; 0 for the default list. */
+	inbound_project_id: number
 }
 
 /** AI settings of one list. */
