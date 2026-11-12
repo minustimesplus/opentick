@@ -161,7 +161,8 @@ data class Views(val json: JsonObject = JsonObject(emptyMap())) {
 
     fun listSort(key: String): ListSort = ListSort.of(str(obj("listSort")[key]))
     /** Missing means shown, as on the web. */
-    fun listShowCompleted(key: String): Boolean = str(obj("listShowCompleted")[key]) != "false"
+    /** Completed tasks are hidden unless the list was set to show them, like the web app. */
+    fun listShowCompleted(key: String): Boolean = str(obj("listShowCompleted")[key]) == "true"
     fun listLayout(key: String): ListLayout = ListLayout.of(str(obj("listView")[key]))
     val timelineScale: TimelineScale get() = TimelineScale.of(str(json["timelineScale"]))
 
