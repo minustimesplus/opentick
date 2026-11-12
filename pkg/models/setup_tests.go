@@ -81,6 +81,7 @@ func SetupTests() {
 		"agent_configs",
 		"project_agent_settings",
 		"agent_dispatches",
+		"inbound_mail_messages",
 		"saved_filters",
 		"subscriptions",
 		"favorites",

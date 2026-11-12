@@ -74,6 +74,17 @@ export const useAgents = defineStore('agents', () => {
 		}
 	}
 
+	/** Creates the private inbound address, or replaces it so the old one stops working. */
+	async function rotateInboundAddress(): Promise<boolean> {
+		try {
+			config.value = await api<AgentConfig>('POST', '/agents/inbound-address')
+			return true
+		} catch (e) {
+			toast((e as Error).message)
+			return false
+		}
+	}
+
 	function listSettings(projectId: number): ProjectAgentSettings {
 		return lists.get(projectId) ?? {project_id: projectId, ai_context: '', agent: ''}
 	}
@@ -133,5 +144,5 @@ export const useAgents = defineStore('agents', () => {
 		}
 	}
 
-	return {config, lists, latest, enabled, ready, load, clear, saveConfig, listSettings, listAgent, saveListSettings, preview, send, history, afterTaskCreated}
+	return {config, lists, latest, enabled, ready, load, clear, saveConfig, rotateInboundAddress, listSettings, listAgent, saveListSettings, preview, send, history, afterTaskCreated}
 })

@@ -104,6 +104,7 @@ var exposedOperations = map[string]toolTier{
 	"tasks-position-update":           catalogTool,
 	"tasks-read":                      typedTool,
 	"tasks-read-by-index":             catalogTool,
+	"tasks-skip-occurrence":           typedTool,
 	"tasks-relations-create":          catalogTool,
 	"tasks-relations-delete":          catalogTool,
 	"tasks-update":                    typedTool,

@@ -20,6 +20,7 @@ import (
 	"embed"
 	"fmt"
 	"io"
+	"strings"
 
 	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/log"
@@ -42,6 +43,12 @@ type Opts struct {
 	Embeds      map[string]io.Reader
 	EmbedFS     map[string]*embed.FS
 	ThreadID    string
+	// ReplyTo is where replies go instead of the From address.
+	ReplyTo string
+	// InReplyTo threads the mail under an earlier message (its Message-ID, with or without angle brackets).
+	InReplyTo string
+	// AutoReply marks the mail as an automatic answer (Auto-Submitted: auto-replied), so mail robots don't answer it.
+	AutoReply bool
 }
 
 // ContentType represents mail content types
@@ -94,6 +101,20 @@ func getMessage(opts *Opts) *mail.Msg {
 
 	for _, h := range opts.Headers {
 		m.SetGenHeader(h.Field, h.Content)
+	}
+
+	if opts.ReplyTo != "" {
+		if err := m.ReplyTo(opts.ReplyTo); err != nil {
+			log.Errorf("Could not set reply-to %q: %s", opts.ReplyTo, err)
+		}
+	}
+	if opts.AutoReply {
+		m.SetGenHeader("Auto-Submitted", "auto-replied")
+	}
+	if opts.InReplyTo != "" {
+		id := "<" + strings.Trim(opts.InReplyTo, "<> ") + ">"
+		m.SetGenHeader(mail.HeaderInReplyTo, id)
+		m.SetGenHeader(mail.HeaderReferences, id)
 	}
 
 	if opts.ThreadID != "" {

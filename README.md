@@ -57,6 +57,24 @@ default; PostgreSQL and MySQL are supported too. Configure the server with
 `VIKUNJA_*` environment variables or a `config.yml` (see
 [`config.yml.sample`](config.yml.sample) for every option).
 
+#### Email commands for AI agents
+
+To let agents without MCP support (like Instinct) change tasks by email,
+give the server an IMAP mailbox with plus-addressing, for example a Gmail
+account made for it with an app password:
+
+```sh
+  -e VIKUNJA_INBOUNDMAIL_ENABLED=true \
+  -e VIKUNJA_INBOUNDMAIL_HOST=imap.gmail.com \
+  -e VIKUNJA_INBOUNDMAIL_USERNAME=opentick.inbox@gmail.com \
+  -e VIKUNJA_INBOUNDMAIL_PASSWORD=<app password> \
+  -e VIKUNJA_INBOUNDMAIL_ADDRESS=opentick.inbox@gmail.com \
+```
+
+No inbound ports or DNS changes are needed. Configure the mailer
+(`VIKUNJA_MAILER_*`) too, so agents get a reply with what was done. See
+[docs/hosted.md](docs/hosted.md#email-commands-for-ai-agents-optional) for details.
+
 ### Hosted
 
 The hosted instance runs on Heroku with Neon, S3 and Clerk sign in. See

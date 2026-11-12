@@ -388,6 +388,56 @@
             ]
         },
         {
+            "key": "inboundmail",
+            "children": [
+                {
+                    "key": "enabled",
+                    "default_value": "false",
+                    "comment": "Whether to read an IMAP mailbox so AI agents (and you) can create, change and delete tasks by email. Every user gets a private address in their AI agent settings. Replies OpenTick sends back need the mailer."
+                },
+                {
+                    "key": "host",
+                    "default_value": "",
+                    "comment": "IMAP host, for example `imap.gmail.com`."
+                },
+                {
+                    "key": "port",
+                    "default_value": "993",
+                    "comment": "IMAP port. 993 uses TLS right away, any other port upgrades with STARTTLS."
+                },
+                {
+                    "key": "username",
+                    "default_value": "",
+                    "comment": "IMAP username, usually the mailbox's full address."
+                },
+                {
+                    "key": "password",
+                    "default_value": "",
+                    "comment": "IMAP password. For Gmail this has to be an app password."
+                },
+                {
+                    "key": "skiptlsverify",
+                    "default_value": "false",
+                    "comment": "Whether to skip verification of the IMAP server's TLS certificate."
+                },
+                {
+                    "key": "mailbox",
+                    "default_value": "INBOX",
+                    "comment": "The IMAP folder to read."
+                },
+                {
+                    "key": "address",
+                    "default_value": "",
+                    "comment": "The address mail is sent to, for example `opentick.inbox@gmail.com`. Every user's private address is this one with a `+tag`, so the mailbox has to support plus-addressing (Gmail, Fastmail, Outlook and most others do)."
+                },
+                {
+                    "key": "pollinterval",
+                    "default_value": "60",
+                    "comment": "How often, in seconds, the mailbox is checked when the server does not support IMAP IDLE. With IDLE, new mail is picked up within seconds."
+                }
+            ]
+        },
+        {
             "key": "log",
             "children": [
                 {

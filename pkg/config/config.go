@@ -140,6 +140,16 @@ const (
 	MailerQueueTimeout  Key = `mailer.queuetimeout`
 	MailerForceSSL      Key = `mailer.forcessl`
 
+	InboundMailEnabled       Key = `inboundmail.enabled`
+	InboundMailHost          Key = `inboundmail.host`
+	InboundMailPort          Key = `inboundmail.port`
+	InboundMailUsername      Key = `inboundmail.username`
+	InboundMailPassword      Key = `inboundmail.password`
+	InboundMailSkipTLSVerify Key = `inboundmail.skiptlsverify`
+	InboundMailMailbox       Key = `inboundmail.mailbox`
+	InboundMailAddress       Key = `inboundmail.address`
+	InboundMailPollInterval  Key = `inboundmail.pollinterval`
+
 	RedisEnabled  Key = `redis.enabled`
 	RedisHost     Key = `redis.host`
 	RedisPassword Key = `redis.password`
@@ -460,6 +470,16 @@ func initDefaultConfig() {
 	MailerQueueTimeout.setDefault(30)
 	MailerForceSSL.setDefault(false)
 	MailerAuthType.setDefault("plain")
+	// Inbound mail
+	InboundMailEnabled.setDefault(false)
+	InboundMailHost.setDefault("")
+	InboundMailPort.setDefault(993)
+	InboundMailUsername.setDefault("")
+	InboundMailPassword.setDefault("")
+	InboundMailSkipTLSVerify.setDefault(false)
+	InboundMailMailbox.setDefault("INBOX")
+	InboundMailAddress.setDefault("")
+	InboundMailPollInterval.setDefault(60)
 	// Redis
 	RedisEnabled.setDefault(false)
 	RedisHost.setDefault("localhost:6379")

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, onMounted, ref, watch} from 'vue'
-import {Copy, ExternalLink} from 'lucide-vue-next'
+import {Copy, ExternalLink, RefreshCw} from 'lucide-vue-next'
 import {useAgents} from '@/stores/agents'
 import {useData} from '@/stores/data'
 import {t} from '@/lib/i18n'
@@ -16,6 +16,8 @@ const fireUrl = ref('')
 const token = ref('')
 const email = ref('')
 const prompt = ref('')
+const senders = ref('')
+const inboundList = ref(0)
 const saving = ref(false)
 
 function reset() {
@@ -24,6 +26,8 @@ function reset() {
 	token.value = ''
 	email.value = c?.instinct_email ?? ''
 	prompt.value = c?.system_prompt || c?.default_system_prompt || ''
+	senders.value = c?.inbound_senders ?? ''
+	inboundList.value = c?.inbound_project_id ?? 0
 }
 
 // Background refreshes replace agents.config; only fill the form once, so they never wipe unsaved edits.
@@ -46,6 +50,8 @@ const dirty = computed(() => {
 		|| token.value.trim() !== ''
 		|| email.value.trim() !== c.instinct_email
 		|| prompt.value.trim() !== (c.system_prompt || c.default_system_prompt).trim()
+		|| senders.value.trim() !== (c.inbound_senders ?? '')
+		|| inboundList.value !== (c.inbound_project_id ?? 0)
 })
 const isDefaultPrompt = computed(() => prompt.value.trim() === (agents.config?.default_system_prompt ?? '').trim())
 
@@ -57,12 +63,23 @@ async function save() {
 		claude_token: token.value.trim() || undefined,
 		instinct_email: email.value.trim(),
 		system_prompt: isDefaultPrompt.value ? '' : prompt.value.trim(),
+		inbound_senders: senders.value.trim(),
+		inbound_project_id: inboundList.value,
 	})
 	saving.value = false
 	if (ok) {
 		reset()
 		toast(t('saved'))
 	}
+}
+
+const rotating = ref(false)
+async function rotateAddress() {
+	if (rotating.value) return
+	if (agents.config?.inbound_address && !confirm(t('agentsInboundRotateConfirm'))) return
+	rotating.value = true
+	await agents.rotateInboundAddress()
+	rotating.value = false
 }
 
 async function copy(value: string) {
@@ -124,6 +141,36 @@ async function copy(value: string) {
 			</div>
 		</div>
 		<p v-if="!agents.config.mailer_enabled" class="intro small warn">{{ t('agentNoMailer') }}</p>
+
+		<h3 class="sub-title">{{ t('agentsInbound') }}</h3>
+		<p class="intro small">{{ t('agentsInboundHint') }}</p>
+		<p v-if="!agents.config.inbound_enabled" class="intro small">{{ t('agentsInboundOff') }}</p>
+		<template v-else>
+			<div class="card">
+				<div class="row">
+					<span>{{ t('agentsInboundAddress') }}</span>
+					<div v-if="agents.config.inbound_address" class="address">
+						<code>{{ agents.config.inbound_address }}</code>
+						<button type="button" class="icon-btn" :title="t('copy')" :aria-label="t('copy')" @click="copy(agents.config.inbound_address)"><Copy :size="14" /></button>
+						<button type="button" class="icon-btn" :title="t('agentsInboundRotate')" :aria-label="t('agentsInboundRotate')" :disabled="rotating" @click="rotateAddress"><RefreshCw :size="14" /></button>
+					</div>
+					<button v-else type="button" class="btn" :disabled="rotating" @click="rotateAddress">{{ t('agentsInboundCreate') }}</button>
+				</div>
+				<div class="row">
+					<label for="agent-inbound-list">{{ t('agentsInboundList') }}</label>
+					<select id="agent-inbound-list" v-model.number="inboundList" class="input wide">
+						<option :value="0">{{ t('agentsInboundDefaultList') }}</option>
+						<option v-for="p in data.realProjects" :key="p.id" :value="p.id">{{ p.title }}</option>
+					</select>
+				</div>
+				<div class="row">
+					<label for="agent-inbound-senders">{{ t('agentsInboundSenders') }}</label>
+					<input id="agent-inbound-senders" v-model="senders" class="input wide" type="text" placeholder="me@work.com, @example.com" autocomplete="off">
+				</div>
+			</div>
+			<p class="intro small">{{ t('agentsInboundSendersHint') }}</p>
+			<p v-if="!agents.config.mailer_enabled" class="intro small warn">{{ t('agentsInboundNoReplies') }}</p>
+		</template>
 
 		<h3 class="sub-title">{{ t('agentsSystemPrompt') }}</h3>
 		<p class="intro small">{{ t('agentsSystemPromptHint') }}</p>
@@ -210,6 +257,24 @@ async function copy(value: string) {
 	font-size: 11.5px;
 	line-height: 1.45;
 	color: var(--text-2);
+}
+
+.address {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.address code {
+	overflow: hidden;
+	padding: 4px 8px;
+	border-radius: 6px;
+	background: var(--bg-input);
+	font-size: 11.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	user-select: all;
 }
 
 .icon-btn {

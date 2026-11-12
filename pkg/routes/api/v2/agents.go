@@ -62,6 +62,15 @@ func RegisterAgentRoutes(api huma.API) {
 	}, agentsConfigUpdate)
 
 	Register(api, huma.Operation{
+		OperationID: "agents-inbound-address-rotate",
+		Summary:     "Get a new inbound address",
+		Description: "Gives the authenticated user a new private address for emailing task commands (and creates the first one). The previous address stops working right away. Returns the updated agent setup; inbound_address stays empty while the server reads no mailbox.",
+		Method:      http.MethodPost,
+		Path:        "/agents/inbound-address",
+		Tags:        tags,
+	}, agentsInboundAddressRotate)
+
+	Register(api, huma.Operation{
 		OperationID: "agents-projects-list",
 		Summary:     "List agent settings of your lists",
 		Description: "Returns the saved AI settings (context for AI bots, agent list) of every list the user can access. Lists without saved settings are left out.",
@@ -142,7 +151,26 @@ func agentsConfigRead(ctx context.Context, in *struct {
 	// mailer_enabled comes from the server config, not the row: without it in
 	// the ETag, a client that cached the config while the mailer was off keeps
 	// getting 304s and says Instinct can't be reached after the mailer is set up.
-	return conditionalReadResponseWithState(&in.Params, cfg, cfg.Updated, maxPermission, fmt.Sprintf("m%t", cfg.MailerEnabled))
+	return conditionalReadResponseWithState(&in.Params, cfg, cfg.Updated, maxPermission,
+		fmt.Sprintf("m%t-i%t-%s", cfg.MailerEnabled, cfg.InboundEnabled, cfg.InboundAddress))
+}
+
+func agentsInboundAddressRotate(ctx context.Context, _ *struct{}) (*singleBody[models.AgentConfig], error) {
+	a, err := authFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s := db.NewSession()
+	defer s.Close()
+	cfg, err := models.RotateInboundAddress(s, a)
+	if err != nil {
+		_ = s.Rollback()
+		return nil, translateDomainError(err)
+	}
+	if err := s.Commit(); err != nil {
+		return nil, translateDomainError(err)
+	}
+	return &singleBody[models.AgentConfig]{Body: cfg}, nil
 }
 
 func agentsConfigUpdate(ctx context.Context, in *struct {
