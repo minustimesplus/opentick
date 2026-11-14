@@ -24,6 +24,7 @@ import {
 } from '@/lib/dates'
 import {compareTitles, level, splitEmoji} from '@/lib/tasks'
 import {openTaskDrawer, type DropZone} from '@/lib/ui'
+import {clamp, startResize} from '@/lib/resize'
 import {isMobile} from '@/lib/viewport'
 
 const data = useData()
@@ -32,25 +33,6 @@ const router = useRouter()
 
 const SIDEBAR_RANGE = [200, 480] as const
 const DETAIL_RANGE = [340, 760] as const
-const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v))
-
-// Drag a pane border; `dir` is +1 when moving right grows the pane, -1 when it shrinks it.
-function startResize(e: PointerEvent, key: 'sidebarWidth' | 'detailWidth', range: readonly [number, number], dir: 1 | -1) {
-	const startX = e.clientX
-	const startW = prefs[key]
-	const move = (ev: PointerEvent) => {
-		prefs[key] = clamp(startW + dir * (ev.clientX - startX), range)
-	}
-	const up = () => {
-		window.removeEventListener('pointermove', move)
-		window.removeEventListener('pointerup', up)
-		document.body.classList.remove('col-resizing')
-	}
-	document.body.classList.add('col-resizing')
-	window.addEventListener('pointermove', move)
-	window.addEventListener('pointerup', up)
-	e.preventDefault()
-}
 
 const listKey = computed(() => String(route.params.list ?? 'today'))
 const selectedId = computed(() => route.params.taskId ? Number(route.params.taskId) : null)
@@ -934,27 +916,6 @@ h1.editable:hover {
 .detail-empty {
 	height: 100%;
 	padding: 40px;
-}
-
-/* Wide invisible hit area straddling the pane border. */
-.resizer {
-	flex: none;
-	position: relative;
-	width: 0;
-	z-index: 5;
-	cursor: col-resize;
-}
-
-.resizer::before {
-	content: '';
-	position: absolute;
-	inset: 0 -4px;
-}
-
-.resizer:hover::before {
-	background: var(--accent);
-	opacity: 0.35;
-	inset: 0 -1px;
 }
 
 @media (max-width: 1100px) {
