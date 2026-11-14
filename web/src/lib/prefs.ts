@@ -5,7 +5,7 @@ import {isMobile} from './viewport'
 import {smartListDefaults, type SmartListKey, type Visibility} from './smartLists'
 
 /** Optional features from Settings > Features. Turning one off only hides it; its data stays. */
-export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'ai'
+export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'people' | 'ai'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
@@ -113,7 +113,7 @@ const defaults: Prefs = {
 	focusLongBreakEvery: 4,
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
-	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, ai: true},
+	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, ai: true},
 	smartLists: {...smartListDefaults},
 }
 

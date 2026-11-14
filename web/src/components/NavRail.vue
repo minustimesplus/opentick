@@ -8,7 +8,18 @@ import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {useFocus} from '@/stores/focus'
 import {t} from '@/lib/i18n'
-import {BellIcon, CalendarIcon, CountdownIcon, FocusIcon, HabitIcon, HelpIcon, MatrixIcon, SearchIcon, TasksIcon} from '@/lib/icons'
+import {
+	BellIcon,
+	CalendarIcon,
+	CountdownIcon,
+	FocusIcon,
+	HabitIcon,
+	HelpIcon,
+	MatrixIcon,
+	PeopleIcon,
+	SearchIcon,
+	TasksIcon,
+} from '@/lib/icons'
 import {installUpdate, installingUpdate, updateReady} from '@/lib/desktop'
 import {fmtDayMonth, fmtTime, parseDate} from '@/lib/dates'
 import {openSettings, ui} from '@/lib/ui'
@@ -38,8 +49,9 @@ const items = computed(() => [
 	{key: 'habits', feature: 'habit', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
 	{key: 'focus', feature: 'pomo', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
 	{key: 'countdowns', feature: 'countdown', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
+	{key: 'people', feature: 'people', icon: PeopleIcon, to: '/people', active: route.path.startsWith('/people'), title: t('people')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
-].filter(i => !i.feature || featureOn(i.feature as Feature)))
+].filter(i => (!i.feature || featureOn(i.feature as Feature)) && (i.key !== 'people' || !data.local)))
 
 // An invitation still waiting for an answer is listed with its buttons
 // above, so its notification would only repeat it.
@@ -141,7 +153,7 @@ function sync() {
 // On phones the rail is a tab bar at the bottom, so menus open upwards.
 const placement = computed(() => isMobile.value ? 'top-start' : 'right-start')
 
-const allShortcuts: [string, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' | 'matrix' | 'week' | 'habits' | 'focus' | 'countdowns', Feature?][] = [
+const allShortcuts: [string, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' | 'matrix' | 'week' | 'habits' | 'focus' | 'countdowns' | 'people', Feature?][] = [
 	['N', 'addTask'],
 	['/', 'search'],
 	['G T', 'today'],
@@ -152,6 +164,7 @@ const allShortcuts: [string, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' 
 	['G H', 'habits', 'habit'],
 	['G F', 'focus', 'pomo'],
 	['G D', 'countdowns', 'countdown'],
+	['G P', 'people', 'people'],
 ]
 const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature || featureOn(feature)))
 </script>

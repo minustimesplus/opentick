@@ -36,6 +36,12 @@ defineProps<{feature: Feature, animated?: boolean}>()
 					<span>{{ n }}</span>
 				</div>
 			</template>
+			<template v-else-if="feature === 'people'">
+				<div v-for="(c, r) in ['#4772fa', '#f5a623', '#2bb673', '#be4bdb']" :key="r" class="person-row" :style="{'--i': r}">
+					<b :style="{background: c}" />
+					<span />
+				</div>
+			</template>
 			<template v-else>
 				<div class="spark">✦</div>
 				<span v-for="n in 4" :key="n" class="line" :style="{'--i': n}" />
@@ -172,6 +178,31 @@ defineProps<{feature: Feature, animated?: boolean}>()
 	height: 8px;
 	border-radius: 4px;
 	background: #4772fa;
+}
+
+.window.people {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+
+.person-row {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.person-row b {
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+}
+
+.person-row span {
+	flex: 1;
+	height: 5px;
+	border-radius: 3px;
+	background: #e8ecf4;
 }
 
 .window.countdown {
