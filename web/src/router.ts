@@ -68,6 +68,9 @@ router.beforeEach(to => routeAllowed(to) || '/tasks/today')
 // The list last open in the tasks view, so coming back from another view
 // (the rail's tasks button) lands on it instead of Today.
 export const lastTasksList = ref('/tasks/today')
+// Likewise the People view comes back on the same list and open contact.
+export const lastPeoplePath = ref('/people')
 router.afterEach(to => {
 	if (to.name === 'tasks' && typeof to.params.list === 'string') lastTasksList.value = `/tasks/${to.params.list}`
+	if (to.name === 'people') lastPeoplePath.value = to.fullPath
 })

@@ -30,7 +30,7 @@ import type {ProjectInvitation} from '@/api/types'
 import {featureOn} from '@/lib/features'
 import type {Feature} from '@/lib/prefs'
 import {isMobile} from '@/lib/viewport'
-import {lastTasksList} from '@/router'
+import {lastPeoplePath, lastTasksList} from '@/router'
 
 const data = useData()
 const focus = useFocus()
@@ -49,7 +49,7 @@ const items = computed(() => [
 	{key: 'habits', feature: 'habit', icon: HabitIcon, to: '/habits', active: route.path.startsWith('/habits'), title: t('habits')},
 	{key: 'focus', feature: 'pomo', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
 	{key: 'countdowns', feature: 'countdown', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
-	{key: 'people', feature: 'people', icon: PeopleIcon, to: '/people', active: route.path.startsWith('/people'), title: t('people')},
+	{key: 'people', feature: 'people', icon: PeopleIcon, to: lastPeoplePath.value, active: route.path.startsWith('/people'), title: t('people')},
 	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
 ].filter(i => (!i.feature || featureOn(i.feature as Feature)) && (i.key !== 'people' || !data.local)))
 

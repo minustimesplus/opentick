@@ -1,39 +1,74 @@
 <script setup lang="ts">
-import {computed, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onMounted, ref, watch} from 'vue'
+import {storeToRefs} from 'pinia'
 import {useRoute, useRouter} from 'vue-router'
-import {ArrowDownUp, ChartPie, Check, ChevronLeft, Hash, Pencil, Plus, Search, Tag, Trash2, Upload, Users, UserMinus, X} from 'lucide-vue-next'
+import {
+	ArrowDownUp,
+	ChartPie,
+	Check,
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	Hash,
+	PanelLeft,
+	Pencil,
+	Plus,
+	Search,
+	Tag,
+	Trash2,
+	Upload,
+	Users,
+	UserMinus,
+	X,
+} from 'lucide-vue-next'
 import ContactAvatar from '@/components/people/ContactAvatar.vue'
 import ContactDetail from '@/components/people/ContactDetail.vue'
 import ContactDialog from '@/components/people/ContactDialog.vue'
 import GroupDialog from '@/components/people/GroupDialog.vue'
 import PeopleImport from '@/components/people/PeopleImport.vue'
+import PeopleStats from '@/components/people/PeopleStats.vue'
 import Popover from '@/components/Popover.vue'
 import type {ContactGroup, ContactListItem} from '@/api/types'
 import {usePeople} from '@/stores/people'
 import {contactSubtitle, filterContacts, nameColor, sortContacts, type ContactSort} from '@/lib/people'
 import {t, type MessageKey} from '@/lib/i18n'
+import {prefs} from '@/lib/prefs'
+import {clamp, startResize} from '@/lib/resize'
 import {toast} from '@/lib/toast'
 import {isMobile} from '@/lib/viewport'
 
 const people = usePeople()
 const route = useRoute()
 const router = useRouter()
+const {query, sort, selected} = storeToRefs(people)
 
-onMounted(() => {
-	if (!people.loaded) people.load()
+const SIDEBAR_RANGE = [200, 420] as const
+const DETAIL_RANGE = [320, 720] as const
+
+onMounted(async () => {
+	if (!people.loaded) await people.load()
+	await nextTick()
+	const el = scroller.value
+	if (el && people.listScroll.list === list.value) {
+		el.scrollTop = people.listScroll.top
+		onScroll()
+	}
 })
 
 // ---------- which list ----------
 
-const list = computed(() => String(route.params.list || 'all'))
+// While leaving for another view the route changes before this view unmounts;
+// holding on to the last list keeps that from resetting the state kept in the store.
+const list = computed<string>(prev => route.name === 'people' ? String(route.params.list || 'all') : prev ?? 'all')
 const groupId = computed(() => /^g\d+$/.test(list.value) ? Number(list.value.slice(1)) : undefined)
 const tagId = computed(() => /^t\d+$/.test(list.value) ? Number(list.value.slice(1)) : undefined)
 const group = computed(() => people.groups.find(g => g.id === groupId.value))
 const tag = computed(() => people.tags.find(x => x.id === tagId.value))
 const pane = computed<'contacts' | 'stats' | 'import'>(() => list.value === 'stats' || list.value === 'import' ? list.value : 'contacts')
 const contactId = computed(() => {
+	if (route.name !== 'people') return undefined
 	const id = Number(route.params.contactId)
-	return pane.value === 'contacts' && Number.isInteger(id) && id > 0 ? id : undefined
+	return pane.value !== 'import' && Number.isInteger(id) && id > 0 ? id : undefined
 })
 
 const heading = computed(() => {
@@ -57,13 +92,11 @@ function openContact(id?: number) {
 }
 
 // On a phone the sidebar, the list and the contact are one screen each.
-const showSidebar = computed(() => !isMobile.value || (!route.params.list && !contactId.value))
+const showSidebar = computed(() => isMobile.value ? !route.params.list && !contactId.value : prefs.peopleSidebar)
 const showMain = computed(() => !isMobile.value || (!!route.params.list && !contactId.value))
 
 // ---------- the list ----------
 
-const query = ref('')
-const sort = ref<ContactSort>('name')
 const sortAnchor = ref<HTMLElement | null>(null)
 const sortMenu = ref(false)
 
@@ -92,6 +125,7 @@ function onScroll() {
 	if (!el) return
 	scrollTop.value = el.scrollTop
 	viewHeight.value = el.clientHeight
+	people.listScroll = {list: list.value, top: el.scrollTop}
 }
 
 const firstRow = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - OVERSCAN))
@@ -103,11 +137,11 @@ const visible = computed(() => {
 watch([list, query, sort], () => {
 	scroller.value?.scrollTo({top: 0})
 	scrollTop.value = 0
+	people.listScroll = {list: list.value, top: 0}
 })
 
 // ---------- selection ----------
 
-const selected = ref<Set<number>>(new Set())
 let lastToggled: number | null = null
 
 const selectedIds = computed(() => shown.value.filter(c => selected.value.has(c.id)).map(c => c.id))
@@ -212,6 +246,10 @@ function deleteSelected() {
 const addingContact = ref(false)
 const groupDialog = ref<{group: ContactGroup | null} | null>(null)
 
+function toggleSection(key: string) {
+	prefs.collapsed[key] = !prefs.collapsed[key]
+}
+
 async function deleteTag() {
 	const current = tag.value
 	if (!current || !confirm(t('deleteTagConfirm', {name: current.name}))) return
@@ -221,7 +259,11 @@ async function deleteTag() {
 
 <template>
 	<div class="people-view">
-		<aside v-if="showSidebar" class="sidebar">
+		<aside
+			v-if="showSidebar"
+			class="sidebar"
+			:style="isMobile ? undefined : {width: clamp(prefs.peopleSidebarWidth, SIDEBAR_RANGE) + 'px'}"
+		>
 			<div class="scroll">
 				<button class="item" :class="{active: list === 'all' && !isMobile}" @click="router.push('/people/all')">
 					<Users :size="18" />
@@ -237,42 +279,79 @@ async function deleteTag() {
 					<span class="grow">{{ t('import') }}</span>
 				</button>
 
-				<div class="section">
-					<span>{{ t('contactGroups') }}</span>
-					<button class="icon-btn small" :title="t('newGroup')" @click="groupDialog = {group: null}"><Plus :size="16" /></button>
-				</div>
-				<button
-					v-for="g in people.groups"
-					:key="g.id"
-					class="item"
-					:class="{active: groupId === g.id}"
-					@click="openList('g' + g.id)"
+				<div
+					class="section"
+					role="button"
+					tabindex="0"
+					:aria-expanded="!prefs.collapsed.peopleGroups"
+					@click="toggleSection('peopleGroups')"
+					@keydown.enter.self="toggleSection('peopleGroups')"
 				>
-					<span class="dot" :style="{background: nameColor(g.name, g.hex_color)}" />
-					<span class="grow">{{ g.name }}</span>
-					<span class="count">{{ g.members || '' }}</span>
-				</button>
+					<span class="grow">{{ t('contactGroups') }}</span>
+					<button class="icon-btn small" :title="t('newGroup')" @click.stop="groupDialog = {group: null}">
+						<Plus :size="16" />
+					</button>
+					<component :is="prefs.collapsed.peopleGroups ? ChevronRight : ChevronDown" :size="14" class="chev" />
+				</div>
+				<template v-if="!prefs.collapsed.peopleGroups">
+					<button
+						v-for="g in people.groups"
+						:key="g.id"
+						class="item"
+						:class="{active: groupId === g.id}"
+						@click="openList('g' + g.id)"
+					>
+						<span class="dot" :style="{background: nameColor(g.name, g.hex_color)}" />
+						<span class="grow">{{ g.name }}</span>
+						<span class="count">{{ g.members || '' }}</span>
+					</button>
+				</template>
 
 				<template v-if="people.tags.length">
-					<div class="section"><span>{{ t('tags') }}</span></div>
-					<button
-						v-for="x in people.tags"
-						:key="x.id"
-						class="item"
-						:class="{active: tagId === x.id}"
-						@click="openList('t' + x.id)"
+					<div
+						class="section"
+						role="button"
+						tabindex="0"
+						:aria-expanded="!prefs.collapsed.peopleTags"
+						@click="toggleSection('peopleTags')"
+						@keydown.enter.self="toggleSection('peopleTags')"
 					>
-						<Hash :size="16" class="hash" />
-						<span class="grow">{{ x.name }}</span>
-						<span class="count">{{ x.contacts || '' }}</span>
-					</button>
+						<span class="grow">{{ t('tags') }}</span>
+						<component :is="prefs.collapsed.peopleTags ? ChevronRight : ChevronDown" :size="14" class="chev" />
+					</div>
+					<template v-if="!prefs.collapsed.peopleTags">
+						<button
+							v-for="x in people.tags"
+							:key="x.id"
+							class="item"
+							:class="{active: tagId === x.id}"
+							@click="openList('t' + x.id)"
+						>
+							<Hash :size="16" class="hash" />
+							<span class="grow">{{ x.name }}</span>
+							<span class="count">{{ x.contacts || '' }}</span>
+						</button>
+					</template>
 				</template>
 			</div>
 		</aside>
+		<div
+			v-if="showSidebar && !isMobile"
+			class="resizer"
+			@pointerdown="startResize($event, 'peopleSidebarWidth', SIDEBAR_RANGE, 1)"
+		/>
 
 		<section v-if="showMain" class="main-pane">
 			<header class="head">
 				<button v-if="isMobile" class="icon-btn" :title="t('people')" @click="router.push('/people')"><ChevronLeft :size="20" /></button>
+				<button
+					v-else
+					class="icon-btn"
+					:title="t('peopleToggleSidebar')"
+					@click="prefs.peopleSidebar = !prefs.peopleSidebar"
+				>
+					<PanelLeft :size="19" />
+				</button>
 				<h1>{{ heading }}</h1>
 				<template v-if="pane === 'contacts'">
 					<span class="total">{{ t('contactsCount', {n: shown.length}) }}</span>
@@ -286,11 +365,7 @@ async function deleteTag() {
 
 			<PeopleImport v-if="pane === 'import'" />
 
-			<div v-else-if="pane === 'stats'" class="empty-state">
-				<div class="big-emoji">🌍</div>
-				<div>{{ t('peopleStatsEmpty') }}</div>
-				<div class="sub">{{ t('peopleStatsEmptyHint') }}</div>
-			</div>
+			<PeopleStats v-else-if="pane === 'stats'" :open-id="contactId" @open="openContact" />
 
 			<template v-else>
 				<div v-if="selectedIds.length" class="bulk">
@@ -349,12 +424,21 @@ async function deleteTag() {
 			</template>
 		</section>
 
-		<ContactDetail
-			v-if="contactId"
-			:contact-id="contactId"
-			@close="openContact()"
-			@deleted="openContact()"
-		/>
+		<template v-if="contactId">
+			<div
+				v-if="!isMobile && prefs.peopleDetail"
+				class="resizer"
+				@pointerdown="startResize($event, 'peopleDetailWidth', DETAIL_RANGE, -1)"
+			/>
+			<ContactDetail
+				:contact-id="contactId"
+				:collapsed="!isMobile && !prefs.peopleDetail"
+				:style="isMobile || !prefs.peopleDetail ? undefined : {width: clamp(prefs.peopleDetailWidth, DETAIL_RANGE) + 'px'}"
+				@close="openContact()"
+				@deleted="openContact()"
+				@collapse="prefs.peopleDetail = !prefs.peopleDetail"
+			/>
+		</template>
 
 		<Popover v-if="sortMenu" :anchor="sortAnchor" placement="bottom-end" @close="sortMenu = false">
 			<div class="menu">
@@ -420,7 +504,6 @@ async function deleteTag() {
 .sidebar {
 	display: flex;
 	flex-direction: column;
-	width: 260px;
 	flex-shrink: 0;
 	border-right: 1px solid var(--border);
 	background: var(--bg);
@@ -489,12 +572,24 @@ async function deleteTag() {
 .section {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	gap: 4px;
 	height: 30px;
 	margin-top: 14px;
-	padding: 0 6px 0 12px;
+	padding: 0 8px 0 12px;
+	border-radius: 6px;
 	font-size: 12px;
 	color: var(--text-3);
+	cursor: pointer;
+	user-select: none;
+}
+
+.section:hover {
+	background: var(--bg-hover);
+}
+
+.section .chev {
+	flex-shrink: 0;
+	color: var(--text-4);
 }
 
 .icon-btn.small {

@@ -305,6 +305,27 @@ body.col-resizing {
 	user-select: none;
 }
 
+/* A draggable pane border (lib/resize.ts): no width of its own, a wide invisible hit area. */
+.resizer {
+	flex: none;
+	position: relative;
+	width: 0;
+	z-index: 5;
+	cursor: col-resize;
+}
+
+.resizer::before {
+	content: '';
+	position: absolute;
+	inset: 0 -4px;
+}
+
+.resizer:hover::before {
+	background: var(--accent);
+	opacity: 0.35;
+	inset: 0 -1px;
+}
+
 body.row-resizing {
 	cursor: row-resize;
 	user-select: none;
