@@ -73,6 +73,7 @@ func SetupTests() {
 		"users_projects",
 		"buckets",
 		"calendar_subscriptions",
+		"calendar_event_archives",
 		"habits",
 		"habit_checkins",
 		"countdowns",

@@ -124,6 +124,9 @@ func (cs *CalendarSubscription) Update(s *xorm.Session, _ web.Auth) error {
 
 // Delete removes a calendar subscription.
 func (cs *CalendarSubscription) Delete(s *xorm.Session, _ web.Auth) error {
+	if err := deleteCalendarEventArchives(s, builder.Eq{"subscription_id": cs.ID}); err != nil {
+		return err
+	}
 	_, err := s.ID(cs.ID).Delete(&CalendarSubscription{})
 	return err
 }

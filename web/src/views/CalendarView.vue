@@ -2,7 +2,7 @@
 import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
-	AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Inbox, ListTodo, MapPin, Menu,
+	AlertCircle, Archive, ArchiveRestore, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Inbox, ListTodo, MapPin, Menu,
 	MoreHorizontal, PanelLeft, Pencil, Plus, Repeat,
 } from 'lucide-vue-next'
 import TimeGrid from '@/components/calendar/TimeGrid.vue'
@@ -24,6 +24,7 @@ import {
 import {hasColor, projectColor, splitEmoji} from '@/lib/tasks'
 import {openTaskDrawer} from '@/lib/ui'
 import {isMobile} from '@/lib/viewport'
+import {toast} from '@/lib/toast'
 
 const data = useData()
 const calendars = useCalendars()
@@ -115,7 +116,9 @@ watch(
 
 const visibleEvents = computed<CalEvent[]>(() => visibleSubs.value.flatMap(sub => {
 	const color = calendarColor(sub)
-	return (calendars.events.get(sub.id) ?? []).map(e => ({...e, color}))
+	return (calendars.events.get(sub.id) ?? [])
+		.filter(e => prefs.calendarShowArchived || !e.archived)
+		.map(e => ({...e, color}))
 }))
 
 function toggleSub(id: number) {
@@ -136,6 +139,14 @@ const openedEvent = ref<{event: CalEvent, x: number, y: number} | null>(null)
 
 function openEvent(event: CalEvent, e: MouseEvent) {
 	openedEvent.value = {event, x: e.clientX, y: e.clientY}
+}
+
+async function toggleArchived(event: CalEvent) {
+	const archived = !event.archived
+	openedEvent.value = null
+	if (await calendars.setArchived(event, archived) && archived) {
+		toast(t('eventArchivedToast'), {label: t('undo'), run: () => { calendars.setArchived(event, false) }})
+	}
 }
 
 function eventWhen(e: CalEvent): string {
@@ -359,6 +370,9 @@ const addDefaults = computed(() => {
 				<button class="menu-item" @click="prefs.calendarShowWeekends = !prefs.calendarShowWeekends">
 					<Check :size="15" :style="{visibility: prefs.calendarShowWeekends ? 'visible' : 'hidden'}" /> {{ t('showWeekends') }}
 				</button>
+				<button v-if="calendars.subscriptions.length" class="menu-item" @click="prefs.calendarShowArchived = !prefs.calendarShowArchived">
+					<Check :size="15" :style="{visibility: prefs.calendarShowArchived ? 'visible' : 'hidden'}" /> {{ t('showArchivedEvents') }}
+				</button>
 				<button class="menu-item" @click="openSubscribe">
 					<CalendarDays :size="15" /> {{ t('subscribeCalendar') }}
 				</button>
@@ -375,7 +389,7 @@ const addDefaults = computed(() => {
 					<span class="cdot" :style="{background: openedEvent.event.color}" />
 					{{ calendars.subscription(openedEvent.event.subscriptionId)?.title }}
 				</div>
-				<div class="evp-title">{{ openedEvent.event.title }}</div>
+				<div class="evp-title" :class="{archived: openedEvent.event.archived}">{{ openedEvent.event.title }}</div>
 				<div class="evp-when">
 					{{ eventWhen(openedEvent.event) }}
 					<span v-if="openedEvent.event.recurring" class="evp-rec" :title="t('recurringEvent')"><Repeat :size="13" /></span>
@@ -385,6 +399,12 @@ const addDefaults = computed(() => {
 				<a v-if="safeLink(openedEvent.event.url)" class="evp-link" :href="safeLink(openedEvent.event.url)!" target="_blank" rel="noopener noreferrer">
 					<ExternalLink :size="13" /> {{ t('openLink') }}
 				</a>
+				<div class="evp-actions">
+					<button class="btn" @click="toggleArchived(openedEvent.event)">
+						<component :is="openedEvent.event.archived ? ArchiveRestore : Archive" :size="14" />
+						{{ openedEvent.event.archived ? t('unarchive') : t('archive') }}
+					</button>
+				</div>
 			</div>
 		</Popover>
 		<SubscriptionDialog v-if="subDialog" :subscription="subDialog.subscription" @close="subDialog = null" />
@@ -751,6 +771,24 @@ h1 {
 	gap: 6px;
 	font-size: 13px;
 	color: var(--accent);
+}
+
+.evp-title.archived {
+	color: var(--text-3);
+	text-decoration: line-through;
+}
+
+.evp-actions {
+	display: flex;
+	justify-content: flex-end;
+	padding-top: 6px;
+	border-top: 1px solid var(--border);
+}
+
+.evp-actions .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 }
 
 .add-pop {

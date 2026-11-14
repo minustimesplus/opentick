@@ -84,6 +84,7 @@ func GetTables() []interface{} {
 		&UserInviteLink{},
 		&UserInviteLinkTeam{},
 		&CalendarSubscription{},
+		&CalendarEventArchive{},
 		&Habit{},
 		&HabitCheckin{},
 		&Countdown{},
