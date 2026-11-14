@@ -153,7 +153,7 @@ export function seed(): DB {
 	]
 	for (const [n, h] of habits.entries()) {
 		const hid = next()
-		db.habits.push({id: hid, ...h, archived: false, created, updated: created})
+		db.habits.push({id: hid, ...h, archived: false, position: (n + 1) * 65536, created, updated: created})
 		const days: Record<string, number> = {}
 		for (let d = -28; d < 0; d++) {
 			const date = new Date()

@@ -200,6 +200,8 @@ export interface Habit {
 	goal: number
 	unit: string
 	archived: boolean
+	/** Habits are listed ascending by position. */
+	position: number
 	today_value: number
 	current_streak: number
 	/** The last 7 days, today included. */
@@ -257,6 +259,8 @@ export interface ExternalEvent {
 	end: string
 	all_day: boolean
 	recurring: boolean
+	/** The user archived this occurrence. */
+	archived?: boolean
 }
 
 export interface CalendarSubscriptionEvents {

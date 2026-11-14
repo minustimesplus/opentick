@@ -8,6 +8,7 @@
   goal: 8
   unit: glasses
   archived: false
+  position: 65536
   created: 2026-10-01 08:00:00
   updated: 2026-10-01 08:00:00
 - id: 2
@@ -18,6 +19,7 @@
   weekdays: 42
   goal: 1
   archived: false
+  position: 131072
   created: 2026-10-01 08:00:00
   updated: 2026-10-01 08:00:00
 - id: 3
@@ -27,5 +29,6 @@
   weekdays: 127
   goal: 1
   archived: false
+  position: 65536
   created: 2026-10-01 08:00:00
   updated: 2026-10-01 08:00:00

@@ -52,6 +52,10 @@ export interface Prefs {
 	peopleSidebarWidth: number
 	peopleDetailWidth: number
 	peopleGlobeWidth: number
+	/** Width (px) of the habit detail pane, set by dragging its border. */
+	habitDetailWidth: number
+	/** Whether the calendar shows archived events of subscribed calendars (faded) or hides them. */
+	calendarShowArchived: boolean
 	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
 	/** Layout per list key: plain list, kanban columns or timeline. */
@@ -108,6 +112,8 @@ const defaults: Prefs = {
 	peopleSidebarWidth: 260,
 	peopleDetailWidth: 400,
 	peopleGlobeWidth: 560,
+	habitDetailWidth: 460,
+	calendarShowArchived: false,
 	listSort: {},
 	listShowCompleted: {},
 	listView: {},

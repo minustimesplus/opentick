@@ -16,6 +16,8 @@ export const DEFAULT_CALENDAR_COLOR = '12B886'
 /** A read-only event occurrence from a subscribed calendar. */
 export interface CalEvent {
 	key: string
+	/** The occurrence id in the feed: its UID plus start. */
+	id: string
 	subscriptionId: number
 	title: string
 	description: string
@@ -26,6 +28,8 @@ export interface CalEvent {
 	end: Date
 	allDay: boolean
 	recurring: boolean
+	/** Archived (dealt with) by the user; the feed itself is unchanged. */
+	archived: boolean
 	color: string
 }
 
@@ -140,6 +144,7 @@ export const useCalendars = defineStore('calendars', () => {
 		})
 		const list = (res?.events ?? []).map(e => ({
 			key: `${sub.id}:${e.id}`,
+			id: e.id,
 			subscriptionId: sub.id,
 			title: e.title,
 			description: e.description,
@@ -149,6 +154,7 @@ export const useCalendars = defineStore('calendars', () => {
 			end: new Date(e.end),
 			allDay: e.all_day,
 			recurring: e.recurring,
+			archived: !!e.archived,
 			color: '',
 		}))
 		cache.set(key, {at: Date.now(), events: list, name: res?.calendar_name ?? ''})
@@ -216,6 +222,33 @@ export const useCalendars = defineStore('calendars', () => {
 		}
 	}
 
+	/** Sets an occurrence's archived flag in the shown events and every cached range. */
+	function applyArchived(subscriptionId: number, key: string, archived: boolean) {
+		const patch = (list: CalEvent[]) => list.map(e => e.key === key ? {...e, archived} : e)
+		for (const [k, hit] of cache) {
+			if (k.startsWith(`${subscriptionId}|`) && hit.events.some(e => e.key === key)) hit.events = patch(hit.events)
+		}
+		const shown = events.value.get(subscriptionId)
+		if (shown?.some(e => e.key === key)) {
+			const next = new Map(events.value)
+			next.set(subscriptionId, patch(shown))
+			events.value = next
+		}
+	}
+
+	/** Archives (or restores) one occurrence of a subscribed calendar's event. */
+	async function setArchived(event: Pick<CalEvent, 'key' | 'id' | 'subscriptionId'>, archived: boolean): Promise<boolean> {
+		applyArchived(event.subscriptionId, event.key, archived)
+		try {
+			await api('PUT', `/calendar-subscriptions/${event.subscriptionId}/events/archive`, {body: {event_id: event.id, archived}})
+			return true
+		} catch (e) {
+			applyArchived(event.subscriptionId, event.key, !archived)
+			toast(String((e as Error).message))
+			return false
+		}
+	}
+
 	async function create(input: {title: string, url: string, hex_color: string}): Promise<CalendarSubscription | null> {
 		const title = input.title.trim() || hostnameOf(input.url)
 		try {
@@ -253,5 +286,5 @@ export const useCalendars = defineStore('calendars', () => {
 		}
 	}
 
-	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, preload, create, update, remove}
+	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, preload, setArchived, create, update, remove}
 })

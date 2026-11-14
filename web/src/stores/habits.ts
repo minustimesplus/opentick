@@ -10,6 +10,7 @@ const MERGE = 'application/merge-patch+json'
 
 export const DEFAULT_HABIT_COLOR = '40C057'
 export const ALL_WEEKDAYS = 0b1111111
+const POSITION_STEP = 65536
 
 export interface HabitInput {
 	title: string
@@ -20,6 +21,7 @@ export interface HabitInput {
 	goal: number
 	unit: string
 	archived?: boolean
+	position?: number
 }
 
 export function habitColor(h?: Pick<Habit, 'hex_color'> | null): string {
@@ -40,8 +42,9 @@ export const useHabits = defineStore('habits', () => {
 	const habits = ref<Habit[]>([])
 	const loaded = ref(false)
 
-	const active = computed(() => habits.value.filter(h => !h.archived))
-	const archived = computed(() => habits.value.filter(h => h.archived))
+	const sorted = computed(() => [...habits.value].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id))
+	const active = computed(() => sorted.value.filter(h => !h.archived))
+	const archived = computed(() => sorted.value.filter(h => h.archived))
 
 	watch(() => data.authed, authed => {
 		if (!authed) {
@@ -89,6 +92,27 @@ export const useHabits = defineStore('habits', () => {
 			toast(String((e as Error).message))
 			return null
 		}
+	}
+
+	/**
+	 * Moves an active habit to `index` among the other active habits (0 is the
+	 * top). Only the moved habit's position changes: it takes the mean of its
+	 * new neighbours'.
+	 */
+	async function move(h: Habit, index: number) {
+		const others = active.value.filter(x => x.id !== h.id)
+		const i = Math.max(0, Math.min(index, others.length))
+		const prev = others[i - 1]
+		const next = others[i]
+		let position: number
+		if (prev && next) position = (prev.position + next.position) / 2
+		else if (prev) position = prev.position + POSITION_STEP
+		else if (next) position = next.position / 2
+		else return
+		if (position === h.position) return
+		const old = h.position
+		replace({...h, position})
+		if (!await update(h.id, {position})) replace({...h, position: old})
 	}
 
 	async function remove(id: number) {
@@ -139,5 +163,5 @@ export const useHabits = defineStore('habits', () => {
 		}
 	}
 
-	return {habits, loaded, active, archived, habit, load, create, update, remove, checkin, valueOn, tap, stats}
+	return {habits, loaded, active, archived, habit, load, create, update, move, remove, checkin, valueOn, tap, stats}
 })

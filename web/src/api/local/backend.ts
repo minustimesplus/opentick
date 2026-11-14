@@ -762,17 +762,29 @@ function habitStats(db: DB, h: StoredHabit, todayKey: string, monthKey?: string)
 	}
 }
 
-const HABIT_FIELDS = ['title', 'icon', 'hex_color', 'frequency', 'weekdays', 'goal', 'unit', 'archived'] as const
+const HABIT_FIELDS = ['title', 'icon', 'hex_color', 'frequency', 'weekdays', 'goal', 'unit', 'archived', 'position'] as const
+const HABIT_POSITION_STEP = 65536
+
+/** Habits stored before positions existed keep their creation order. */
+function ensureHabitPositions(db: DB) {
+	for (const h of db.habits) if (!h.position) h.position = h.id * HABIT_POSITION_STEP
+}
 
 function habitsRoute(db: DB, c: Ctx): unknown {
 	const [, a, b, date] = c.parts
 	const todayKey = String(c.query.today ?? dayKey(new Date()))
+	ensureHabitPositions(db)
 	if (a === undefined) {
-		if (c.method === 'GET') return paginate(db.habits.map(h => presentHabit(db, h, todayKey)), c.query)
+		if (c.method === 'GET') {
+			const sorted = [...db.habits].sort((x, y) => x.position - y.position || x.id - y.id)
+			return paginate(sorted.map(h => presentHabit(db, h, todayKey)), c.query)
+		}
 		if (c.method === 'POST') {
 			const stamp = now()
-			const h: StoredHabit = {id: nextId(), title: '', icon: '✅', hex_color: '', frequency: 'daily', weekdays: 127, goal: 1, unit: '', archived: false, created: stamp, updated: stamp}
+			const last = Math.max(0, ...db.habits.map(x => x.position))
+			const h: StoredHabit = {id: nextId(), title: '', icon: '✅', hex_color: '', frequency: 'daily', weekdays: 127, goal: 1, unit: '', archived: false, position: 0, created: stamp, updated: stamp}
 			for (const k of HABIT_FIELDS) if (k in c.body) (h as unknown as Record<string, unknown>)[k] = c.body[k]
+			if (!h.position) h.position = last + HABIT_POSITION_STEP
 			if (h.frequency === 'daily') h.weekdays = 127
 			db.habits.push(h)
 			return presentHabit(db, h, todayKey)
@@ -784,6 +796,7 @@ function habitsRoute(db: DB, c: Ctx): unknown {
 		if (c.method === 'PATCH') {
 			for (const k of HABIT_FIELDS) if (k in c.body) (h as unknown as Record<string, unknown>)[k] = c.body[k]
 			if (h.frequency === 'daily') h.weekdays = 127
+			ensureHabitPositions(db)
 			h.updated = now()
 			return presentHabit(db, h, todayKey)
 		}
