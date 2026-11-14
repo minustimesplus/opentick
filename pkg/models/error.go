@@ -3714,3 +3714,456 @@ func (err ErrAgentMailerDisabled) HTTPError() web.HTTPError {
 		Message:  "This server can't send email, so tasks can't be sent to Instinct. Configure the mailer first.",
 	}
 }
+
+// =============================
+// Contact errors
+// =============================
+
+// ErrContactDoesNotExist represents an error where a contact does not exist.
+type ErrContactDoesNotExist struct {
+	ID int64
+}
+
+// IsErrContactDoesNotExist checks if an error is ErrContactDoesNotExist.
+func IsErrContactDoesNotExist(err error) bool {
+	_, ok := err.(ErrContactDoesNotExist)
+	return ok
+}
+
+func (err ErrContactDoesNotExist) Error() string {
+	return fmt.Sprintf("Contact does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeContactDoesNotExist holds the unique world-error code of this error
+const ErrCodeContactDoesNotExist = 26001
+
+// HTTPError holds the http error description
+func (err ErrContactDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactDoesNotExist,
+		Message:  "This contact does not exist.",
+	}
+}
+
+// ErrContactInvalidBirthday represents an error where a contact birthday is no date.
+type ErrContactInvalidBirthday struct {
+	Birthday string
+}
+
+// IsErrContactInvalidBirthday checks if an error is ErrContactInvalidBirthday.
+func IsErrContactInvalidBirthday(err error) bool {
+	_, ok := err.(ErrContactInvalidBirthday)
+	return ok
+}
+
+func (err ErrContactInvalidBirthday) Error() string {
+	return "Contact birthday is invalid: " + err.Birthday
+}
+
+// ErrCodeContactInvalidBirthday holds the unique world-error code of this error
+const ErrCodeContactInvalidBirthday = 26002
+
+// HTTPError holds the http error description
+func (err ErrContactInvalidBirthday) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactInvalidBirthday,
+		Message:  "The birthday must be a date like YYYY-MM-DD, or MM-DD without a year.",
+	}
+}
+
+// ErrContactNeedsIdentity represents an error where a contact has nothing to identify it by.
+type ErrContactNeedsIdentity struct{}
+
+// IsErrContactNeedsIdentity checks if an error is ErrContactNeedsIdentity.
+func IsErrContactNeedsIdentity(err error) bool {
+	_, ok := err.(ErrContactNeedsIdentity)
+	return ok
+}
+
+func (err ErrContactNeedsIdentity) Error() string {
+	return "Contact has no name, LinkedIn URL or email"
+}
+
+// ErrCodeContactNeedsIdentity holds the unique world-error code of this error
+const ErrCodeContactNeedsIdentity = 26003
+
+// HTTPError holds the http error description
+func (err ErrContactNeedsIdentity) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactNeedsIdentity,
+		Message:  "A contact needs a name, a LinkedIn URL or an email address.",
+	}
+}
+
+// ErrContactAlreadyExists represents an error where a contact with the same LinkedIn URL or email exists.
+type ErrContactAlreadyExists struct {
+	ID   int64
+	Name string
+}
+
+// IsErrContactAlreadyExists checks if an error is ErrContactAlreadyExists.
+func IsErrContactAlreadyExists(err error) bool {
+	_, ok := err.(ErrContactAlreadyExists)
+	return ok
+}
+
+func (err ErrContactAlreadyExists) Error() string {
+	return fmt.Sprintf("Contact already exists [ID: %d]", err.ID)
+}
+
+// ErrCodeContactAlreadyExists holds the unique world-error code of this error
+const ErrCodeContactAlreadyExists = 26004
+
+// HTTPError holds the http error description
+func (err ErrContactAlreadyExists) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusConflict,
+		Code:     ErrCodeContactAlreadyExists,
+		Message:  fmt.Sprintf("A contact with this LinkedIn URL or email already exists: %s (id %d). Pass allow_duplicate to create it anyway.", err.Name, err.ID),
+	}
+}
+
+// ErrContactEntryEmpty represents an error where a job, school or note of a contact is empty.
+type ErrContactEntryEmpty struct{}
+
+// IsErrContactEntryEmpty checks if an error is ErrContactEntryEmpty.
+func IsErrContactEntryEmpty(err error) bool {
+	_, ok := err.(ErrContactEntryEmpty)
+	return ok
+}
+
+func (err ErrContactEntryEmpty) Error() string {
+	return "Contact entry is empty"
+}
+
+// ErrCodeContactEntryEmpty holds the unique world-error code of this error
+const ErrCodeContactEntryEmpty = 26005
+
+// HTTPError holds the http error description
+func (err ErrContactEntryEmpty) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactEntryEmpty,
+		Message:  "A job needs a company or a title, a school needs a name, and a note needs text.",
+	}
+}
+
+// ErrContactEntryDoesNotExist represents an error where a job, school or note does not exist on the contact.
+type ErrContactEntryDoesNotExist struct {
+	ID int64
+}
+
+// IsErrContactEntryDoesNotExist checks if an error is ErrContactEntryDoesNotExist.
+func IsErrContactEntryDoesNotExist(err error) bool {
+	_, ok := err.(ErrContactEntryDoesNotExist)
+	return ok
+}
+
+func (err ErrContactEntryDoesNotExist) Error() string {
+	return fmt.Sprintf("Contact entry does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeContactEntryDoesNotExist holds the unique world-error code of this error
+const ErrCodeContactEntryDoesNotExist = 26006
+
+// HTTPError holds the http error description
+func (err ErrContactEntryDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactEntryDoesNotExist,
+		Message:  "This job, school or note does not exist on this contact.",
+	}
+}
+
+// ErrContactGroupDoesNotExist represents an error where a contact group does not exist.
+type ErrContactGroupDoesNotExist struct {
+	ID int64
+}
+
+// IsErrContactGroupDoesNotExist checks if an error is ErrContactGroupDoesNotExist.
+func IsErrContactGroupDoesNotExist(err error) bool {
+	_, ok := err.(ErrContactGroupDoesNotExist)
+	return ok
+}
+
+func (err ErrContactGroupDoesNotExist) Error() string {
+	return fmt.Sprintf("Contact group does not exist [ID: %d]", err.ID)
+}
+
+// ErrCodeContactGroupDoesNotExist holds the unique world-error code of this error
+const ErrCodeContactGroupDoesNotExist = 26007
+
+// HTTPError holds the http error description
+func (err ErrContactGroupDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactGroupDoesNotExist,
+		Message:  "This contact group does not exist.",
+	}
+}
+
+// ErrContactGroupNameEmpty represents an error where a group or tag name is empty.
+type ErrContactGroupNameEmpty struct{}
+
+// IsErrContactGroupNameEmpty checks if an error is ErrContactGroupNameEmpty.
+func IsErrContactGroupNameEmpty(err error) bool {
+	_, ok := err.(ErrContactGroupNameEmpty)
+	return ok
+}
+
+func (err ErrContactGroupNameEmpty) Error() string {
+	return "Contact group or tag name is empty"
+}
+
+// ErrCodeContactGroupNameEmpty holds the unique world-error code of this error
+const ErrCodeContactGroupNameEmpty = 26008
+
+// HTTPError holds the http error description
+func (err ErrContactGroupNameEmpty) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactGroupNameEmpty,
+		Message:  "The name of a group or tag cannot be empty.",
+	}
+}
+
+// ErrContactGroupNotFound represents an error where no contact group has the given name or id.
+type ErrContactGroupNotFound struct {
+	Group  string
+	Groups []string
+}
+
+// IsErrContactGroupNotFound checks if an error is ErrContactGroupNotFound.
+func IsErrContactGroupNotFound(err error) bool {
+	_, ok := err.(ErrContactGroupNotFound)
+	return ok
+}
+
+func (err ErrContactGroupNotFound) Error() string {
+	return "No contact group named " + err.Group
+}
+
+// ErrCodeContactGroupNotFound holds the unique world-error code of this error
+const ErrCodeContactGroupNotFound = 26009
+
+// HTTPError holds the http error description
+func (err ErrContactGroupNotFound) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactGroupNotFound,
+		Message:  fmt.Sprintf("No group %q (pass create to make it). Groups: %s", err.Group, strings.Join(err.Groups, ", ")),
+	}
+}
+
+// ErrContactTagDoesNotExist represents an error where a contact tag does not exist.
+type ErrContactTagDoesNotExist struct {
+	Tag string
+}
+
+// IsErrContactTagDoesNotExist checks if an error is ErrContactTagDoesNotExist.
+func IsErrContactTagDoesNotExist(err error) bool {
+	_, ok := err.(ErrContactTagDoesNotExist)
+	return ok
+}
+
+func (err ErrContactTagDoesNotExist) Error() string {
+	return "Contact tag does not exist: " + err.Tag
+}
+
+// ErrCodeContactTagDoesNotExist holds the unique world-error code of this error
+const ErrCodeContactTagDoesNotExist = 26010
+
+// HTTPError holds the http error description
+func (err ErrContactTagDoesNotExist) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactTagDoesNotExist,
+		Message:  "This contact tag does not exist.",
+	}
+}
+
+// ErrContactIDsEmpty represents an error where a bulk change names no contacts.
+type ErrContactIDsEmpty struct{}
+
+// IsErrContactIDsEmpty checks if an error is ErrContactIDsEmpty.
+func IsErrContactIDsEmpty(err error) bool {
+	_, ok := err.(ErrContactIDsEmpty)
+	return ok
+}
+
+func (err ErrContactIDsEmpty) Error() string {
+	return "No contact ids given"
+}
+
+// ErrCodeContactIDsEmpty holds the unique world-error code of this error
+const ErrCodeContactIDsEmpty = 26011
+
+// HTTPError holds the http error description
+func (err ErrContactIDsEmpty) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactIDsEmpty,
+		Message:  "contact_ids cannot be empty.",
+	}
+}
+
+// ErrContactInvalidSearch represents an error where a contact search has an invalid filter.
+type ErrContactInvalidSearch struct {
+	Message string
+}
+
+// IsErrContactInvalidSearch checks if an error is ErrContactInvalidSearch.
+func IsErrContactInvalidSearch(err error) bool {
+	_, ok := err.(ErrContactInvalidSearch)
+	return ok
+}
+
+func (err ErrContactInvalidSearch) Error() string {
+	return "Contact search is invalid: " + err.Message
+}
+
+// ErrCodeContactInvalidSearch holds the unique world-error code of this error
+const ErrCodeContactInvalidSearch = 26012
+
+// HTTPError holds the http error description
+func (err ErrContactInvalidSearch) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactInvalidSearch,
+		Message:  "Invalid search: " + err.Message,
+	}
+}
+
+// ErrContactInvalidProfile represents an error where an imported profile is unusable.
+type ErrContactInvalidProfile struct {
+	Message string
+}
+
+// IsErrContactInvalidProfile checks if an error is ErrContactInvalidProfile.
+func IsErrContactInvalidProfile(err error) bool {
+	_, ok := err.(ErrContactInvalidProfile)
+	return ok
+}
+
+func (err ErrContactInvalidProfile) Error() string {
+	return "Contact profile is invalid: " + err.Message
+}
+
+// ErrCodeContactInvalidProfile holds the unique world-error code of this error
+const ErrCodeContactInvalidProfile = 26013
+
+// HTTPError holds the http error description
+func (err ErrContactInvalidProfile) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactInvalidProfile,
+		Message:  "Invalid profile: " + err.Message,
+	}
+}
+
+// ErrContactNotInContacts represents an error where no contact has the given LinkedIn URL.
+type ErrContactNotInContacts struct {
+	URL string
+}
+
+// IsErrContactNotInContacts checks if an error is ErrContactNotInContacts.
+func IsErrContactNotInContacts(err error) bool {
+	_, ok := err.(ErrContactNotInContacts)
+	return ok
+}
+
+func (err ErrContactNotInContacts) Error() string {
+	return "No contact with LinkedIn URL " + err.URL
+}
+
+// ErrCodeContactNotInContacts holds the unique world-error code of this error
+const ErrCodeContactNotInContacts = 26014
+
+// HTTPError holds the http error description
+func (err ErrContactNotInContacts) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactNotInContacts,
+		Message:  "Nobody in your contacts has that LinkedIn URL.",
+	}
+}
+
+// ErrContactImportEmpty represents an error where an import contains no contacts.
+type ErrContactImportEmpty struct{}
+
+// IsErrContactImportEmpty checks if an error is ErrContactImportEmpty.
+func IsErrContactImportEmpty(err error) bool {
+	_, ok := err.(ErrContactImportEmpty)
+	return ok
+}
+
+func (err ErrContactImportEmpty) Error() string {
+	return "Contact import is empty"
+}
+
+// ErrCodeContactImportEmpty holds the unique world-error code of this error
+const ErrCodeContactImportEmpty = 26015
+
+// HTTPError holds the http error description
+func (err ErrContactImportEmpty) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactImportEmpty,
+		Message:  "The import contains no contacts. For LinkedIn, upload the Connections.csv from your data export.",
+	}
+}
+
+// ErrContactPhotoInvalid represents an error where a contact photo is no usable image.
+type ErrContactPhotoInvalid struct{}
+
+// IsErrContactPhotoInvalid checks if an error is ErrContactPhotoInvalid.
+func IsErrContactPhotoInvalid(err error) bool {
+	_, ok := err.(ErrContactPhotoInvalid)
+	return ok
+}
+
+func (err ErrContactPhotoInvalid) Error() string {
+	return "Contact photo is invalid"
+}
+
+// ErrCodeContactPhotoInvalid holds the unique world-error code of this error
+const ErrCodeContactPhotoInvalid = 26016
+
+// HTTPError holds the http error description
+func (err ErrContactPhotoInvalid) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeContactPhotoInvalid,
+		Message:  "The photo must be a PNG, JPEG, GIF, TIFF or BMP image of at most 8 MB.",
+	}
+}
+
+// ErrContactHasNoPhoto represents an error where a contact has no photo.
+type ErrContactHasNoPhoto struct {
+	ID int64
+}
+
+// IsErrContactHasNoPhoto checks if an error is ErrContactHasNoPhoto.
+func IsErrContactHasNoPhoto(err error) bool {
+	_, ok := err.(ErrContactHasNoPhoto)
+	return ok
+}
+
+func (err ErrContactHasNoPhoto) Error() string {
+	return fmt.Sprintf("Contact has no photo [ID: %d]", err.ID)
+}
+
+// ErrCodeContactHasNoPhoto holds the unique world-error code of this error
+const ErrCodeContactHasNoPhoto = 26017
+
+// HTTPError holds the http error description
+func (err ErrContactHasNoPhoto) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusNotFound,
+		Code:     ErrCodeContactHasNoPhoto,
+		Message:  "This contact has no photo.",
+	}
+}

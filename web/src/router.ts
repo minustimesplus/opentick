@@ -20,6 +20,7 @@ export const router = createRouter({
 		{path: '/habits/:habitId?', name: 'habits', component: () => import('./views/HabitsView.vue')},
 		{path: '/focus', name: 'focus', component: () => import('./views/FocusView.vue')},
 		{path: '/countdowns', name: 'countdowns', component: () => import('./views/CountdownsView.vue')},
+		{path: '/people/:list?/:contactId?', name: 'people', component: () => import('./views/PeopleView.vue')},
 		{path: '/search', name: 'search', component: () => import('./views/SearchView.vue')},
 		// Linkable sign up and sign in pages (e.g. from the README or the demo).
 		// Signed out, App shows LoginView in the matching mode; signed in, they

@@ -1,0 +1,15 @@
+- id: 1
+  contact_id: 2
+  school: Yale University
+  degree: PhD
+  field_of_study: Mathematics
+  start_year: "1930"
+  end_year: "1934"
+  sort_order: 0
+- id: 2
+  contact_id: 3
+  school: Sciences Po
+  degree: Master
+  start_year: "2019"
+  end_year: "2021"
+  sort_order: 0

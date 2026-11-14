@@ -9,6 +9,7 @@ export const OPTIONAL_FEATURES: {key: Feature, title: MessageKey, desc: MessageK
 	{key: 'habit', title: 'featHabit', desc: 'featHabitDesc'},
 	{key: 'pomo', title: 'featPomo', desc: 'featPomoDesc'},
 	{key: 'countdown', title: 'featCountdown', desc: 'featCountdownDesc'},
+	{key: 'people', title: 'people', desc: 'featPeopleDesc'},
 	{key: 'ai', title: 'featAi', desc: 'featAiDesc'},
 ]
 
@@ -19,6 +20,7 @@ export const FEATURE_TINTS: Record<Feature, string> = {
 	habit: '#9fdd9c',
 	pomo: '#f09a8a',
 	countdown: '#8fa6f6',
+	people: '#8fc7c0',
 	ai: '#8ab4f4',
 }
 
@@ -29,6 +31,7 @@ const routeFeatures: Record<string, Feature> = {
 	habits: 'habit',
 	focus: 'pomo',
 	countdowns: 'countdown',
+	people: 'people',
 }
 
 export function featureOn(feature: Feature): boolean {

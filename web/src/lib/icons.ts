@@ -52,6 +52,18 @@ export const CountdownIcon = createLucideIcon('rail-countdown', [
 	['path', {...solid, key: 'lower', d: 'M12 12.6l1.4.6c2.1 1.2 3.6 2.7 3.6 4.7v.4H7v-.4c0-2 1.5-3.5 3.6-4.7z'}],
 ])
 
+// Two people: a head and shoulders in front, a second person behind to the right.
+export const PeopleIcon = createLucideIcon('rail-people', [
+	['path', {...solid, key: 'head', d: 'M9 3.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8z'}],
+	['path', {...solid, key: 'body', d: 'M9 13.2c3.9 0 7 2.4 7 5.6 0 1-.8 1.7-1.8 1.7H3.8c-1 0-1.8-.7-1.8-1.7 0-3.2 3.1-5.6 7-5.6z'}],
+	['path', {
+		...solid,
+		key: 'second',
+		d: 'M15.6 4.2a3.4 3.4 0 0 1 0 6.6 5.6 5.6 0 0 0 0-6.6z'
+			+ 'M17.4 13.6c2.7.6 4.6 2.6 4.6 5.2 0 1-.8 1.7-1.8 1.7h-2.5c.2-.5.3-1.1.3-1.7 0-2-.9-3.8-2.4-5.1.6-.1 1.2-.2 1.8-.1z',
+	}],
+])
+
 // A stopwatch: a disc with a hand cut out, under a crown button.
 export const FocusIcon = createLucideIcon('rail-focus', [
 	['path', {...solid, key: 'crown', d: 'M10 1.5h4a1 1 0 0 1 0 2h-4a1 1 0 0 1 0-2z'}],
