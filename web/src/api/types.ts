@@ -408,3 +408,133 @@ export interface AgentDispatch {
 	prompt?: string
 	created: string
 }
+
+export interface ContactExperience {
+	id: number
+	contact_id: number
+	company: string
+	title: string
+	location: string
+	start_date: string
+	end_date: string
+	description: string
+	sort_order: number
+}
+
+export interface ContactEducation {
+	id: number
+	contact_id: number
+	school: string
+	degree: string
+	field_of_study: string
+	start_year: string
+	end_year: string
+	sort_order: number
+}
+
+export interface ContactNote {
+	id: number
+	contact_id: number
+	body: string
+	created: string
+	updated: string
+}
+
+export type ContactSource = 'manual' | 'csv' | 'linkedin' | 'brightdata'
+
+/** The scalar fields of a contact a user edits by hand. */
+export type ContactField =
+	| 'full_name'
+	| 'headline'
+	| 'company'
+	| 'title'
+	| 'location'
+	| 'email'
+	| 'phone'
+	| 'linkedin_url'
+	| 'birthday'
+	| 'about'
+
+export interface Contact extends Record<ContactField, string> {
+	id: number
+	name: string
+	first_name: string
+	last_name: string
+	source: ContactSource
+	locked_fields: string[]
+	has_photo: boolean
+	experiences: ContactExperience[]
+	educations: ContactEducation[]
+	notes: ContactNote[]
+	tag_ids: number[]
+	group_ids: number[]
+	tags: string[]
+	groups: string[]
+	created: string
+	updated: string
+}
+
+/** A contact as /contacts/overview lists it. */
+export interface ContactListItem {
+	id: number
+	name: string
+	headline: string
+	company: string
+	title: string
+	location: string
+	email: string
+	phone: string
+	linkedin_url: string
+	birthday: string
+	source: ContactSource
+	has_photo: boolean
+	tag_ids: number[]
+	group_ids: number[]
+	schools: string[]
+	notes_count: number
+	has_experience: boolean
+	has_education: boolean
+	search_text: string
+	created: string
+	updated: string
+}
+
+export interface ContactGroup {
+	id: number
+	name: string
+	hex_color: string
+	description: string
+	members: number
+}
+
+export interface ContactTag {
+	id: number
+	name: string
+	hex_color: string
+	contacts: number
+}
+
+export interface ContactOverview {
+	contacts: ContactListItem[] | null
+	tags: ContactTag[] | null
+	groups: ContactGroup[] | null
+}
+
+export interface ContactMembershipResult {
+	dry_run: boolean
+	target: {
+		id: number
+		name: string
+		created: boolean
+	}
+	changed: number
+	unchanged: number
+	contacts: {id: number, name: string}[]
+	unknown_ids: number[]
+}
+
+export interface ContactImportResult {
+	created: number
+	updated: number
+	skipped: number
+}

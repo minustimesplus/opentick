@@ -1,0 +1,18 @@
+- id: 1
+  contact_id: 1
+  company: Analytical Engines
+  title: Mathematician
+  start_date: "1842"
+  sort_order: 0
+- id: 2
+  contact_id: 2
+  company: Remington Rand
+  title: Senior Mathematician
+  start_date: "1949"
+  end_date: "1967"
+  sort_order: 0
+- id: 3
+  contact_id: 4
+  company: Elsewhere Inc
+  title: Stranger
+  sort_order: 0

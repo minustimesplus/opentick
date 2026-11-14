@@ -1,0 +1,48 @@
+- id: 1
+  user_id: 1
+  first_name: Ada
+  last_name: Lovelace
+  full_name: Ada Lovelace
+  company: Analytical Engines
+  title: Mathematician
+  location: London, England, United Kingdom
+  email: ada@example.com
+  linkedin_url: https://www.linkedin.com/in/ada
+  source: manual
+  locked_fields: '["company"]'
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00
+- id: 2
+  user_id: 1
+  first_name: Grace
+  last_name: Hopper
+  full_name: Grace Hopper
+  company: US Navy
+  location: New York, United States
+  linkedin_url: https://www.linkedin.com/in/grace
+  source: csv
+  locked_fields: '[]'
+  created: 2026-10-02 08:00:00
+  updated: 2026-10-02 08:00:00
+- id: 3
+  user_id: 1
+  first_name: Jean
+  last_name: Dupont
+  full_name: Jean Dupont
+  headline: Étudiant à SciencesPo
+  location: Reims, Grand Est, France
+  email: jean@example.com
+  source: manual
+  locked_fields: '[]'
+  created: 2026-10-03 08:00:00
+  updated: 2026-10-03 08:00:00
+- id: 4
+  user_id: 2
+  first_name: Someone
+  last_name: Else
+  full_name: Someone Else
+  linkedin_url: https://www.linkedin.com/in/else
+  source: manual
+  locked_fields: '[]'
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00

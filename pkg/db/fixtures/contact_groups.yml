@@ -1,0 +1,12 @@
+- id: 1
+  user_id: 1
+  name: Pioneers
+  hex_color: 4772fa
+  description: People who were first
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00
+- id: 2
+  user_id: 2
+  name: Someone else's group
+  created: 2026-10-01 08:00:00
+  updated: 2026-10-01 08:00:00

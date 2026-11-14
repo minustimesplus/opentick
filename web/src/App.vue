@@ -129,7 +129,7 @@ function onKey(e: KeyboardEvent) {
 			window.removeEventListener('keydown', next, true)
 			const map: Record<string, string> = {
 				a: '/tasks/all', t: '/tasks/today', r: '/tasks/tomorrow', w: '/tasks/week', i: '/tasks/inbox', b: '/tasks/summary', g: '/tasks/trash',
-				m: '/matrix', c: '/calendar', h: '/habits', f: '/focus', d: '/countdowns',
+				m: '/matrix', c: '/calendar', h: '/habits', f: '/focus', d: '/countdowns', p: '/people',
 			}
 			if (map[ev.key] && routeAllowed(router.resolve(map[ev.key]))) {
 				ev.preventDefault()

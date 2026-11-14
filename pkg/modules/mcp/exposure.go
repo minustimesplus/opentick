@@ -32,11 +32,28 @@ const (
 )
 
 // Anything not listed stays off MCP; credentials, account, webhooks, shares, file transfer and admin routes are deliberately absent.
+// Contacts have no delete tool on purpose.
 var exposedOperations = map[string]toolTier{
 	"buckets-create":                  catalogTool,
 	"buckets-delete":                  catalogTool,
 	"buckets-list":                    catalogTool,
 	"buckets-update":                  catalogTool,
+	"contact-groups-create":           typedTool,
+	"contact-groups-list":             typedTool,
+	"contact-groups-update":           typedTool,
+	"contact-tags-list":               typedTool,
+	"contacts-add-to-group":           typedTool,
+	"contacts-create":                 typedTool,
+	"contacts-distinct-values":        typedTool,
+	"contacts-educations-create":      typedTool,
+	"contacts-experiences-create":     typedTool,
+	"contacts-notes-create":           typedTool,
+	"contacts-read":                   typedTool,
+	"contacts-remove-from-group":      typedTool,
+	"contacts-search":                 typedTool,
+	"contacts-tag":                    typedTool,
+	"contacts-untag":                  typedTool,
+	"contacts-update":                 typedTool,
 	"filters-create":                  catalogTool,
 	"filters-delete":                  catalogTool,
 	"filters-read":                    catalogTool,

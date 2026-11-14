@@ -1,0 +1,10 @@
+- id: 1
+  contact_id: 1
+  body: Met at the Royal Society
+  created: 2026-10-05 08:00:00
+  updated: 2026-10-05 08:00:00
+- id: 2
+  contact_id: 4
+  body: Someone else's note
+  created: 2026-10-05 08:00:00
+  updated: 2026-10-05 08:00:00
