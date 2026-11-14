@@ -18,7 +18,9 @@ package events
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/stretchr/testify/assert"
@@ -106,4 +108,56 @@ func TestShouldReportPoisonedMessage(t *testing.T) {
 	t.Run("flag set to something else", func(t *testing.T) {
 		assert.True(t, shouldReportPoisonedMessage(message.Metadata{MetadataSkipErrorReporting: "false"}))
 	})
+}
+
+// TestHandlerCounterConcurrentStartAndWait covers handlers starting while a
+// wait is in progress, which made the previous sync.WaitGroup panic with
+// "WaitGroup is reused before previous Wait has returned".
+func TestHandlerCounterConcurrentStartAndWait(t *testing.T) {
+	c := newHandlerCounter()
+	stop := make(chan struct{})
+	var workers sync.WaitGroup
+	for range 8 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					c.start()
+					c.done()
+				}
+			}
+		}()
+	}
+	for range 2000 {
+		c.wait()
+	}
+	close(stop)
+	workers.Wait()
+	c.wait()
+	assert.Equal(t, 0, c.active)
+}
+
+func TestHandlerCounterWaitBlocksUntilDone(t *testing.T) {
+	c := newHandlerCounter()
+	c.start()
+	waited := make(chan struct{})
+	go func() {
+		c.wait()
+		close(waited)
+	}()
+	select {
+	case <-waited:
+		t.Fatal("wait returned while a handler was in flight")
+	case <-time.After(50 * time.Millisecond):
+	}
+	c.done()
+	select {
+	case <-waited:
+	case <-time.After(time.Second):
+		t.Fatal("wait did not return after the handler finished")
+	}
 }
