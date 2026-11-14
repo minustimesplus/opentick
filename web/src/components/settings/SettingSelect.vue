@@ -21,7 +21,7 @@ function pick(value: T) {
 </script>
 
 <template>
-	<button ref="btn" class="value" :class="{open}" :disabled="disabled" @click="open = !open">
+	<button ref="btn" type="button" class="value" :class="{open}" :disabled="disabled" @click="open = !open">
 		<span>{{ current }}</span>
 		<ChevronsUpDown :size="11" :stroke-width="2" />
 	</button>
@@ -30,6 +30,7 @@ function pick(value: T) {
 			<button
 				v-for="o in options"
 				:key="String(o.value)"
+				type="button"
 				class="menu-item"
 				:class="{active: o.value === model}"
 				@click="pick(o.value)"
