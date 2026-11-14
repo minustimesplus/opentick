@@ -66,6 +66,25 @@ func TestHabit_Create(t *testing.T) {
 			"weekdays":  127,
 			"goal":      1,
 		}, false)
+		assert.InDelta(t, 131072+habitPositionStep, h.Position, 0, "new habits go after the user's last one")
+	})
+	t.Run("explicit position", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		h := &Habit{Title: "First", Position: 1}
+		require.NoError(t, h.Create(s, u))
+		assert.InDelta(t, 1, h.Position, 0)
+	})
+	t.Run("first habit", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		h := &Habit{Title: "Read"}
+		require.NoError(t, h.Create(s, &user.User{ID: 3}))
+		assert.InDelta(t, habitPositionStep, h.Position, 0)
 	})
 	t.Run("weekdays", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
@@ -132,6 +151,20 @@ func TestHabit_ReadAll(t *testing.T) {
 		assert.Equal(t, 1, gym.TodayValue)
 		assert.Equal(t, 1, gym.CurrentStreak)
 		require.Len(t, gym.RecentCheckins, 1)
+	})
+	t.Run("sorted by position", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		_, err := s.ID(2).Cols("position").Update(&Habit{Position: 1})
+		require.NoError(t, err)
+		result, _, _, err := (&Habit{}).ReadAll(s, &user.User{ID: 1}, "", 0, 50)
+		require.NoError(t, err)
+		habits := result.([]*Habit)
+		require.Len(t, habits, 2)
+		assert.Equal(t, int64(2), habits[0].ID)
+		assert.Equal(t, int64(1), habits[1].ID)
 	})
 	t.Run("search", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
@@ -269,7 +302,25 @@ func TestHabit_Update(t *testing.T) {
 	assert.Equal(t, int64(1), h.UserID, "the owner can never change")
 	// With a goal of 3, Oct 4 counts too: Oct 1-7 is a streak of five weekdays.
 	assert.Equal(t, 5, h.CurrentStreak)
-	db.AssertExists(t, "habits", map[string]any{"id": 1, "user_id": 1, "title": "Water", "frequency": "weekdays", "weekdays": 62, "goal": 3}, false)
+	db.AssertExists(t, "habits", map[string]any{"id": 1, "user_id": 1, "title": "Water", "frequency": "weekdays", "weekdays": 62, "goal": 3, "position": 65536}, false)
+}
+
+func TestHabit_UpdatePosition(t *testing.T) {
+	owner := &user.User{ID: 1}
+
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+
+	h := &Habit{ID: 2, Title: "Gym", Frequency: HabitFrequencyDaily, Position: 32768}
+	can, err := h.CanUpdate(s, owner)
+	require.NoError(t, err)
+	require.True(t, can)
+	require.NoError(t, h.Update(s, owner))
+	require.NoError(t, s.Commit())
+
+	assert.InDelta(t, 32768, h.Position, 0)
+	db.AssertExists(t, "habits", map[string]any{"id": 2, "position": 32768}, false)
 }
 
 func TestHabit_Delete(t *testing.T) {
