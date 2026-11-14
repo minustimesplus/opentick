@@ -15,7 +15,7 @@ import type {
 	ContactTag,
 } from '@/api/types'
 import {useData} from '@/stores/data'
-import {indexContacts} from '@/lib/people'
+import {indexContacts, type ContactSort} from '@/lib/people'
 import {toast} from '@/lib/toast'
 
 const MERGE = 'application/merge-patch+json'
@@ -44,6 +44,21 @@ export const usePeople = defineStore('people', () => {
 	/** Bumped per contact when its photo changes, so cached images are refetched. */
 	const photoVersions = ref<Record<number, number>>({})
 
+	// What the People view showed, kept here so leaving for another view and
+	// coming back via the rail restores it.
+	const query = ref('')
+	const sort = ref<ContactSort>('name')
+	const selected = ref<Set<number>>(new Set())
+	const listScroll = ref({list: '', top: 0})
+	const detailScroll = ref({id: 0, top: 0})
+	const globe = ref({
+		lon0: 10,
+		lat0: 30,
+		zoom: 1,
+		placed: false,
+		place: '',
+	})
+
 	const tagNames = computed(() => new Map(tags.value.map(t => [t.id, t.name])))
 	const groupNames = computed(() => new Map(groups.value.map(g => [g.id, g.name])))
 	const indexed = computed(() => indexContacts(contacts.value, tagNames.value, groupNames.value))
@@ -54,6 +69,12 @@ export const usePeople = defineStore('people', () => {
 			groups.value = []
 			tags.value = []
 			loaded.value = false
+			query.value = ''
+			selected.value = new Set()
+			listScroll.value = {list: '', top: 0}
+			detailScroll.value = {id: 0, top: 0}
+			globe.value.placed = false
+			globe.value.place = ''
 		}
 	})
 
@@ -267,6 +288,12 @@ export const usePeople = defineStore('people', () => {
 		loaded,
 		loading,
 		photoVersions,
+		query,
+		sort,
+		selected,
+		listScroll,
+		detailScroll,
+		globe,
 		indexed,
 		tagNames,
 		groupNames,

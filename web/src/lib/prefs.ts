@@ -46,6 +46,12 @@ export interface Prefs {
 	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
 	sidebarWidth: number
 	detailWidth: number
+	/** The People view's panes, like the tasks view's: shown or collapsed, and their widths (px). */
+	peopleSidebar: boolean
+	peopleDetail: boolean
+	peopleSidebarWidth: number
+	peopleDetailWidth: number
+	peopleGlobeWidth: number
 	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
 	/** Layout per list key: plain list, kanban columns or timeline. */
@@ -97,6 +103,11 @@ const defaults: Prefs = {
 	tasksSidebar: true,
 	sidebarWidth: 260,
 	detailWidth: 420,
+	peopleSidebar: true,
+	peopleDetail: true,
+	peopleSidebarWidth: 260,
+	peopleDetailWidth: 400,
+	peopleGlobeWidth: 560,
 	listSort: {},
 	listShowCompleted: {},
 	listView: {},
