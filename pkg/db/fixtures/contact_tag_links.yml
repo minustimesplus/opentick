@@ -1,0 +1,6 @@
+- id: 1
+  contact_id: 2
+  tag_id: 1
+- id: 2
+  contact_id: 4
+  tag_id: 2

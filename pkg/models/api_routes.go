@@ -212,6 +212,8 @@ func isStandardCRUDRoute(routeGroupName string, routeParts []string, _ string) b
 		"relations":            true,
 		"attachments":          true,
 		"time_entries":         true,
+		"contacts":             true,
+		"contact_groups":       true,
 		"projects_views":       true,
 		"projects_teams":       true,
 		"projects_users":       true,

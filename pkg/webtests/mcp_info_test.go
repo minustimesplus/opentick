@@ -73,7 +73,10 @@ func TestMCPInfo(t *testing.T) {
 			var typed map[string][]string
 			require.NoError(t, json.Unmarshal(info.Presets["typed"], &typed))
 			crud := []string{"create", "delete", "read_all", "read_one", "update"}
-			assert.Len(t, typed, 6)
+			assert.Len(t, typed, 8)
+			assert.ElementsMatch(t, []string{"create", "read_all", "update"}, typed["contact_groups"], "contact groups have no delete tool")
+			assert.NotContains(t, typed["contacts"], "delete", "contacts have no delete tool")
+			assert.Subset(t, typed["contacts"], []string{"create", "read_one", "update", "search", "distinct_values", "bulk_add_to_group", "notes"})
 			for _, group := range []string{"projects", "labels", "tasks_comments"} {
 				assert.ElementsMatch(t, crud, typed[group], group)
 			}
@@ -81,10 +84,10 @@ func TestMCPInfo(t *testing.T) {
 			assert.ElementsMatch(t, append(crud, "skip_occurrence"), typed["tasks"], "tasks")
 			assert.ElementsMatch(t, []string{"create", "delete", "read_all"}, typed["tasks_assignees"])
 			assert.Contains(t, typed["other"], "users")
-			for _, permission := range typed["other"] {
-				token := &models.APIToken{APIPermissions: models.APIPermissions{"other": {permission}}}
-				assert.True(t, token.CanUseRoute("/api/v2/users", http.MethodGet), permission)
-			}
+			assert.ElementsMatch(t, []string{"contact_tags", "users"}, typed["other"])
+			token := &models.APIToken{APIPermissions: models.APIPermissions{"other": {"users"}}}
+			assert.True(t, token.CanUseRoute("/api/v2/users", http.MethodGet))
+			assert.False(t, token.CanUseRoute("/api/v2/contact-tags", http.MethodGet), "each permission covers its own route only")
 		})
 	}
 }
