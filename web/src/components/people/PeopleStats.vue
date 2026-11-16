@@ -40,7 +40,7 @@ const globe = ref<InstanceType<typeof StatsGlobe> | null>(null)
 
 function home(): [number, number, number] {
 	const [lon, lat] = centroid(stats.value?.places ?? []) ?? [10, 30]
-	return [lon, Math.max(-45, Math.min(45, lat * 0.65)), 1.15]
+	return [lon, Math.max(-45, Math.min(45, lat * 0.65)), 0.95]
 }
 
 // Opens on the contacts' center of mass the first time, then wherever it was left.
