@@ -7,6 +7,7 @@ import {addDays, addMonths, fmtMonthYear, fmtWeekdayNarrow, fmtWeekdayShort, sta
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
 import {isMobile} from '@/lib/viewport'
+import WeightCard from '@/components/weight/WeightCard.vue'
 
 const props = defineProps<{habit: Habit}>()
 const emit = defineEmits<{edit: [], back: []}>()
@@ -89,6 +90,8 @@ const frequencyLabel = computed(() => {
 			</div>
 			<button class="icon-btn" :title="t('edit')" @click="emit('edit')"><Pencil :size="17" /></button>
 		</header>
+
+		<WeightCard v-if="habit.tracks_weight" class="weight" :color="color" />
 
 		<div class="cards">
 			<div class="card">
@@ -174,6 +177,10 @@ h2 {
 
 .small {
 	font-size: 12px;
+}
+
+.weight {
+	margin-bottom: 12px;
 }
 
 .cards {

@@ -150,10 +150,11 @@ export function seed(): DB {
 		{title: 'Drink water', icon: '💧', hex_color: '15AABF', goal: 8, unit: 'glasses', frequency: 'daily' as const, weekdays: 127},
 		{title: 'Read 20 minutes', icon: '📚', hex_color: '7048E8', goal: 1, unit: '', frequency: 'daily' as const, weekdays: 127},
 		{title: 'Workout', icon: '🏃', hex_color: 'F76707', goal: 1, unit: '', frequency: 'weekdays' as const, weekdays: 0b0101010},
+		{title: 'Weigh-in', icon: '⚖️', hex_color: '4772FA', goal: 1, unit: '', frequency: 'daily' as const, weekdays: 127, tracks_weight: true},
 	]
 	for (const [n, h] of habits.entries()) {
 		const hid = next()
-		db.habits.push({id: hid, ...h, archived: false, position: (n + 1) * 65536, created, updated: created})
+		db.habits.push({id: hid, tracks_weight: false, ...h, archived: false, position: (n + 1) * 65536, created, updated: created})
 		const days: Record<string, number> = {}
 		for (let d = -28; d < 0; d++) {
 			const date = new Date()
@@ -165,6 +166,14 @@ export function seed(): DB {
 		}
 		if (n === 0) days[dayKey(0)] = 3
 		db.checkins[hid] = days
+		// The weigh-in habit's check-ins come with a slowly falling weight.
+		if (h.tracks_weight) {
+			db.weights = {}
+			for (const key of Object.keys(days)) {
+				const d = Math.round((new Date(key).getTime() - Date.now()) / 86400000)
+				db.weights[key] = Math.round((72.4 - d * 0.06 + Math.sin(d * 1.7) * 0.3) * 10) / 10
+			}
+		}
 	}
 
 	const year = new Date().getFullYear()

@@ -167,6 +167,10 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		return err
 	}
 
+	if err = deleteWeightsOfUser(s, u.ID); err != nil {
+		return err
+	}
+
 	if err = deleteContactsOfUser(s, u.ID); err != nil {
 		return err
 	}

@@ -21,6 +21,7 @@ export interface HabitInput {
 	goal: number
 	unit: string
 	archived?: boolean
+	tracks_weight?: boolean
 	position?: number
 }
 

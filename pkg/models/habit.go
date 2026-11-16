@@ -52,17 +52,18 @@ const (
 // Habit is something a user wants to do regularly, like drinking water or
 // reading. Each day they check in with how much they did.
 type Habit struct {
-	ID        int64   `xorm:"bigint autoincr not null unique pk" json:"id" param:"habit" readOnly:"true" doc:"The unique, numeric id of this habit."`
-	UserID    int64   `xorm:"bigint not null index" json:"-"`
-	Title     string  `xorm:"varchar(250) not null" json:"title" valid:"runelength(1|250)" minLength:"1" maxLength:"250" doc:"The name of the habit."`
-	Icon      string  `xorm:"varchar(50) null" json:"icon" maxLength:"50" doc:"An emoji shown next to the habit."`
-	HexColor  string  `xorm:"varchar(6) null" json:"hex_color" valid:"hexcolor" maxLength:"7" doc:"The habit's color, in hex format."`
-	Frequency string  `xorm:"varchar(20) not null default 'daily'" json:"frequency" enum:"daily,weekdays" doc:"When the habit is due: every day, or only on the days in weekdays. Defaults to daily."`
-	Weekdays  int     `xorm:"int not null default 127" json:"weekdays" minimum:"0" maximum:"127" doc:"Bitmask of the days a weekdays habit is due on: bit 0 is Sunday, bit 6 Saturday. Always 127 for daily habits."`
-	Goal      int     `xorm:"int not null default 1" json:"goal" minimum:"0" maximum:"100000" doc:"How much to check in per day for the day to count as done, e.g. 8 glasses of water. Defaults to 1."`
-	Unit      string  `xorm:"varchar(50) null" json:"unit" maxLength:"50" doc:"What the goal counts, e.g. glasses. Display only."`
-	Archived  bool    `xorm:"bool not null default false" json:"archived" doc:"Archived habits keep their history but are no longer tracked."`
-	Position  float64 `xorm:"double not null default 0" json:"position" doc:"Where the habit is listed: habits are sorted ascending by position. To move a habit between two others, set it to the mean of theirs. New habits are added at the end when this is 0; an update without a position keeps the current one."`
+	ID           int64   `xorm:"bigint autoincr not null unique pk" json:"id" param:"habit" readOnly:"true" doc:"The unique, numeric id of this habit."`
+	UserID       int64   `xorm:"bigint not null index" json:"-"`
+	Title        string  `xorm:"varchar(250) not null" json:"title" valid:"runelength(1|250)" minLength:"1" maxLength:"250" doc:"The name of the habit."`
+	Icon         string  `xorm:"varchar(50) null" json:"icon" maxLength:"50" doc:"An emoji shown next to the habit."`
+	HexColor     string  `xorm:"varchar(6) null" json:"hex_color" valid:"hexcolor" maxLength:"7" doc:"The habit's color, in hex format."`
+	Frequency    string  `xorm:"varchar(20) not null default 'daily'" json:"frequency" enum:"daily,weekdays" doc:"When the habit is due: every day, or only on the days in weekdays. Defaults to daily."`
+	Weekdays     int     `xorm:"int not null default 127" json:"weekdays" minimum:"0" maximum:"127" doc:"Bitmask of the days a weekdays habit is due on: bit 0 is Sunday, bit 6 Saturday. Always 127 for daily habits."`
+	Goal         int     `xorm:"int not null default 1" json:"goal" minimum:"0" maximum:"100000" doc:"How much to check in per day for the day to count as done, e.g. 8 glasses of water. Defaults to 1."`
+	Unit         string  `xorm:"varchar(50) null" json:"unit" maxLength:"50" doc:"What the goal counts, e.g. glasses. Display only."`
+	Archived     bool    `xorm:"bool not null default false" json:"archived" doc:"Archived habits keep their history but are no longer tracked."`
+	TracksWeight bool    `xorm:"bool not null default false" json:"tracks_weight" doc:"A weigh-in habit: checking in asks for the day's weight, and logging a weight checks it off."`
+	Position     float64 `xorm:"double not null default 0" json:"position" doc:"Where the habit is listed: habits are sorted ascending by position. To move a habit between two others, set it to the mean of theirs. New habits are added at the end when this is 0; an update without a position keeps the current one."`
 
 	// Today's value and streak, as of the requested (or the user's) day.
 	TodayValue     int             `xorm:"-" json:"today_value" readOnly:"true" doc:"How much was checked in today. Set by the server."`
@@ -236,7 +237,7 @@ func (h *Habit) Update(s *xorm.Session, a web.Auth) error {
 	if err := h.normalize(); err != nil {
 		return err
 	}
-	cols := []string{"title", "icon", "hex_color", "frequency", "weekdays", "goal", "unit", "archived"}
+	cols := []string{"title", "icon", "hex_color", "frequency", "weekdays", "goal", "unit", "archived", "tracks_weight"}
 	// A client that doesn't know about positions sends none; keep the habit where it is.
 	if h.Position != 0 {
 		cols = append(cols, "position")

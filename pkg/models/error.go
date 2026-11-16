@@ -3385,6 +3385,56 @@ func (err ErrHabitCheckinInFuture) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrWeightInvalid represents an error where a logged weight is out of range.
+type ErrWeightInvalid struct{}
+
+// IsErrWeightInvalid checks if an error is ErrWeightInvalid.
+func IsErrWeightInvalid(err error) bool {
+	_, ok := err.(ErrWeightInvalid)
+	return ok
+}
+
+func (err ErrWeightInvalid) Error() string {
+	return "Weight is out of range"
+}
+
+// ErrCodeWeightInvalid holds the unique world-error code of this error
+const ErrCodeWeightInvalid = 21007
+
+// HTTPError holds the http error description
+func (err ErrWeightInvalid) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeWeightInvalid,
+		Message:  "The weight must be between 1 and 1000 kg.",
+	}
+}
+
+// ErrWeightInvalidRange represents an error where a weight range is reversed or too long.
+type ErrWeightInvalidRange struct{}
+
+// IsErrWeightInvalidRange checks if an error is ErrWeightInvalidRange.
+func IsErrWeightInvalidRange(err error) bool {
+	_, ok := err.(ErrWeightInvalidRange)
+	return ok
+}
+
+func (err ErrWeightInvalidRange) Error() string {
+	return "Weight range is invalid"
+}
+
+// ErrCodeWeightInvalidRange holds the unique world-error code of this error
+const ErrCodeWeightInvalidRange = 21008
+
+// HTTPError holds the http error description
+func (err ErrWeightInvalidRange) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeWeightInvalidRange,
+		Message:  "The end of the range must not be before its start, and the range can span at most 3660 days.",
+	}
+}
+
 // =============================
 // Countdown errors
 // =============================

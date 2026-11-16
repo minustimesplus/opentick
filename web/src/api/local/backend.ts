@@ -762,7 +762,7 @@ function habitStats(db: DB, h: StoredHabit, todayKey: string, monthKey?: string)
 	}
 }
 
-const HABIT_FIELDS = ['title', 'icon', 'hex_color', 'frequency', 'weekdays', 'goal', 'unit', 'archived', 'position'] as const
+const HABIT_FIELDS = ['title', 'icon', 'hex_color', 'frequency', 'weekdays', 'goal', 'unit', 'archived', 'tracks_weight', 'position'] as const
 const HABIT_POSITION_STEP = 65536
 
 /** Habits stored before positions existed keep their creation order. */
@@ -782,7 +782,7 @@ function habitsRoute(db: DB, c: Ctx): unknown {
 		if (c.method === 'POST') {
 			const stamp = now()
 			const last = Math.max(0, ...db.habits.map(x => x.position))
-			const h: StoredHabit = {id: nextId(), title: '', icon: '✅', hex_color: '', frequency: 'daily', weekdays: 127, goal: 1, unit: '', archived: false, position: 0, created: stamp, updated: stamp}
+			const h: StoredHabit = {id: nextId(), title: '', icon: '✅', hex_color: '', frequency: 'daily', weekdays: 127, goal: 1, unit: '', archived: false, tracks_weight: false, position: 0, created: stamp, updated: stamp}
 			for (const k of HABIT_FIELDS) if (k in c.body) (h as unknown as Record<string, unknown>)[k] = c.body[k]
 			if (!h.position) h.position = last + HABIT_POSITION_STEP
 			if (h.frequency === 'daily') h.weekdays = 127
@@ -814,6 +814,35 @@ function habitsRoute(db: DB, c: Ctx): unknown {
 		return presentHabit(db, h, todayKey)
 	}
 	if (b === 'stats' && c.method === 'GET') return habitStats(db, h, todayKey, c.query.month as string | undefined)
+	notFound()
+}
+
+// ---------- weights ----------
+
+function weightsRoute(db: DB, c: Ctx): unknown {
+	const [, date] = c.parts
+	const weights = db.weights ??= {}
+	if (date === undefined && c.method === 'GET') {
+		const from = String(c.query.from ?? '0000-00-00')
+		const to = String(c.query.to ?? '9999-99-99')
+		return Object.keys(weights).filter(k => k >= from && k <= to).sort().map(k => ({date: k, weight: weights[k]}))
+	}
+	if (date && c.method === 'PUT') {
+		const kg = Math.round(num(c.body.weight) * 10) / 10
+		if (!(kg >= 1 && kg <= 1000)) throw new ApiError(400, t('weightOutOfRange'))
+		weights[date] = kg
+		// Like the server: logging a weight checks off the weigh-in habits.
+		for (const h of db.habits) {
+			if (!h.tracks_weight || h.archived) continue
+			const days = db.checkins[h.id] ??= {}
+			if ((days[date] ?? 0) < h.goal) days[date] = h.goal
+		}
+		return {date, weight: kg}
+	}
+	if (date && c.method === 'DELETE') {
+		delete weights[date]
+		return {}
+	}
 	notFound()
 }
 
@@ -1017,6 +1046,7 @@ function route(db: DB, c: Ctx): unknown {
 	case 'labels': return labelsRoute(db, c)
 	case 'habits': return habitsRoute(db, c)
 	case 'countdowns': return countdownsRoute(db, c)
+	case 'weights': return weightsRoute(db, c)
 	case 'focus-sessions': return focusRoute(db, c)
 	case 'user': return userRoute(db, c)
 	case 'notifications': return c.method === 'GET' ? paginate([], c.query) : {}
