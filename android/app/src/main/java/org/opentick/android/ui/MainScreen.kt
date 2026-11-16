@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -52,6 +53,9 @@ import org.opentick.android.data.AccountMode
 import org.opentick.android.ui.auth.LoginScreen
 import org.opentick.android.ui.calendar.CalendarScreen
 import org.opentick.android.ui.components.CalendarDayIcon
+import org.opentick.android.ui.components.HabitTabIcon
+import org.opentick.android.ui.habits.HabitsScreen
+import org.opentick.android.ui.people.PeopleScreen
 import org.opentick.android.ui.components.MatrixTabIcon
 import org.opentick.android.ui.components.PomoTabIcon
 import org.opentick.android.ui.components.TaskTabIcon
@@ -79,6 +83,8 @@ enum class Tab(val title: String, val description: String) {
     TASKS("Task", "Manage your task with lists and filters."),
     MATRIX("Eisenhower Matrix", "Focus on what's important and urgent."),
     CALENDAR("Calendar", "Manage your task with six calendar views."),
+    HABITS("Habit", "Develop a habit and track your weight."),
+    PEOPLE("People", "Keep your contacts, their history and notes."),
     POMO("Pomodoro", "Use the Pomo timer to keep focus."),
     SEARCH("Search", "Do a quick search easily.");
 
@@ -95,6 +101,8 @@ fun TabIcon(tab: Tab, color: Color, modifier: Modifier = Modifier) = when (tab) 
     Tab.TASKS -> TaskTabIcon(color, modifier)
     Tab.MATRIX -> MatrixTabIcon(color, modifier)
     Tab.CALENDAR -> CalendarDayIcon(color, modifier)
+    Tab.HABITS -> HabitTabIcon(color, modifier)
+    Tab.PEOPLE -> Icon(Icons.Rounded.People, null, tint = color, modifier = modifier.size(30.dp))
     Tab.POMO -> PomoTabIcon(color, modifier)
     Tab.SEARCH -> Icon(Icons.Rounded.Search, null, tint = color, modifier = modifier.size(30.dp))
 }
@@ -160,6 +168,8 @@ fun MainScreen(vm: MainViewModel, initialTab: Tab?, oauthError: String?, onOAuth
                         Tab.TASKS -> TaskListScreen(vm, snackbar) { scope.launch { drawer.open() } }
                         Tab.CALENDAR -> CalendarScreen(vm)
                         Tab.MATRIX -> MatrixScreen(vm)
+                        Tab.HABITS -> HabitsScreen(vm)
+                        Tab.PEOPLE -> PeopleScreen(vm)
                         Tab.POMO -> FocusScreen(vm)
                         Tab.SEARCH -> SearchTab(vm)
                     }

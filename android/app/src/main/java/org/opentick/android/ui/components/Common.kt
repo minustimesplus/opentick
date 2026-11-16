@@ -178,6 +178,20 @@ fun CalendarDayIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 26.d
     }
 }
 
+/** A ring around a check: the Habit tab. */
+@Composable
+fun HabitTabIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(26.dp)) {
+        val s = size.minDimension
+        drawCircle(color, radius = s * 0.46f)
+        val stroke = Stroke(width = s * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(s * 0.3f, s * 0.52f); lineTo(s * 0.45f, s * 0.66f); lineTo(s * 0.71f, s * 0.38f)
+        }
+        drawPath(path, Color.White, style = stroke)
+    }
+}
+
 /** Ring with a dot: the Pomodoro tab. */
 @Composable
 fun PomoTabIcon(color: Color, modifier: Modifier = Modifier) {

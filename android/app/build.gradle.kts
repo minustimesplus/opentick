@@ -65,6 +65,8 @@ android {
         unitTests.all { test ->
             // The sync test talks to a running server; see SyncTest.
             System.getenv("OPENTICK_TEST_SERVER")?.let { test.environment("OPENTICK_TEST_SERVER", it) }
+            // The Habits and People screenshots sign in to one; see HabitsPeopleScreenshotTest.
+            System.getenv("OPENTICK_SCREENSHOT_SERVER")?.let { test.environment("OPENTICK_SCREENSHOT_SERVER", it) }
             // ./gradlew testDebugUnitTest -Pscreenshots writes PNGs to app/build/screenshots.
             test.systemProperty("roborazzi.test.record", project.hasProperty("screenshots").toString())
             test.systemProperty("opentick.screenshots", project.hasProperty("screenshots").toString())

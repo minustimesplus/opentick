@@ -335,30 +335,35 @@ class Api(private val prefs: Prefs) {
     // ─── Authenticated ─────────────────────────────────────────────────
 
     private fun send(method: String, path: String, body: JsonElement?, merge: Boolean): String {
+        val rb = body?.toString()?.toRequestBody(if (merge) mergeType else jsonType)
+        return String(sendRaw(method, path, rb), Charsets.UTF_8)
+    }
+
+    /** Sends any body (JSON, multipart) and returns the raw response bytes, refreshing the session on 401. */
+    private fun sendRaw(method: String, path: String, body: okhttp3.RequestBody?): ByteArray {
         var token = prefs.accessToken ?: throw AuthExpiredException()
         if (tokenExpiresSoon(token) && prefs.refreshToken != null) {
             if (refresh(token)) token = prefs.accessToken!!
         }
-        var res = execute(method, path, body, merge, token)
+        var res = execute(method, path, body, token)
         if (res.code == 401) {
             res.close()
             if (!refresh(token)) throw AuthExpiredException()
-            res = execute(method, path, body, merge, prefs.accessToken!!)
+            res = execute(method, path, body, prefs.accessToken!!)
             if (res.code == 401) {
                 res.close()
                 throw AuthExpiredException()
             }
         }
         res.use {
-            val text = it.body?.string().orEmpty()
-            if (!it.isSuccessful) throw ApiException(it.code, errorMessage(text, it.code))
-            return text
+            val bytes = it.body?.bytes() ?: ByteArray(0)
+            if (!it.isSuccessful) throw ApiException(it.code, errorMessage(String(bytes, Charsets.UTF_8), it.code))
+            return bytes
         }
     }
 
-    private fun execute(method: String, path: String, body: JsonElement?, merge: Boolean, token: String): Response {
-        val rb = body?.toString()?.toRequestBody(if (merge) mergeType else jsonType)
-            ?: if (method == "POST" || method == "PUT" || method == "PATCH") ByteArray(0).toRequestBody(null) else null
+    private fun execute(method: String, path: String, body: okhttp3.RequestBody?, token: String): Response {
+        val rb = body ?: if (method == "POST" || method == "PUT" || method == "PATCH") ByteArray(0).toRequestBody(null) else null
         val req = Request.Builder().url(base() + path)
             .method(method, rb)
             .header("Authorization", "Bearer $token")
@@ -514,6 +519,115 @@ class Api(private val prefs: Prefs) {
     fun calendarEvents(id: Long, from: Instant, to: Instant, timezone: String): ApiCalendarEvents {
         fun enc(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
         return json.decodeFromString(send("GET", "/calendar-subscriptions/$id/events?from=${enc(from.toString())}&to=${enc(to.toString())}&timezone=${enc(timezone)}", null, false))
+    }
+
+    // ─── Habits and weight (online only) ───────────────────────────────
+
+    /** All habits, archived ones included, with progress relative to [today] (YYYY-MM-DD). */
+    fun habits(today: String): List<ApiHabit> = getAll("/habits", "today=$today")
+
+    fun createHabit(fields: JsonObject): ApiHabit = json.decodeFromString(send("POST", "/habits", fields, false))
+
+    fun updateHabit(id: Long, patch: JsonObject): ApiHabit = json.decodeFromString(send("PATCH", "/habits/$id", patch, true))
+
+    fun deleteHabit(id: Long) {
+        send("DELETE", "/habits/$id", null, false)
+    }
+
+    /** Sets how much was done on [date]; 0 clears it. Returns the habit with its new progress. */
+    fun setCheckin(id: Long, date: String, value: Int, today: String): ApiHabit = json.decodeFromString(
+        send("PUT", "/habits/$id/checkins/$date?today=$today", buildJsonObject { put("value", value) }, false),
+    )
+
+    fun habitStats(id: Long, today: String, month: String): ApiHabitStats =
+        json.decodeFromString(send("GET", "/habits/$id/stats?today=$today&month=$month", null, false))
+
+    fun weights(from: String, to: String): List<ApiWeight> =
+        json.decodeFromString(send("GET", "/weights?from=$from&to=$to", null, false))
+
+    /** Logs a day's weight in kg; the server also checks off weigh-in habits. */
+    fun setWeight(date: String, kg: Double, today: String): ApiWeight = json.decodeFromString(
+        send("PUT", "/weights/$date?today=$today", buildJsonObject { put("weight", kg) }, false),
+    )
+
+    fun deleteWeight(date: String) {
+        send("DELETE", "/weights/$date", null, false)
+    }
+
+    // ─── People (online only) ──────────────────────────────────────────
+
+    /** Every contact as a list row, plus all groups and tags, in one call. */
+    fun contactOverview(): ApiContactOverview = json.decodeFromString(send("GET", "/contacts/overview", null, false))
+
+    fun contact(id: Long): ApiContact = json.decodeFromString(send("GET", "/contacts/$id", null, false))
+
+    /** Fails with 409 if a contact with the same LinkedIn URL or email exists, unless [allowDuplicate]. */
+    fun createContact(fields: JsonObject, allowDuplicate: Boolean): ApiContact = json.decodeFromString(
+        send("POST", "/contacts" + if (allowDuplicate) "?allow_duplicate=true" else "", fields, false),
+    )
+
+    fun updateContact(id: Long, patch: JsonObject): ApiContact = json.decodeFromString(send("PATCH", "/contacts/$id", patch, true))
+
+    fun deleteContact(id: Long) {
+        send("DELETE", "/contacts/$id", null, false)
+    }
+
+    /** Adds or removes contacts to/from a group, by name or id; [create] makes a missing group. */
+    fun setContactGroup(group: String, ids: List<Long>, on: Boolean, create: Boolean = false) {
+        val body = buildJsonObject {
+            put("group", group)
+            put("contact_ids", kotlinx.serialization.json.JsonArray(ids.map { JsonPrimitive(it) }))
+            if (on && create) put("create", true)
+        }
+        send("POST", "/contacts/bulk/" + if (on) "add-to-group" else "remove-from-group", body, false)
+    }
+
+    /** Tags or untags contacts, by tag name or id; tagging creates a missing tag. */
+    fun setContactTag(tag: String, ids: List<Long>, on: Boolean) {
+        val body = buildJsonObject {
+            put("tag", tag)
+            put("contact_ids", kotlinx.serialization.json.JsonArray(ids.map { JsonPrimitive(it) }))
+        }
+        send("POST", "/contacts/bulk/" + if (on) "tag" else "untag", body, false)
+    }
+
+    /** Adds ([entry] null) or replaces an experience, education or note: [kind] is experiences, educations or notes. */
+    fun saveContactEntry(contactId: Long, kind: String, entry: Long?, fields: JsonObject) {
+        if (entry == null) send("POST", "/contacts/$contactId/$kind", fields, false)
+        else send("PUT", "/contacts/$contactId/$kind/$entry", fields, false)
+    }
+
+    fun deleteContactEntry(contactId: Long, kind: String, entry: Long) {
+        send("DELETE", "/contacts/$contactId/$kind/$entry", null, false)
+    }
+
+    /** The contact's photo as JPEG bytes. */
+    fun contactPhoto(id: Long): ByteArray = sendRaw("GET", "/contacts/$id/photo", null)
+
+    fun uploadContactPhoto(id: Long, bytes: ByteArray, mime: String) {
+        val body = okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart("photo", "photo", bytes.toRequestBody(mime.toMediaType()))
+            .build()
+        sendRaw("POST", "/contacts/$id/photo", body)
+    }
+
+    fun deleteContactPhoto(id: Long) {
+        send("DELETE", "/contacts/$id/photo", null, false)
+    }
+
+    fun saveContactGroup(id: Long?, name: String, hexColor: String, description: String): ApiContactGroup {
+        val body = buildJsonObject { put("name", name); put("hex_color", hexColor); put("description", description) }
+        return json.decodeFromString(
+            if (id == null) send("POST", "/contact-groups", body, false) else send("PUT", "/contact-groups/$id", body, false),
+        )
+    }
+
+    fun deleteContactGroup(id: Long) {
+        send("DELETE", "/contact-groups/$id", null, false)
+    }
+
+    fun deleteContactTag(id: Long) {
+        send("DELETE", "/contact-tags/$id", null, false)
     }
 
     // ─── AI agents (Settings > AI features on the web) ─────────────────
