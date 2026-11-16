@@ -8,7 +8,7 @@ environment variables:
 - **S3 or Cloudflare R2** stores attachments and backgrounds, because a dyno's disk is wiped on every restart.
 - **Clerk** handles sign up and sign in (email and password, Google, Apple).
 
-The `Deploy hosted` workflow builds the image and releases it to Heroku on
+The `Desktop release` workflow builds the image and releases it to Heroku on
 every push to `main`.
 
 ## How sign in works

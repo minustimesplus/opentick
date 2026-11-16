@@ -11,7 +11,7 @@ const props = defineProps<{habit?: Habit | null}>()
 const emit = defineEmits<{close: [], saved: [habit: Habit], deleted: []}>()
 const habits = useHabits()
 
-const ICONS = ['💧', '🏃', '📚', '🧘', '🥗', '😴', '💪', '🚭', '🎸', '✍️', '🌱', '☀️']
+const ICONS = ['💧', '🏃', '📚', '🧘', '🥗', '😴', '💪', '⚖️', '🚭', '🎸', '✍️', '🌱', '☀️']
 const COLORS = SWATCHES.filter(Boolean)
 
 const title = ref(props.habit?.title ?? '')
@@ -21,6 +21,7 @@ const frequency = ref<HabitFrequency>(props.habit?.frequency ?? 'daily')
 const weekdays = ref(props.habit?.frequency === 'weekdays' ? props.habit.weekdays : ALL_WEEKDAYS)
 const goal = ref(props.habit?.goal ?? 1)
 const unit = ref(props.habit?.unit ?? '')
+const tracksWeight = ref(props.habit?.tracks_weight ?? false)
 const saving = ref(false)
 
 /** The days of the week in the user's order, as [weekday number, label]. */
@@ -50,6 +51,7 @@ async function save() {
 			weekdays: frequency.value === 'daily' ? ALL_WEEKDAYS : weekdays.value,
 			goal: Math.max(1, Math.round(goal.value) || 1),
 			unit: unit.value.trim(),
+			tracks_weight: tracksWeight.value,
 		}
 		const saved = props.habit ? await habits.update(props.habit.id, body) : await habits.create(body)
 		if (saved) {
@@ -134,6 +136,11 @@ async function remove() {
 				<input v-model="unit" class="input" :placeholder="t('habitUnitPlaceholder')" maxlength="50">
 			</div>
 
+			<label class="check">
+				<input v-model="tracksWeight" type="checkbox">
+				{{ t('tracksWeight') }}
+			</label>
+
 			<div class="actions">
 				<template v-if="habit">
 					<button type="button" class="btn danger" @click="remove">{{ t('delete') }}</button>
@@ -148,6 +155,14 @@ async function remove() {
 </template>
 
 <style scoped>
+.check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 4px;
+	font-size: 13px;
+}
+
 .form {
 	display: flex;
 	flex-direction: column;

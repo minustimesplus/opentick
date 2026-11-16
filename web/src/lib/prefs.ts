@@ -5,7 +5,7 @@ import {isMobile} from './viewport'
 import {smartListDefaults, type SmartListKey, type Visibility} from './smartLists'
 
 /** Optional features from Settings > Features. Turning one off only hides it; its data stays. */
-export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'people' | 'ai'
+export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'people' | 'search' | 'ai'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
@@ -46,6 +46,18 @@ export interface Prefs {
 	/** Widths (px) of the list sidebar and the task detail pane, set by dragging their borders. */
 	sidebarWidth: number
 	detailWidth: number
+	/** The People view's panes, like the tasks view's: shown or collapsed, and their widths (px). */
+	peopleSidebar: boolean
+	peopleDetail: boolean
+	peopleSidebarWidth: number
+	peopleDetailWidth: number
+	peopleGlobeWidth: number
+	/** Width (px) of the habit detail pane, set by dragging its border. */
+	habitDetailWidth: number
+	/** Whether the weight panel above the habits list is open. */
+	habitWeightOpen: boolean
+	/** Whether the calendar shows archived events of subscribed calendars (faded) or hides them. */
+	calendarShowArchived: boolean
 	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
 	listShowCompleted: Record<string, boolean>
 	/** Layout per list key: plain list, kanban columns or timeline. */
@@ -69,6 +81,8 @@ export interface Prefs {
 	focusAutoStartBreak: boolean
 	focusAutoStartPomo: boolean
 	features: Record<Feature, boolean>
+	/** Order of the view icons in the nav rail (keys), set by dragging them. Unknown or missing keys keep their default place. */
+	navOrder: string[]
 	/** Settings > Smart List: whether each smart list shows in the sidebar. */
 	smartLists: Record<SmartListKey, Visibility>
 }
@@ -97,6 +111,14 @@ const defaults: Prefs = {
 	tasksSidebar: true,
 	sidebarWidth: 260,
 	detailWidth: 420,
+	peopleSidebar: true,
+	peopleDetail: true,
+	peopleSidebarWidth: 260,
+	peopleDetailWidth: 400,
+	peopleGlobeWidth: 560,
+	habitDetailWidth: 460,
+	habitWeightOpen: false,
+	calendarShowArchived: false,
 	listSort: {},
 	listShowCompleted: {},
 	listView: {},
@@ -113,7 +135,8 @@ const defaults: Prefs = {
 	focusLongBreakEvery: 4,
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
-	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, ai: true},
+	navOrder: [],
+	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, search: true, ai: true},
 	smartLists: {...smartListDefaults},
 }
 

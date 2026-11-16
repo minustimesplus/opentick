@@ -25,6 +25,7 @@ import (
 
 	"code.vikunja.io/api/pkg/config"
 	"code.vikunja.io/api/pkg/db"
+	"code.vikunja.io/api/pkg/modules/icalfeed"
 	"code.vikunja.io/api/pkg/user"
 
 	"github.com/stretchr/testify/assert"
@@ -255,6 +256,42 @@ func TestCalendarSubscription_Delete(t *testing.T) {
 	require.NoError(t, s.Commit())
 	db.AssertMissing(t, "calendar_subscriptions", map[string]any{"id": 1})
 	db.AssertExists(t, "calendar_subscriptions", map[string]any{"id": 2}, false)
+	db.AssertMissing(t, "calendar_event_archives", map[string]any{"subscription_id": 1})
+	db.AssertExists(t, "calendar_event_archives", map[string]any{"subscription_id": 3}, false)
+}
+
+func TestCalendarSubscription_ArchiveEvents(t *testing.T) {
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+
+	cs := &CalendarSubscription{ID: 2}
+	require.NoError(t, cs.SetEventArchived(s, "standup#1760254200", true))
+	// Archiving twice is harmless.
+	require.NoError(t, cs.SetEventArchived(s, "standup#1760254200", true))
+	require.NoError(t, s.Commit())
+
+	count, err := s.Where("subscription_id = ?", 2).Count(&CalendarEventArchive{})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+
+	events := []*icalfeed.Event{{ID: "standup#1760254200"}, {ID: "standup#1760340600"}}
+	require.NoError(t, cs.MarkArchivedEvents(s, events))
+	assert.True(t, events[0].Archived)
+	assert.False(t, events[1].Archived, "only the archived occurrence is marked")
+
+	// The same occurrence id in another subscription is not archived.
+	other := []*icalfeed.Event{{ID: "standup#1760254200"}}
+	require.NoError(t, (&CalendarSubscription{ID: 1}).MarkArchivedEvents(s, other))
+	assert.False(t, other[0].Archived)
+
+	require.NoError(t, cs.SetEventArchived(s, "standup#1760254200", false))
+	require.NoError(t, cs.SetEventArchived(s, "standup#1760254200", false))
+	require.NoError(t, s.Commit())
+	events[0].Archived = false
+	require.NoError(t, cs.MarkArchivedEvents(s, events))
+	assert.False(t, events[0].Archived)
+	db.AssertMissing(t, "calendar_event_archives", map[string]any{"subscription_id": 2})
 }
 
 func TestCalendarSubscription_GetEvents(t *testing.T) {

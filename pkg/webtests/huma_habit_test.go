@@ -249,3 +249,22 @@ func TestHumaHabit_CheckinChangesETag(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code, "a check-in must invalidate the habit's ETag")
 }
+
+func TestHumaHabit_PatchPosition(t *testing.T) {
+	e, err := setupTestEnv()
+	require.NoError(t, err)
+	token := humaTokenFor(t, &testuser1)
+
+	rec := humaRequest(t, e, http.MethodPatch, "/api/v2/habits/2", `{"position":1}`, token, "application/merge-patch+json")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	db.AssertExists(t, "habits", map[string]any{"id": 2, "position": 1, "title": "Gym"}, false)
+
+	rec = humaRequest(t, e, http.MethodGet, "/api/v2/habits", "", token, "")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var body struct {
+		Items []*models.Habit `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Items, 2)
+	assert.Equal(t, int64(2), body.Items[0].ID, "the moved habit is listed first")
+}

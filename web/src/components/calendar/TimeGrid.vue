@@ -456,6 +456,7 @@ const today0 = computed(() => startOfDay(now.value))
 						<div
 							v-if="entry.event"
 							class="ad-chip ext"
+							:class="{done: entry.event.archived}"
 							:style="{'--c': entry.event.color}"
 							:title="entry.event.title"
 							@click.stop="emit('openEvent', entry.event!, $event)"
@@ -515,7 +516,7 @@ const today0 = computed(() => startOfDay(now.value))
 						<div
 							v-if="it.event"
 							class="ev ext"
-							:class="{point: it.point, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
+							:class="{point: it.point, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40, done: it.event.archived}"
 							:style="itemStyle(it)"
 							:title="it.event.title"
 							@pointerdown.stop

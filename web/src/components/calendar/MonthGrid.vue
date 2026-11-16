@@ -378,7 +378,7 @@ const creatingLabel = computed(() => {
 						<div
 							v-if="entry.event"
 							class="chip ext"
-							:class="{timed: !!chipTime(entry)}"
+							:class="{timed: !!chipTime(entry), done: entry.event.archived}"
 							:style="{'--c': entry.event.color}"
 							:title="entry.event.title"
 							@click="emit('openEvent', entry.event!, $event)"

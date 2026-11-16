@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import {computed, nextTick, reactive, ref, watch} from 'vue'
-import {Briefcase, GraduationCap, Lock, Plus, StickyNote, Trash2, X} from 'lucide-vue-next'
+import {
+	Briefcase,
+	GraduationCap,
+	Lock,
+	PanelRightClose,
+	PanelRightOpen,
+	Plus,
+	StickyNote,
+	Trash2,
+	X,
+} from 'lucide-vue-next'
 import ContactAvatar from './ContactAvatar.vue'
 import Popover from '@/components/Popover.vue'
 import type {Contact, ContactEducation, ContactExperience, ContactField, ContactNote} from '@/api/types'
@@ -10,8 +20,16 @@ import {fmtDayMonth, parseDate} from '@/lib/dates'
 import {t, type MessageKey} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
 
-const props = defineProps<{contactId: number}>()
-const emit = defineEmits<{close: [], deleted: []}>()
+const props = defineProps<{
+	contactId: number
+	/** Folded to a thin strip; the content stays mounted so its scroll position survives. */
+	collapsed?: boolean
+}>()
+const emit = defineEmits<{
+	close: []
+	deleted: []
+	collapse: []
+}>()
 const people = usePeople()
 
 const contact = ref<Contact | null>(null)
@@ -273,21 +291,43 @@ watch(() => props.contactId, async id => {
 	if (props.contactId !== id) return
 	contact.value = c
 	loading.value = false
-	if (!c) emit('close')
+	if (!c) {
+		emit('close')
+		return
+	}
+	await nextTick()
+	if (scroller.value && people.detailScroll.id === id) scroller.value.scrollTop = people.detailScroll.top
 }, {immediate: true})
+
+const scroller = ref<HTMLElement | null>(null)
+
+function onScroll() {
+	if (scroller.value) people.detailScroll = {id: props.contactId, top: scroller.value.scrollTop}
+}
 </script>
 
 <template>
-	<aside class="detail">
-		<div v-if="!contact" class="empty-state muted">{{ loading ? '' : t('contactSelect') }}</div>
+	<aside class="detail" :class="{collapsed}">
+		<div v-if="collapsed" class="strip">
+			<button class="icon-btn" :title="t('peopleExpandContact')" @click="emit('collapse')">
+				<PanelRightOpen :size="18" />
+			</button>
+			<button v-if="contact" class="strip-avatar" :title="contact.name" @click="emit('collapse')">
+				<ContactAvatar :contact="contact" :size="30" />
+			</button>
+		</div>
+		<div v-if="!contact" v-show="!collapsed" class="empty-state muted">{{ loading ? '' : t('contactSelect') }}</div>
 		<template v-else>
-			<header class="top">
+			<header v-show="!collapsed" class="top">
 				<button class="icon-btn" :title="t('close')" @click="emit('close')"><X :size="18" /></button>
 				<div class="spacer" />
 				<button class="icon-btn danger" :title="t('delete')" @click="remove"><Trash2 :size="17" /></button>
+				<button class="icon-btn collapse-btn" :title="t('peopleCollapseContact')" @click="emit('collapse')">
+					<PanelRightClose :size="18" />
+				</button>
 			</header>
 
-			<div class="scroll">
+			<div v-show="!collapsed" ref="scroller" class="scroll" @scroll.passive="onScroll">
 				<div class="identity">
 					<button class="photo" :title="t('contactChangePhoto')" @click="photoInput?.click()">
 						<ContactAvatar :contact="contact" :size="72" />
@@ -535,6 +575,23 @@ watch(() => props.contactId, async id => {
 	min-height: 0;
 	border-left: 1px solid var(--border);
 	background: var(--bg);
+}
+
+.detail.collapsed {
+	width: 48px;
+}
+
+.strip {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding-top: 8px;
+}
+
+.strip-avatar {
+	display: flex;
+	border-radius: 50%;
 }
 
 .top {
@@ -873,6 +930,10 @@ h4 {
 	.detail {
 		width: 100%;
 		border-left: none;
+	}
+
+	.collapse-btn {
+		display: none;
 	}
 }
 </style>

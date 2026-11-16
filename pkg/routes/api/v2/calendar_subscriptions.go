@@ -96,6 +96,18 @@ func RegisterCalendarSubscriptionRoutes(api huma.API) {
 		Path:   "/calendar-subscriptions/{id}/events",
 		Tags:   tags,
 	}, calendarSubscriptionsEvents)
+
+	Register(api, huma.Operation{
+		OperationID: "calendar-subscriptions-events-archive",
+		Summary:     "Archive or restore an event",
+		Description: "Marks one occurrence of a subscribed calendar's event as archived (dealt with), or restores it. " +
+			"The feed itself is not changed; the events endpoint reports the state in each event's `archived`. " +
+			"Each occurrence of a recurring event is archived on its own. Idempotent. Only the owner of the subscription may do this.",
+		Method:        http.MethodPut,
+		Path:          "/calendar-subscriptions/{id}/events/archive",
+		Tags:          tags,
+		DefaultStatus: http.StatusNoContent,
+	}, calendarSubscriptionsEventsArchive)
 }
 
 func init() { AddRouteRegistrar(RegisterCalendarSubscriptionRoutes) }
@@ -206,7 +218,50 @@ func calendarSubscriptionsEvents(ctx context.Context, in *struct {
 	if err != nil {
 		return nil, translateDomainError(err)
 	}
+
+	s := db.NewSession()
+	defer s.Close()
+	if err := cs.MarkArchivedEvents(s, events.Events); err != nil {
+		return nil, translateDomainError(err)
+	}
 	return &calendarSubscriptionEventsBody{Body: events}, nil
+}
+
+type calendarEventArchiveInput struct {
+	EventID  string `json:"event_id" minLength:"1" maxLength:"4096" doc:"The id of the event occurrence, as returned by the events endpoint."`
+	Archived bool   `json:"archived" doc:"true archives the occurrence, false restores it."`
+}
+
+func calendarSubscriptionsEventsArchive(ctx context.Context, in *struct {
+	ID   int64 `path:"id"`
+	Body calendarEventArchiveInput
+}) (*emptyBody, error) {
+	a, err := authFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	s := db.NewSession()
+	defer s.Close()
+
+	cs := &models.CalendarSubscription{ID: in.ID}
+	can, err := cs.CanUpdate(s, a)
+	if err != nil {
+		_ = s.Rollback()
+		return nil, translateDomainError(err)
+	}
+	if !can {
+		_ = s.Rollback()
+		return nil, huma.Error403Forbidden("forbidden")
+	}
+	if err := cs.SetEventArchived(s, in.Body.EventID, in.Body.Archived); err != nil {
+		_ = s.Rollback()
+		return nil, translateDomainError(err)
+	}
+	if err := s.Commit(); err != nil {
+		return nil, translateDomainError(err)
+	}
+	return &emptyBody{}, nil
 }
 
 func loadCalendarSubscriptionForEvents(id int64, timezone string, a web.Auth) (*models.CalendarSubscription, *time.Location, error) {

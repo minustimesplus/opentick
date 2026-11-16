@@ -55,6 +55,7 @@ type Event struct {
 	End         time.Time `json:"end" doc:"End of the occurrence (exclusive). For all-day events this is midnight after the last day in the requested timezone."`
 	AllDay      bool      `json:"all_day" doc:"Whether this is an all-day event."`
 	Recurring   bool      `json:"recurring" doc:"Whether this occurrence belongs to a recurring event."`
+	Archived    bool      `json:"archived" readOnly:"true" doc:"Whether the user archived this occurrence, to mark it as dealt with. Set by the server."`
 }
 
 // stamp is a parsed iCalendar date or date-time. All-day and floating values
@@ -191,7 +192,7 @@ func parseEvent(ev *ics.VEvent) (*sourceEvent, error) {
 	se := &sourceEvent{
 		uid:         textProp(ev, ics.ComponentPropertyUniqueId),
 		summary:     textProp(ev, ics.ComponentPropertySummary),
-		description: textProp(ev, ics.ComponentPropertyDescription),
+		description: descriptionText(textProp(ev, ics.ComponentPropertyDescription)),
 		location:    textProp(ev, ics.ComponentPropertyLocation),
 		url:         textProp(ev, ics.ComponentPropertyUrl),
 		start:       start,

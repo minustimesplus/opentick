@@ -21,6 +21,7 @@ export const SYNCED_KEYS = [
 	'timelineScale',
 	'smartLists',
 	'features',
+	'navOrder',
 	'calendarHidden',
 	'calendarHiddenSubs',
 	'calendarShowWeekends',

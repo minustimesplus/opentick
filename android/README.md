@@ -8,7 +8,9 @@ A native Android app (Kotlin, Jetpack Compose) that looks and works like TickTic
 - **Quick add** with smart recognition: `Call mom tomorrow 5pm #family !high ~Personal`.
 - **Calendar** with TickTick's six views: List, Year, Month, Week (default), 3 Day and Day. Tasks with a start and end show as blocks; tap an empty slot to add a task there. The night hours (0–6 and 21–24) fold into a band each, like on the web; tap a band to show all hours and ⌃ at the top to fold them again. The phone remembers this on its own, separate from the web and desktop apps. Events of calendars you subscribed to on the web (ICS feeds) show alongside your tasks, read-only and online only; tap one for its details, and show or hide each calendar from the ⋮ menu → Subscribed Calendars.
 - **Eisenhower Matrix**, **Pomodoro**, **Search**.
-- **Tab Bar**: pick and reorder the bottom tabs in Settings → Tab Bar, like TickTick.
+- **Habits**, like on the web: each habit with its last 7 days, streak and a check button (a ring that fills for counters such as 8 glasses of water). Tap a day dot to check it in, tap a habit for its streaks, completion rate and month calendar, long press to reorder, edit, archive or delete. Weigh-in habits ask for your weight; the ⚖ button shows the weight log with its 30 day chart and 7/30 day change.
+- **People**: your contacts, searchable by name, company, school, tags or notes, sorted by name, company, location or recently updated, filtered by group or tag. A contact's page has Call, Message, Email and LinkedIn buttons, its groups and tags, editable fields (edited fields are locked against imports; tap the lock to unlock), experience, education, notes and photo. LinkedIn imports and the stats globe stay on the web.
+- **Tab Bar**: pick and reorder the bottom tabs in Settings → Tab Bar, like TickTick. Task, Matrix, Calendar, Habit and People by default; Pomodoro and Search can be swapped in.
 - **Reminders** as local notifications, **share to OpenTick** from other apps, light and dark theme.
 
 ## Offline first
@@ -20,6 +22,11 @@ task changed on both sides, the phone's edit wins for the fields the app edits
 (title, description, done, due date, priority, list, tags).
 
 "Use without an account" keeps tasks on the device only. Signing in later uploads them.
+
+Habits, the weight log and People live on the server only: they need a
+connection and a server account, like the kanban board and subscribed
+calendars. Changes save right away; a check-in shows at once and rolls back
+if the server refuses it.
 
 ## Servers
 

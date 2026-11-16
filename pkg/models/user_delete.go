@@ -167,7 +167,17 @@ func DeleteUser(s *xorm.Session, u *user.User) (err error) {
 		return err
 	}
 
+	if err = deleteWeightsOfUser(s, u.ID); err != nil {
+		return err
+	}
+
 	if err = deleteContactsOfUser(s, u.ID); err != nil {
+		return err
+	}
+
+	err = deleteCalendarEventArchives(s, builder.In("subscription_id",
+		builder.Select("id").From("calendar_subscriptions").Where(builder.Eq{"user_id": u.ID})))
+	if err != nil {
 		return err
 	}
 

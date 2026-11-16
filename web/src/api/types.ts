@@ -200,10 +200,24 @@ export interface Habit {
 	goal: number
 	unit: string
 	archived: boolean
+	/** A weigh-in habit: checking in asks for the day's weight, and logging a weight checks it off. */
+	tracks_weight: boolean
+	/** Habits are listed ascending by position. */
+	position: number
 	today_value: number
 	current_streak: number
 	/** The last 7 days, today included. */
 	recent_checkins: HabitCheckin[] | null
+	created?: string
+	updated?: string
+}
+
+/** A body weight logged for one day. */
+export interface WeightEntry {
+	/** YYYY-MM-DD */
+	date: string
+	/** Kilograms, rounded to 0.1. */
+	weight: number
 	created?: string
 	updated?: string
 }
@@ -257,6 +271,8 @@ export interface ExternalEvent {
 	end: string
 	all_day: boolean
 	recurring: boolean
+	/** The user archived this occurrence. */
+	archived?: boolean
 }
 
 export interface CalendarSubscriptionEvents {

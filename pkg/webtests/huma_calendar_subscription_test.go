@@ -175,6 +175,44 @@ func TestHumaCalendarSubscription_Events(t *testing.T) {
 		assert.Equal(t, "Offsite", body.Events[2].Title)
 		assert.True(t, body.Events[2].AllDay)
 	})
+	t.Run("Archive", func(t *testing.T) {
+		archivePath := "/api/v2/calendar-subscriptions/" + strconv.FormatInt(created.ID, 10) + "/events/archive"
+		rec, err := testHandler.serve(http.MethodGet, eventsPath(created.ID, week), "")
+		require.NoError(t, err)
+		var body models.CalendarSubscriptionEvents
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		require.Len(t, body.Events, 3)
+		assert.False(t, body.Events[0].Archived)
+		eventID, err := json.Marshal(body.Events[0].ID)
+		require.NoError(t, err)
+
+		rec, err = testHandler.serve(http.MethodPut, archivePath, `{"event_id":`+string(eventID)+`,"archived":true}`)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		rec, err = testHandler.serve(http.MethodGet, eventsPath(created.ID, week), "")
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.True(t, body.Events[0].Archived, "the archived occurrence")
+		assert.False(t, body.Events[1].Archived, "the next occurrence of the same recurring event")
+
+		_, err = testHandler.serve(http.MethodPut, archivePath, `{"event_id":`+string(eventID)+`,"archived":false}`)
+		require.NoError(t, err)
+		rec, err = testHandler.serve(http.MethodGet, eventsPath(created.ID, week), "")
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.False(t, body.Events[0].Archived)
+	})
+	t.Run("Archive - other user's subscription", func(t *testing.T) {
+		_, err := testHandler.serve(http.MethodPut, "/api/v2/calendar-subscriptions/3/events/archive", `{"event_id":"x#1","archived":true}`)
+		require.Error(t, err)
+		assert.Equal(t, http.StatusForbidden, getHTTPErrorCode(err))
+	})
+	t.Run("Archive - missing event id", func(t *testing.T) {
+		_, err := testHandler.serve(http.MethodPut, "/api/v2/calendar-subscriptions/"+strconv.FormatInt(created.ID, 10)+"/events/archive", `{"event_id":"","archived":true}`)
+		require.Error(t, err)
+		assert.Equal(t, http.StatusUnprocessableEntity, getHTTPErrorCode(err))
+	})
 	t.Run("Forbidden - other user's subscription", func(t *testing.T) {
 		_, err := testHandler.serve(http.MethodGet, eventsPath(3, week), "")
 		require.Error(t, err)

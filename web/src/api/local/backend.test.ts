@@ -86,6 +86,17 @@ describe('local backend', () => {
 		expect(checked.current_streak).toBe(1)
 	})
 
+	it('lists habits by position', async () => {
+		const a = await localApi<Habit>('POST', '/habits', {body: {title: 'A'}})
+		const b = await localApi<Habit>('POST', '/habits', {body: {title: 'B'}})
+		expect(b.position).toBeGreaterThan(a.position)
+		await localApi('PATCH', `/habits/${b.id}`, {body: {position: a.position / 2}})
+		const list = await localApi<{items: Habit[]} | Habit[]>('GET', '/habits')
+		const items = Array.isArray(list) ? list : list.items
+		const titles = items.map(h => h.title).filter(t => t === 'A' || t === 'B')
+		expect(titles).toEqual(['B', 'A'])
+	})
+
 	it('persists across reloads', async () => {
 		const labels = await localApi<{id: number}>('POST', '/labels', {body: {title: 'kept'}})
 		const raw = JSON.parse(localStorage.getItem('tt.local.db')!) as {labels: {id: number}[]}

@@ -96,6 +96,17 @@ LOCATION:Room 1`), octFrom, octTo, berlin)
 		assert.False(t, e.Recurring)
 	})
 
+	t.Run("html description becomes plain text", func(t *testing.T) {
+		// Google Calendar writes its description markup into DESCRIPTION.
+		events := expand(t, calendar(`UID:g
+DTSTART:20261016T090000Z
+DTEND:20261016T100000Z
+SUMMARY:Meet the Dean
+DESCRIPTION:<b>Réservé par</b>\nJannik FACHAT\njannik.fachat@sciencespo.fr\n<br><b>Campus et année d'étude</b>\nReims\, 2A\n<br><b>Objet du rendez-vous</b>\nAcademic Structure &amp\; Inquiry Methods\n<br>Rendez-vous avec Mme Jeanne Lazarus`), octFrom, octTo, berlin)
+		require.Len(t, events, 1)
+		assert.Equal(t, "Réservé par\nJannik FACHAT\njannik.fachat@sciencespo.fr\nCampus et année d'étude\nReims, 2A\nObjet du rendez-vous\nAcademic Structure & Inquiry Methods\nRendez-vous avec Mme Jeanne Lazarus", events[0].Description)
+	})
+
 	t.Run("event outside the range is dropped", func(t *testing.T) {
 		events := expand(t, calendar(`UID:one
 DTSTART:20261116T090000Z
