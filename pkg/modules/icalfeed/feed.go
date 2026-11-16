@@ -192,7 +192,7 @@ func parseEvent(ev *ics.VEvent) (*sourceEvent, error) {
 	se := &sourceEvent{
 		uid:         textProp(ev, ics.ComponentPropertyUniqueId),
 		summary:     textProp(ev, ics.ComponentPropertySummary),
-		description: textProp(ev, ics.ComponentPropertyDescription),
+		description: descriptionText(textProp(ev, ics.ComponentPropertyDescription)),
 		location:    textProp(ev, ics.ComponentPropertyLocation),
 		url:         textProp(ev, ics.ComponentPropertyUrl),
 		start:       start,
