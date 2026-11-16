@@ -353,7 +353,7 @@ function onDoubleClick(e: MouseEvent) {
 }
 
 function zoomBy(factor: number) {
-	g.zoom = Math.max(0.8, Math.min(12, g.zoom * factor))
+	g.zoom = Math.max(0.3, Math.min(12, g.zoom * factor))
 	target = null
 	redraw()
 }
