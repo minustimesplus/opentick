@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, Check, ChevronDown, ChevronRight, Flame, Pencil, Plus} from 'lucide-vue-next'
+import {ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, Check, ChevronDown, ChevronRight, Flame, Pencil, Plus, Scale} from 'lucide-vue-next'
 import HabitDialog from '@/components/HabitDialog.vue'
 import HabitDetail from '@/components/HabitDetail.vue'
 import Popover from '@/components/Popover.vue'
+import WeightCard from '@/components/weight/WeightCard.vue'
+import WeightInput from '@/components/weight/WeightInput.vue'
+import {fmtWeight, useWeights} from '@/stores/weights'
 import type {Habit} from '@/api/types'
 import {habitColor, isDue, todayKey, useHabits} from '@/stores/habits'
 import {addDays, dateKey, fmtWeekdayNarrow, startOfDay} from '@/lib/dates'
@@ -16,6 +19,7 @@ import {clamp, startResize} from '@/lib/resize'
 const DETAIL_RANGE = [320, 760] as const
 
 const habits = useHabits()
+const weights = useWeights()
 const route = useRoute()
 const router = useRouter()
 
@@ -29,7 +33,21 @@ const detailStyle = computed(() => isMobile.value ? undefined : {width: clamp(pr
 
 onMounted(() => {
 	habits.load()
+	weights.load()
 })
+
+// A weigh-in habit's check button asks for today's weight instead of checking in.
+const weighIn = ref<number | null>(null)
+
+function onCheck(h: Habit) {
+	if (h.tracks_weight && h.today_value < h.goal) {
+		weighIn.value = weighIn.value === h.id ? null : h.id
+		return
+	}
+	tap(h)
+}
+
+const weightChange = computed(() => weights.change(30))
 
 /** The last 7 days, oldest first. */
 const week = computed(() => {
@@ -146,8 +164,19 @@ function onDeleted() {
 		<section v-if="!isMobile || !selected" class="list-pane">
 			<header class="head">
 				<h1>{{ t('habits') }}</h1>
-				<button class="icon-btn" :title="t('newHabit')" @click="dialog = {habit: null}"><Plus :size="20" /></button>
+				<div class="head-actions">
+					<button
+						class="icon-btn"
+						:class="{toggled: prefs.habitWeightOpen}"
+						:title="t('weight')"
+						:aria-pressed="prefs.habitWeightOpen"
+						@click="prefs.habitWeightOpen = !prefs.habitWeightOpen"
+					><Scale :size="19" /></button>
+					<button class="icon-btn" :title="t('newHabit')" @click="dialog = {habit: null}"><Plus :size="20" /></button>
+				</div>
 			</header>
+
+			<WeightCard v-if="prefs.habitWeightOpen" class="weight-panel" />
 
 			<div class="week-head">
 				<span class="spacer" />
@@ -186,7 +215,11 @@ function onDeleted() {
 						<div class="title">{{ h.title }}</div>
 						<div class="sub">
 							<span v-if="h.current_streak" class="streak"><Flame :size="12" /> {{ t('streakDays', {n: h.current_streak}) }}</span>
-							<span v-if="h.goal > 1">{{ h.today_value }}/{{ h.goal }} {{ h.unit }}</span>
+							<span v-if="h.tracks_weight && weights.latest" class="kg">
+								{{ fmtWeight(weights.latest.weight) }} kg
+								<span v-if="weightChange !== null" :class="{down: weightChange < 0}">{{ t('weightChange', {delta: fmtWeight(weightChange, true), n: 30}) }}</span>
+							</span>
+							<span v-else-if="h.goal > 1">{{ h.today_value }}/{{ h.goal }} {{ h.unit }}</span>
 							<span v-else-if="!dueToday(h)">{{ t('notDueToday') }}</span>
 						</div>
 					</div>
@@ -205,10 +238,14 @@ function onDeleted() {
 						:style="h.today_value >= h.goal ? {background: habitColor(h)} : ring(h)"
 						:title="h.today_value >= h.goal ? t('undoCheckIn') : t('checkIn')"
 						:disabled="busy.has(h.id)"
-						@click.stop="tap(h)"
+						@click.stop="onCheck(h)"
 					>
 						<span class="check-inner"><Check v-if="h.today_value >= h.goal" :size="16" :stroke-width="3" /><Plus v-else-if="h.goal > 1" :size="14" :stroke-width="3" /></span>
 					</button>
+					<div v-if="weighIn === h.id" class="weigh-in" draggable="false" @click.stop @dragstart.stop.prevent>
+						<span class="muted small">{{ t('todaysWeight') }}</span>
+						<WeightInput compact autofocus @logged="weighIn = null" />
+					</div>
 				</div>
 
 				<template v-if="habits.archived.length">
@@ -337,6 +374,48 @@ h1 {
 	padding: 8px 10px;
 	border-radius: 8px;
 	cursor: pointer;
+}
+
+.head-actions {
+	display: flex;
+	gap: 2px;
+}
+
+.icon-btn.toggled {
+	background: var(--bg-active);
+	color: var(--accent);
+}
+
+.weight-panel {
+	margin-bottom: 12px;
+	flex-shrink: 0;
+}
+
+.kg {
+	color: var(--text-2);
+	font-variant-numeric: tabular-nums;
+}
+
+.kg .down {
+	margin-left: 4px;
+	color: #2f9e44;
+}
+
+.weigh-in {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--bg-panel);
+	cursor: default;
+}
+
+.small {
+	font-size: 12px;
 }
 
 .week-head .spacer {

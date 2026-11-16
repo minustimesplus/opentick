@@ -54,6 +54,8 @@ export interface Prefs {
 	peopleGlobeWidth: number
 	/** Width (px) of the habit detail pane, set by dragging its border. */
 	habitDetailWidth: number
+	/** Whether the weight panel above the habits list is open. */
+	habitWeightOpen: boolean
 	/** Whether the calendar shows archived events of subscribed calendars (faded) or hides them. */
 	calendarShowArchived: boolean
 	listSort: Record<string, 'date' | 'priority' | 'title' | 'created' | 'custom'>
@@ -113,6 +115,7 @@ const defaults: Prefs = {
 	peopleDetailWidth: 400,
 	peopleGlobeWidth: 560,
 	habitDetailWidth: 460,
+	habitWeightOpen: false,
 	calendarShowArchived: false,
 	listSort: {},
 	listShowCompleted: {},

@@ -62,6 +62,8 @@ export interface DB {
 	/** habit id → YYYY-MM-DD → value */
 	checkins: Record<number, Record<string, number>>
 	countdowns: Countdown[]
+	/** YYYY-MM-DD → body weight in kg. Missing in databases stored before weights existed. */
+	weights?: Record<string, number>
 	focus: FocusSession[]
 }
 
