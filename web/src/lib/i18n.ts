@@ -745,6 +745,7 @@ const en = {
 	featCountdownDesc: 'Remember every special day.',
 	people: 'People',
 	featPeopleDesc: 'Keep track of the people you know.',
+	featSearchDesc: 'Find any task, list or tag in seconds.',
 	allContacts: 'All contacts',
 	contactGroups: 'Groups',
 	peopleStats: 'Stats',

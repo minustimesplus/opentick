@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {ChartPie, CircleArrowDown, Cloud, RefreshCw, Settings, LogOut} from 'lucide-vue-next'
 import Popover from './Popover.vue'
@@ -28,7 +28,8 @@ import {toast} from '@/lib/toast'
 import {permissionLabel} from './collab/permissions'
 import type {ProjectInvitation} from '@/api/types'
 import {featureOn} from '@/lib/features'
-import type {Feature} from '@/lib/prefs'
+import {prefs, type Feature} from '@/lib/prefs'
+import {moveKey, orderKeys} from '@/lib/navOrder'
 import {isMobile} from '@/lib/viewport'
 import {lastPeoplePath, lastTasksList} from '@/router'
 
@@ -42,7 +43,7 @@ const bellEl = ref<HTMLElement | null>(null)
 const helpEl = ref<HTMLElement | null>(null)
 const menu = ref<'avatar' | 'bell' | 'help' | 'local' | null>(null)
 
-const items = computed(() => [
+const allItems = computed(() => [
 	{key: 'tasks', icon: TasksIcon, to: lastTasksList.value, active: route.path.startsWith('/tasks'), title: t('lists')},
 	{key: 'matrix', feature: 'matrix', icon: MatrixIcon, to: '/matrix', active: route.path.startsWith('/matrix'), title: t('matrix')},
 	{key: 'calendar', feature: 'calendar', icon: CalendarIcon, to: '/calendar', active: route.path.startsWith('/calendar'), title: t('week')},
@@ -50,8 +51,128 @@ const items = computed(() => [
 	{key: 'focus', feature: 'pomo', icon: FocusIcon, to: '/focus', active: route.path.startsWith('/focus'), title: t('focus')},
 	{key: 'countdowns', feature: 'countdown', icon: CountdownIcon, to: '/countdowns', active: route.path.startsWith('/countdowns'), title: t('countdowns')},
 	{key: 'people', feature: 'people', icon: PeopleIcon, to: lastPeoplePath.value, active: route.path.startsWith('/people'), title: t('people')},
-	{key: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
-].filter(i => (!i.feature || featureOn(i.feature as Feature)) && (i.key !== 'people' || !data.local)))
+	{key: 'search', feature: 'search', icon: SearchIcon, to: '/search', active: route.path.startsWith('/search'), title: t('search')},
+])
+
+const DEFAULT_KEYS = ['tasks', 'matrix', 'calendar', 'habits', 'focus', 'countdowns', 'people', 'search']
+
+// While dragging, the rail shows the order the drop would give.
+const dragOrder = ref<string[] | null>(null)
+const order = computed(() => dragOrder.value ?? orderKeys(DEFAULT_KEYS, prefs.navOrder))
+
+const items = computed(() => {
+	const byKey = new Map(allItems.value.map(i => [i.key, i]))
+	return order.value
+		.map(k => byKey.get(k)!)
+		.filter(i => (!i.feature || featureOn(i.feature as Feature)) && (i.key !== 'people' || !data.local))
+})
+
+// Reordering the view icons by dragging them up or down (left or right in the
+// phone tab bar). On touch a short press starts the drag, so swiping across
+// the tab bar doesn't reorder it by accident.
+const DRAG_THRESHOLD = 6
+const TOUCH_HOLD_MS = 350
+const itemEls = new Map<string, HTMLElement>()
+const dragging = ref<string | null>(null)
+let press: {key: string, x: number, y: number, touch: boolean, held: boolean, timer?: number} | null = null
+
+function setItemEl(key: string, el: unknown) {
+	const node = (el as {$el?: HTMLElement} | null)?.$el
+	if (node) itemEls.set(key, node)
+	else itemEls.delete(key)
+}
+
+function onItemDown(e: PointerEvent, key: string) {
+	if (e.button !== 0) return
+	const touch = e.pointerType !== 'mouse'
+	press = {key, x: e.clientX, y: e.clientY, touch, held: !touch}
+	if (touch) {
+		press.timer = window.setTimeout(() => {
+			if (!press) return
+			press.held = true
+			startDrag()
+		}, TOUCH_HOLD_MS)
+	}
+	window.addEventListener('pointermove', onItemMove, {passive: false})
+	window.addEventListener('pointerup', onItemUp)
+	window.addEventListener('pointercancel', cancelDrag)
+}
+
+function startDrag() {
+	if (!press) return
+	dragging.value = press.key
+	dragOrder.value = [...order.value]
+	document.body.classList.add('rail-dragging')
+}
+
+function onItemMove(e: PointerEvent) {
+	if (!press) return
+	if (!dragging.value) {
+		const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_THRESHOLD
+		if (!moved) return
+		// A touch that moves before the hold is a tap or swipe, not a drag.
+		if (!press.held) return endPress()
+		startDrag()
+	}
+	e.preventDefault()
+	const vertical = !isMobile.value
+	const pos = vertical ? e.clientY : e.clientX
+	for (const i of items.value) {
+		if (i.key === dragging.value) continue
+		const r = itemEls.get(i.key)?.getBoundingClientRect()
+		if (!r) continue
+		const [start, end] = vertical ? [r.top, r.bottom] : [r.left, r.right]
+		if (pos >= start && pos <= end) {
+			dragOrder.value = moveKey(dragOrder.value!, dragging.value!, i.key)
+			break
+		}
+	}
+}
+
+function onItemUp() {
+	if (dragging.value && dragOrder.value) {
+		prefs.navOrder = dragOrder.value
+		// The release would also click the link under the pointer.
+		const swallow = (ev: MouseEvent) => {
+			ev.preventDefault()
+			ev.stopPropagation()
+		}
+		window.addEventListener('click', swallow, {capture: true, once: true})
+		setTimeout(() => window.removeEventListener('click', swallow, {capture: true}))
+	}
+	cancelDrag()
+}
+
+function endPress() {
+	if (press?.timer) clearTimeout(press.timer)
+	press = null
+	window.removeEventListener('pointermove', onItemMove)
+	window.removeEventListener('pointerup', onItemUp)
+	window.removeEventListener('pointercancel', cancelDrag)
+}
+
+function cancelDrag() {
+	endPress()
+	dragging.value = null
+	dragOrder.value = null
+	document.body.classList.remove('rail-dragging')
+}
+
+onBeforeUnmount(cancelDrag)
+
+// Keyboard: Alt+Up/Down (Left/Right on phones) moves the focused icon.
+function onItemKey(e: KeyboardEvent, key: string) {
+	if (!e.altKey) return
+	const back = e.key === 'ArrowUp' || e.key === 'ArrowLeft'
+	const fwd = e.key === 'ArrowDown' || e.key === 'ArrowRight'
+	if (!back && !fwd) return
+	e.preventDefault()
+	const visible = items.value.map(i => i.key)
+	const target = visible[visible.indexOf(key) + (back ? -1 : 1)]
+	if (!target) return
+	prefs.navOrder = moveKey(order.value, key, target)
+	nextTick(() => itemEls.get(key)?.focus())
+}
 
 // An invitation still waiting for an answer is listed with its buttons
 // above, so its notification would only repeat it.
@@ -155,7 +276,7 @@ const placement = computed(() => isMobile.value ? 'top-start' : 'right-start')
 
 const allShortcuts: [string, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' | 'matrix' | 'week' | 'habits' | 'focus' | 'countdowns' | 'people', Feature?][] = [
 	['N', 'addTask'],
-	['/', 'search'],
+	['/', 'search', 'search'],
 	['G T', 'today'],
 	['G W', 'next7'],
 	['G I', 'inbox'],
@@ -180,7 +301,20 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 			<UserAvatar :size="30" />
 			<span v-if="data.local" class="local-badge"><Cloud :size="10" :stroke-width="2.6" /></span>
 		</button>
-		<RouterLink v-for="i in items" :key="i.key" :to="i.to" class="rail-btn" :class="{active: i.active}" :title="i.title">
+		<RouterLink
+			v-for="i in items"
+			:key="i.key"
+			:ref="el => setItemEl(i.key, el)"
+			:to="i.to"
+			class="rail-btn view-btn"
+			:class="{active: i.active, dragging: dragging === i.key}"
+			:title="i.title"
+			draggable="false"
+			@pointerdown="onItemDown($event, i.key)"
+			@keydown="onItemKey($event, i.key)"
+			@dragstart.prevent
+			@contextmenu="dragging && $event.preventDefault()"
+		>
 			<component :is="i.icon" :size="24" />
 			<span v-if="i.key === 'focus' && focus.state.running" class="dot running" :class="{break: focus.state.phase === 'break'}" />
 		</RouterLink>
@@ -315,6 +449,23 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 
 .rail-btn.active {
 	color: var(--rail-active);
+}
+
+.view-btn {
+	touch-action: none;
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+
+.view-btn.dragging {
+	color: var(--rail-active);
+	background: var(--accent-soft);
+	cursor: grabbing;
+}
+
+:global(body.rail-dragging) {
+	cursor: grabbing;
+	user-select: none;
 }
 
 .rail-btn.update {
