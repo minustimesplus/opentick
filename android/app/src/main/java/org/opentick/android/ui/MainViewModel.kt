@@ -92,6 +92,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val auth = ot.auth
     /** Events of subscribed calendars for the calendar tab (online only, read-only). */
     val feeds = org.opentick.android.ui.calendar.CalendarFeeds(ot.api, prefs, viewModelScope)
+    /** Habits and the weight log (online only). */
+    val habits = org.opentick.android.ui.habits.HabitsStore(ot.api, prefs, viewModelScope)
+    /** Contacts, groups and tags (online only). */
+    val people = org.opentick.android.ui.people.PeopleStore(ot.api, prefs, viewModelScope)
 
     val data: StateFlow<Data> = combine(repo.allProjects, repo.allLabels, repo.allTasks) { p, l, t -> Data(p, l, t) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Data())

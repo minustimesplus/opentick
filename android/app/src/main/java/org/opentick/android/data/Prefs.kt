@@ -96,10 +96,31 @@ class Prefs(context: Context) {
     private fun stringFlow(key: String, default: String): MutableStateFlow<String> =
         MutableStateFlow(sp.getString(key, default) ?: default)
 
-    /** Bottom tabs in order, e.g. "TASKS,MATRIX,CALENDAR,POMO" (Settings → Tab Bar). */
-    private val _tabs = stringFlow("tabs", "TASKS,MATRIX,CALENDAR,POMO")
+    /** Bottom tabs in order, e.g. "TASKS,MATRIX,CALENDAR,HABITS,PEOPLE" (Settings → Tab Bar). */
+    private val _tabs = MutableStateFlow(migrateTabs())
     val tabs: StateFlow<String> = _tabs
     fun setTabs(v: String) { sp.edit().putString("tabs", v).apply(); _tabs.value = v }
+
+    /**
+     * Habits and People came later: add them to a tab bar set up before, as
+     * far as the 5 tabs allow. The old default makes way for them entirely.
+     */
+    private fun migrateTabs(): String {
+        val stored = sp.getString("tabs", null) ?: return DEFAULT_TABS
+        if (sp.getBoolean("tabs_habits_people", false)) return stored
+        val next = if (stored == OLD_DEFAULT_TABS) DEFAULT_TABS else {
+            val tabs = stored.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+            for (t in listOf("HABITS", "PEOPLE")) if (t !in tabs && tabs.size < 5) tabs += t
+            tabs.joinToString(",")
+        }
+        sp.edit().putString("tabs", next).putBoolean("tabs_habits_people", true).apply()
+        return next
+    }
+
+    /** Whether the Habits tab shows the weight panel. */
+    private val _habitWeightOpen = MutableStateFlow(sp.getBoolean("habit_weight_open", false))
+    val habitWeightOpen: StateFlow<Boolean> = _habitWeightOpen
+    fun setHabitWeightOpen(v: Boolean) { sp.edit().putBoolean("habit_weight_open", v).apply(); _habitWeightOpen.value = v }
 
     /** LIST, YEAR, MONTH, WEEK, THREE_DAY or DAY */
     private val _calendarView = stringFlow("calendar_view", "WEEK")
@@ -154,6 +175,8 @@ class Prefs(context: Context) {
 
     companion object {
         val DEFAULT_SMART_LISTS = setOf("TODAY", "INBOX", "TAGS", "COMPLETED", "TRASH")
+        const val DEFAULT_TABS = "TASKS,MATRIX,CALENDAR,HABITS,PEOPLE"
+        private const val OLD_DEFAULT_TABS = "TASKS,MATRIX,CALENDAR,POMO"
     }
 
     fun clearAccount() {
