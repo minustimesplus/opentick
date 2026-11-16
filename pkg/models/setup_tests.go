@@ -76,6 +76,7 @@ func SetupTests() {
 		"calendar_event_archives",
 		"habits",
 		"habit_checkins",
+		"weights",
 		"countdowns",
 		"contacts",
 		"contact_experiences",
