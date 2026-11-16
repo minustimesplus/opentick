@@ -5,7 +5,7 @@ import {isMobile} from './viewport'
 import {smartListDefaults, type SmartListKey, type Visibility} from './smartLists'
 
 /** Optional features from Settings > Features. Turning one off only hides it; its data stays. */
-export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'people' | 'ai'
+export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'people' | 'search' | 'ai'
 
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
@@ -81,6 +81,8 @@ export interface Prefs {
 	focusAutoStartBreak: boolean
 	focusAutoStartPomo: boolean
 	features: Record<Feature, boolean>
+	/** Order of the view icons in the nav rail (keys), set by dragging them. Unknown or missing keys keep their default place. */
+	navOrder: string[]
 	/** Settings > Smart List: whether each smart list shows in the sidebar. */
 	smartLists: Record<SmartListKey, Visibility>
 }
@@ -133,7 +135,8 @@ const defaults: Prefs = {
 	focusLongBreakEvery: 4,
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
-	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, ai: true},
+	navOrder: [],
+	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, search: true, ai: true},
 	smartLists: {...smartListDefaults},
 }
 

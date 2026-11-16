@@ -10,6 +10,7 @@ export const OPTIONAL_FEATURES: {key: Feature, title: MessageKey, desc: MessageK
 	{key: 'pomo', title: 'featPomo', desc: 'featPomoDesc'},
 	{key: 'countdown', title: 'featCountdown', desc: 'featCountdownDesc'},
 	{key: 'people', title: 'people', desc: 'featPeopleDesc'},
+	{key: 'search', title: 'search', desc: 'featSearchDesc'},
 	{key: 'ai', title: 'featAi', desc: 'featAiDesc'},
 ]
 
@@ -21,6 +22,7 @@ export const FEATURE_TINTS: Record<Feature, string> = {
 	pomo: '#f09a8a',
 	countdown: '#8fa6f6',
 	people: '#8fc7c0',
+	search: '#b9a3f0',
 	ai: '#8ab4f4',
 }
 
@@ -32,6 +34,7 @@ const routeFeatures: Record<string, Feature> = {
 	focus: 'pomo',
 	countdowns: 'countdown',
 	people: 'people',
+	search: 'search',
 }
 
 export function featureOn(feature: Feature): boolean {

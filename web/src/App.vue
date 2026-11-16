@@ -118,7 +118,8 @@ function onKey(e: KeyboardEvent) {
 	if (target.closest('input, textarea, [contenteditable="true"]')) return
 	if (e.metaKey || e.ctrlKey || e.altKey) return
 	if (ui.settings || showConsent.value || showOnboarding.value) return
-	if (e.key === '/' ) {
+	if (e.key === '/') {
+		if (!featureOn('search')) return
 		e.preventDefault()
 		router.push('/search')
 	} else if (e.key === 'n' || e.key === 'N') {

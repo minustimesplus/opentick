@@ -42,6 +42,13 @@ defineProps<{feature: Feature, animated?: boolean}>()
 					<span />
 				</div>
 			</template>
+			<template v-else-if="feature === 'search'">
+				<div class="search-bar"><b /><span class="typed" /></div>
+				<div v-for="r in 3" :key="r" class="hit" :style="{'--i': r}">
+					<b />
+					<span />
+				</div>
+			</template>
 			<template v-else>
 				<div class="spark">✦</div>
 				<span v-for="n in 4" :key="n" class="line" :style="{'--i': n}" />
@@ -205,6 +212,60 @@ defineProps<{feature: Feature, animated?: boolean}>()
 	background: #e8ecf4;
 }
 
+.window.search {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+
+.search-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 16px;
+	padding: 0 6px;
+	border-radius: 4px;
+	background: #f1eefc;
+}
+
+.search-bar b {
+	width: 7px;
+	height: 7px;
+	border: 2px solid #8e74e0;
+	border-radius: 50%;
+}
+
+.search-bar .typed {
+	width: 40%;
+	height: 4px;
+	border-radius: 2px;
+	background: #c7b9f3;
+}
+
+.hit {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.hit b {
+	width: 9px;
+	height: 9px;
+	border-radius: 2px;
+	border: 1.5px solid #c9c3dd;
+}
+
+.hit span {
+	flex: 1;
+	height: 4px;
+	border-radius: 2px;
+	background: #ececec;
+}
+
+.hit:nth-child(odd) span {
+	flex: 0 0 60%;
+}
+
 .window.countdown {
 	display: flex;
 	gap: 8px;
@@ -280,6 +341,16 @@ defineProps<{feature: Feature, animated?: boolean}>()
 	transform-origin: left;
 	animation: grow 2.6s ease-out infinite;
 	animation-delay: calc(var(--i) * 220ms);
+}
+
+.animated .search-bar .typed {
+	transform-origin: left;
+	animation: grow 2.8s ease-out infinite;
+}
+
+.animated .hit {
+	animation: drop 2.8s ease-out infinite;
+	animation-delay: calc(var(--i) * 140ms + 500ms);
 }
 
 .animated .spark {
