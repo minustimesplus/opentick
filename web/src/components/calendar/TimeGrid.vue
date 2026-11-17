@@ -17,8 +17,20 @@ import {t} from '@/lib/i18n'
 import type {CalEvent} from '@/stores/calendars'
 import {allDayEventsFor, allDayFor, layoutDay, minOf, POINT_MINUTES, snap, totalHeight, yOf, type Scale, type TimedItem} from './layout'
 
-const props = withDefaults(defineProps<{days: Date[], tasks: Task[], events?: CalEvent[]}>(), {events: () => []})
-const emit = defineEmits<{openEvent: [CalEvent, MouseEvent]}>()
+const props = withDefaults(defineProps<{
+	/** The days on screen. */
+	days: Date[]
+	/** The page before and after `days`, the same length; rendered off screen so they slide in while scrolling sideways. */
+	before?: Date[]
+	after?: Date[]
+	tasks: Task[]
+	events?: CalEvent[]
+}>(), {before: () => [], after: () => [], events: () => []})
+const emit = defineEmits<{
+	openEvent: [CalEvent, MouseEvent]
+	/** Scrolled a whole page sideways: the parent should move `days` by one page in this direction. */
+	page: [1 | -1]
+}>()
 const data = useData()
 
 // Hour label column; narrower on phones so seven days still fit.
@@ -27,8 +39,23 @@ const NIGHT_H = 44
 const DAY_START = 6 * 60
 const DAY_END = 21 * 60
 
+const rootEl = ref<HTMLElement | null>(null)
 const bodyEl = ref<HTMLElement | null>(null)
 const innerEl = ref<HTMLElement | null>(null)
+const viewportEl = ref<HTMLElement | null>(null)
+
+// Every column rendered: the page before, the visible days, the page after.
+// Column indices below are indices into this strip.
+const strip = computed(() => {
+	const n = props.days.length
+	const fits = (d: Date[]) => d.length === n
+	return {
+		days: [...(fits(props.before) ? props.before : []), ...props.days, ...(fits(props.after) ? props.after : [])],
+		lead: fits(props.before) ? n : 0,
+		canBack: fits(props.before) && n > 0,
+		canForward: fits(props.after) && n > 0,
+	}
+})
 const hourH = ref(52)
 
 const scale = computed<Scale>(() => ({
@@ -53,6 +80,7 @@ const now = ref(new Date())
 let nowTimer: number | undefined
 
 onMounted(() => {
+	rootEl.value?.addEventListener('wheel', onWheel, {passive: false})
 	fit()
 	ro = new ResizeObserver(fit)
 	if (bodyEl.value) ro.observe(bodyEl.value)
@@ -61,6 +89,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+	rootEl.value?.removeEventListener('wheel', onWheel)
+	stopSnap()
+	clearTimeout(idleTimer)
 	ro?.disconnect()
 	clearInterval(nowTimer)
 	detach()
@@ -101,7 +132,7 @@ const nightBlocks = computed(() => {
 })
 
 // ---- data ----
-const columns = computed(() => props.days.map(day => ({
+const columns = computed(() => strip.value.days.map(day => ({
 	day,
 	key: dateKey(day),
 	today: isSameDay(day, now.value),
@@ -202,10 +233,151 @@ const dragging = ref(false)
 function pos(e: PointerEvent | DragEvent) {
 	const inner = innerEl.value!.getBoundingClientRect()
 	const body = bodyEl.value!.getBoundingClientRect()
-	const colW = (inner.width - gutter.value) / props.days.length
-	const dayIdx = Math.max(0, Math.min(props.days.length - 1, Math.floor((e.clientX - inner.left - gutter.value) / colW)))
+	const vp = viewportEl.value!.getBoundingClientRect()
+	const colW = vp.width / Math.max(1, props.days.length)
+	const x = e.clientX - vp.left - sx + strip.value.lead * colW
+	const dayIdx = Math.max(0, Math.min(strip.value.days.length - 1, Math.floor(x / colW)))
 	const min = Math.max(0, Math.min(1440, minOf(e.clientY - inner.top, scale.value)))
 	return {dayIdx, min, inAllDay: e.clientY < body.top}
+}
+
+// ---- sideways scrolling ----
+// Trackpad swipes and shift+wheel slide the columns with the fingers, using
+// the neighbouring pages rendered off screen. Passing a whole page commits it
+// (the parent moves `days`), and once the gesture ends the grid eases to the
+// nearest page, leaning toward the direction it was scrolled in. The offset is
+// written straight to a CSS variable so scrolling never re-renders the grid.
+
+/** Horizontal offset of the strip from its resting place, in px; negative shows later days. */
+let sx = 0
+/** Pages the parent was asked to move that have not reached the props yet. */
+let pendingPages = 0
+let lastDir = 0
+let gestureAxis: 'x' | 'y' | null = null
+let idleTimer: number | undefined
+let snapFrame = 0
+const SNAP_LEAN = 0.12
+const GESTURE_GAP = 160
+
+function pageW() {
+	return viewportEl.value?.clientWidth ?? 0
+}
+
+function applyOffset() {
+	rootEl.value?.style.setProperty('--sx', `${sx}px`)
+}
+
+function clampOffset() {
+	const w = pageW()
+	const min = strip.value.canForward ? -w : 0
+	const max = strip.value.canBack ? w : 0
+	sx = Math.max(min, Math.min(max, sx))
+}
+
+/** Commits a page once the strip has slid a whole page; the props catch up in `watch(days)`. */
+function maybeTurnPage() {
+	const w = pageW()
+	if (!w || pendingPages) return
+	if (sx <= -w && strip.value.canForward) {
+		pendingPages = 1
+		emit('page', 1)
+	} else if (sx >= w && strip.value.canBack) {
+		pendingPages = -1
+		emit('page', -1)
+	}
+}
+
+watch(() => props.days.map(dateKey).join(), () => {
+	if (pendingPages) {
+		// The strip moved one page under the offset: shift the offset back so
+		// the same days stay under the fingers.
+		sx += pendingPages * pageW()
+		pendingPages = 0
+	} else {
+		// Navigated some other way (buttons, mini calendar): start at rest.
+		stopSnap()
+		sx = 0
+	}
+	clampOffset()
+	applyOffset()
+}, {flush: 'post'})
+
+function wheelPx(delta: number, e: WheelEvent) {
+	if (e.deltaMode === 1) return delta * 16
+	if (e.deltaMode === 2) return delta * pageW()
+	return delta
+}
+
+function onWheel(e: WheelEvent) {
+	if (e.ctrlKey || drag || (!strip.value.canBack && !strip.value.canForward)) return
+	// Shift+wheel scrolls sideways; some platforms already report it as deltaX.
+	const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX
+	const dy = e.shiftKey ? 0 : e.deltaY
+	// Lock each gesture to the axis it started on, so a vertical scroll that
+	// drifts sideways does not wobble the columns.
+	if (!gestureAxis) {
+		if (!dx && !dy) return
+		gestureAxis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+	}
+	clearTimeout(idleTimer)
+	idleTimer = window.setTimeout(endGesture, GESTURE_GAP)
+	if (gestureAxis !== 'x') return
+	e.preventDefault()
+	stopSnap()
+	const d = wheelPx(dx, e)
+	if (!d) return
+	lastDir = Math.sign(d)
+	sx -= d
+	clampOffset()
+	maybeTurnPage()
+	applyOffset()
+}
+
+function endGesture() {
+	const axis = gestureAxis
+	gestureAxis = null
+	if (axis === 'x') snapToPage()
+}
+
+function snapToPage() {
+	const w = pageW()
+	if (!w) return
+	const frac = sx / w
+	let target = 0
+	if (lastDir > 0 && frac < -SNAP_LEAN) target = -w
+	else if (lastDir < 0 && frac > SNAP_LEAN) target = w
+	else if (Math.abs(frac) > 0.5) target = Math.sign(frac) * w
+	if (target < 0 && !strip.value.canForward) target = 0
+	if (target > 0 && !strip.value.canBack) target = 0
+	animateTo(target)
+}
+
+function animateTo(target: number) {
+	stopSnap()
+	const from = sx
+	if (from === target) return
+	const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+	const duration = reduce ? 0 : Math.min(320, 160 + Math.abs(target - from) * 0.25)
+	const t0 = performance.now()
+	const tick = (now: number) => {
+		const p = duration ? Math.min(1, (now - t0) / duration) : 1
+		const eased = 1 - Math.pow(1 - p, 3)
+		sx = from + (target - from) * eased
+		if (p >= 1) {
+			snapFrame = 0
+			sx = target
+			maybeTurnPage()
+		} else {
+			snapFrame = requestAnimationFrame(tick)
+		}
+		applyOffset()
+	}
+	snapFrame = requestAnimationFrame(tick)
+}
+
+function stopSnap() {
+	if (snapFrame) cancelAnimationFrame(snapFrame)
+	snapFrame = 0
 }
 
 // A touch that turns into a scroll ends with pointercancel, not pointerup.
@@ -318,7 +490,7 @@ function onUp(e: PointerEvent) {
 		return
 	}
 	if (!pv) return
-	const day = props.days[pv.dayIdx]
+	const day = strip.value.days[pv.dayIdx]
 	if (d.kind === 'create' || d.kind === 'create-allday') {
 		openCreate(e, pv)
 		return
@@ -349,11 +521,11 @@ const creating = ref<Creating | null>(null)
 const newTitle = ref('')
 
 function openCreate(e: PointerEvent, pv: Preview) {
-	const day = props.days[pv.dayIdx]
+	const day = strip.value.days[pv.dayIdx]
 	creating.value = {
 		anchor: {x: e.clientX, y: e.clientY},
 		day,
-		endDay: props.days[pv.endDayIdx ?? pv.dayIdx],
+		endDay: strip.value.days[pv.endDayIdx ?? pv.dayIdx],
 		start: pv.allDay ? null : withMinutes(day, pv.startMin),
 		end: pv.allDay ? null : withMinutes(day, pv.endMin),
 		allDay: pv.allDay,
@@ -409,7 +581,7 @@ function onDrop(e: DragEvent) {
 	preview.value = null
 	if (!id || !pv) return
 	e.preventDefault()
-	const start = withMinutes(props.days[pv.dayIdx], pv.startMin)
+	const start = withMinutes(strip.value.days[pv.dayIdx], pv.startMin)
 	data.updateTask(id, schedulePatch(start, false, addMinutes(start, 60)))
 }
 
@@ -422,73 +594,87 @@ function onAllDayDragOver(e: DragEvent, idx: number) {
 function onAllDayDrop(e: DragEvent, idx: number) {
 	dropAllDay.value = null
 	const id = Number(e.dataTransfer?.getData('application/x-task-id'))
-	if (id) data.updateTask(id, schedulePatch(props.days[idx], true))
+	if (id) data.updateTask(id, schedulePatch(strip.value.days[idx], true))
 }
 
 const nowY = computed(() => yOf(minutesOfDay(now.value), scale.value))
-const gridCols = computed(() => ({gridTemplateColumns: `${gutter.value}px repeat(${props.days.length}, minmax(0, 1fr))`}))
+const gutterStyle = computed(() => ({width: `${gutter.value}px`}))
+// The strip is as many pages wide as it has columns, parked on the visible page.
+const trackStyle = computed(() => {
+	const n = Math.max(1, props.days.length)
+	const total = strip.value.days.length
+	return {
+		width: `${(total / n) * 100}%`,
+		gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))`,
+		'--lead': `${(-strip.value.lead / Math.max(1, total)) * 100}%`,
+	}
+})
 const today0 = computed(() => startOfDay(now.value))
 </script>
 
 <template>
-	<div class="tg" :class="{dragging}">
-		<div class="tg-head" :style="gridCols">
-			<div class="g-head">
+	<div ref="rootEl" class="tg" :class="{dragging}">
+		<div class="tg-head">
+			<div class="g-head" :style="gutterStyle">
 				<div class="wk"><template v-if="prefs.showWeekNumbers && days.length">{{ t('weekShort') }}{{ weekNumber(days[0]) }}</template></div>
 			</div>
-			<div
-				v-for="(col, i) in columns"
-				:key="col.key"
-				class="col-head"
-				:class="{drop: dropAllDay === i, 'drop-preview': inAllDayPreview(i)}"
-				@pointerdown="startCreateAllDay($event, i)"
-				@dragover="onAllDayDragOver($event, i)"
-				@dragleave="dropAllDay = null"
-				@drop="onAllDayDrop($event, i)"
-			>
-				<div class="wd">{{ fmtWeekdayShort(col.day) }}</div>
-				<div class="dn">
-					<span :class="{today: col.today, past: col.day < today0}">{{ col.day.getDate() }}</span>
-					<small v-if="prefs.altCalendar !== 'none'" class="alt">{{ altDayLabel(col.day) }}</small>
-				</div>
-				<div class="ad-list" :style="{height: adHeight + 'px'}">
-					<template v-for="entry in adVisible(col.allDay)" :key="entry.key">
-						<div
-							v-if="entry.event"
-							class="ad-chip ext"
-							:class="{done: entry.event.archived}"
-							:style="{'--c': entry.event.color}"
-							:title="entry.event.title"
-							@click.stop="emit('openEvent', entry.event!, $event)"
-						>
-							<EventIcon />
-							<span class="ad-title">{{ entry.event.title }}</span>
+			<div class="hvp">
+				<div class="track" :style="trackStyle">
+					<div
+						v-for="(col, i) in columns"
+						:key="col.key"
+						class="col-head"
+						:class="{drop: dropAllDay === i, 'drop-preview': inAllDayPreview(i)}"
+						@pointerdown="startCreateAllDay($event, i)"
+						@dragover="onAllDayDragOver($event, i)"
+						@dragleave="dropAllDay = null"
+						@drop="onAllDayDrop($event, i)"
+					>
+						<div class="wd">{{ fmtWeekdayShort(col.day) }}</div>
+						<div class="dn">
+							<span :class="{today: col.today, past: col.day < today0}">{{ col.day.getDate() }}</span>
+							<small v-if="prefs.altCalendar !== 'none'" class="alt">{{ altDayLabel(col.day) }}</small>
 						</div>
-						<div
-							v-else-if="entry.task"
-							class="ad-chip"
-							:class="{done: entry.task.done}"
-							:style="{'--c': color(entry.task)}"
-							@pointerdown="startOnAllDay($event, entry.task!, i)"
-							@contextmenu="openTaskMenu(entry.task!.id, $event)"
-						>
-							<TaskCheckbox :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
-							<span class="ad-title">{{ entry.task.title }}</span>
+						<div class="ad-list" :style="{height: adHeight + 'px'}">
+							<template v-for="entry in adVisible(col.allDay)" :key="entry.key">
+								<div
+									v-if="entry.event"
+									class="ad-chip ext"
+									:class="{done: entry.event.archived}"
+									:style="{'--c': entry.event.color}"
+									:title="entry.event.title"
+									@click.stop="emit('openEvent', entry.event!, $event)"
+								>
+									<EventIcon />
+									<span class="ad-title">{{ entry.event.title }}</span>
+								</div>
+								<div
+									v-else-if="entry.task"
+									class="ad-chip"
+									:class="{done: entry.task.done}"
+									:style="{'--c': color(entry.task)}"
+									@pointerdown="startOnAllDay($event, entry.task!, i)"
+									@contextmenu="openTaskMenu(entry.task!.id, $event)"
+								>
+									<TaskCheckbox :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
+									<span class="ad-title">{{ entry.task.title }}</span>
+								</div>
+							</template>
+							<button
+								v-if="col.allDay.length > adRows"
+								class="ad-more"
+								@click.stop="expandAllDay"
+							>{{ t('more', {n: col.allDay.length - (adRows - 1)}) }}</button>
 						</div>
-					</template>
-					<button
-						v-if="col.allDay.length > adRows"
-						class="ad-more"
-						@click.stop="expandAllDay"
-					>{{ t('more', {n: col.allDay.length - (adRows - 1)}) }}</button>
+					</div>
 				</div>
 			</div>
 			<div class="ad-resizer" @pointerdown="startAllDayResize" />
 		</div>
 
 		<div ref="bodyEl" class="tg-body" @dragover="onDragOver" @dragleave="preview = drag ? preview : null" @drop="onDrop">
-			<div ref="innerEl" class="tg-inner" :style="{...gridCols, height: height + 'px'}" @pointerdown="startCreate">
-				<div class="gutter">
+			<div ref="innerEl" class="tg-inner" :style="{height: height + 'px'}" @pointerdown="startCreate">
+				<div class="gutter" :style="gutterStyle">
 					<div v-for="l in lines" :key="l.y" class="hour-label" :style="{top: l.y + 'px'}">{{ l.label }}</div>
 					<button
 						v-for="(n, i) in nightBlocks"
@@ -506,61 +692,65 @@ const today0 = computed(() => startOfDay(now.value))
 					>⌃</button>
 				</div>
 
-				<div class="lines">
-					<div v-for="l in lines" :key="l.y" class="line" :style="{top: l.y + 'px'}" />
-					<div v-for="(n, i) in nightBlocks" :key="'nb' + i" class="night" :style="{top: n.y + 'px', height: n.h + 'px'}" />
-				</div>
-
-				<div v-for="(col, i) in columns" :key="col.key" class="col" :class="{today: col.today}" :data-idx="i">
-					<template v-for="it in col.items" :key="it.key">
-						<div
-							v-if="it.event"
-							class="ev ext"
-							:class="{point: it.point, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40, done: it.event.archived}"
-							:style="itemStyle(it)"
-							:title="it.event.title"
-							@pointerdown.stop
-							@click="emit('openEvent', it.event!, $event)"
-						>
-							<div class="ev-top">
-								<EventIcon />
-								<span class="ev-title">{{ it.event.title }}</span>
-							</div>
-							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
-						</div>
-						<div
-							v-else-if="it.task"
-							class="ev"
-							:class="{point: it.point, done: it.task.done, ghost: preview?.task?.id === it.task.id, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
-							:style="itemStyle(it)"
-							@pointerdown.stop="startOnItem($event, it, i, 'move')"
-							@contextmenu="openTaskMenu(it.task!.id, $event)"
-						>
-							<div class="ev-top">
-								<TaskCheckbox :done="it.task.done" :wont-do="it.task.wont_do" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
-								<span class="ev-title">{{ it.task.title }}</span>
-							</div>
-							<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
-							<div class="resize" @pointerdown.stop="startOnItem($event, it, i, 'resize')" />
-						</div>
-					</template>
-
-					<div
-						v-if="preview && !preview.allDay && preview.dayIdx === i"
-						class="ev preview"
-						:style="{
-							top: yOf(preview.startMin, scale) + 1 + 'px',
-							height: Math.max(20, yOf(preview.endMin, scale) - yOf(preview.startMin, scale) - 2) + 'px',
-							left: '2px',
-							width: 'calc(100% - 6px)',
-							'--c': preview.task ? color(preview.task) : 'var(--accent)',
-						}"
-					>
-						<div class="ev-top"><span class="ev-title">{{ preview.task?.title ?? t('newTask') }}</span></div>
-						<div class="ev-time">{{ fmtTime(withMinutes(props.days[i], preview.startMin)) }}-{{ fmtTime(withMinutes(props.days[i], preview.endMin)) }}</div>
+				<div ref="viewportEl" class="bvp">
+					<div class="lines">
+						<div v-for="l in lines" :key="l.y" class="line" :style="{top: l.y + 'px'}" />
+						<div v-for="(n, i) in nightBlocks" :key="'nb' + i" class="night" :style="{top: n.y + 'px', height: n.h + 'px'}" />
 					</div>
 
-					<div v-if="col.today" class="now" :style="{top: nowY + 'px'}" />
+					<div class="track" :style="trackStyle">
+						<div v-for="(col, i) in columns" :key="col.key" class="col" :class="{today: col.today}" :data-idx="i">
+							<template v-for="it in col.items" :key="it.key">
+								<div
+									v-if="it.event"
+									class="ev ext"
+									:class="{point: it.point, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40, done: it.event.archived}"
+									:style="itemStyle(it)"
+									:title="it.event.title"
+									@pointerdown.stop
+									@click="emit('openEvent', it.event!, $event)"
+								>
+									<div class="ev-top">
+										<EventIcon />
+										<span class="ev-title">{{ it.event.title }}</span>
+									</div>
+									<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
+								</div>
+								<div
+									v-else-if="it.task"
+									class="ev"
+									:class="{point: it.point, done: it.task.done, ghost: preview?.task?.id === it.task.id, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
+									:style="itemStyle(it)"
+									@pointerdown.stop="startOnItem($event, it, i, 'move')"
+									@contextmenu="openTaskMenu(it.task!.id, $event)"
+								>
+									<div class="ev-top">
+										<TaskCheckbox :done="it.task.done" :wont-do="it.task.wont_do" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
+										<span class="ev-title">{{ it.task.title }}</span>
+									</div>
+									<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
+									<div class="resize" @pointerdown.stop="startOnItem($event, it, i, 'resize')" />
+								</div>
+							</template>
+
+							<div
+								v-if="preview && !preview.allDay && preview.dayIdx === i"
+								class="ev preview"
+								:style="{
+									top: yOf(preview.startMin, scale) + 1 + 'px',
+									height: Math.max(20, yOf(preview.endMin, scale) - yOf(preview.startMin, scale) - 2) + 'px',
+									left: '2px',
+									width: 'calc(100% - 6px)',
+									'--c': preview.task ? color(preview.task) : 'var(--accent)',
+								}"
+							>
+								<div class="ev-top"><span class="ev-title">{{ preview.task?.title ?? t('newTask') }}</span></div>
+								<div class="ev-time">{{ fmtTime(withMinutes(strip.days[i], preview.startMin)) }}-{{ fmtTime(withMinutes(strip.days[i], preview.endMin)) }}</div>
+							</div>
+
+							<div v-if="col.today" class="now" :style="{top: nowY + 'px'}" />
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -576,11 +766,14 @@ const today0 = computed(() => startOfDay(now.value))
 
 <style scoped>
 .tg {
+	--sx: 0px;
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
 	user-select: none;
+	/* Sideways swipes scroll the days, not the browser history. */
+	overscroll-behavior-x: none;
 }
 
 .tg.dragging {
@@ -594,10 +787,39 @@ const today0 = computed(() => startOfDay(now.value))
 
 .tg-head {
 	position: relative;
-	display: grid;
+	display: flex;
 	overflow-y: hidden;
 	border-bottom: 1px solid var(--border);
 	flex-shrink: 0;
+}
+
+.g-head,
+.gutter {
+	flex-shrink: 0;
+}
+
+/* Viewports clip the strip of columns to the visible page. `clip` rather than
+   `hidden`, so focusing something off screen never scrolls them. */
+.hvp,
+.bvp {
+	flex: 1;
+	min-width: 0;
+	overflow: clip;
+}
+
+.bvp {
+	position: relative;
+}
+
+.track {
+	display: grid;
+	transform: translateX(calc(var(--lead) + var(--sx)));
+	will-change: transform;
+}
+
+.bvp > .track {
+	position: relative;
+	height: 100%;
 }
 
 .col-head {
@@ -741,14 +963,12 @@ const today0 = computed(() => startOfDay(now.value))
 }
 
 .tg-inner {
-	display: grid;
+	display: flex;
 	position: relative;
 }
 
 .gutter {
 	position: relative;
-	grid-column: 1;
-	grid-row: 1;
 }
 
 .hour-label {
@@ -786,7 +1006,6 @@ const today0 = computed(() => startOfDay(now.value))
 .lines {
 	position: absolute;
 	inset: 0;
-	left: 72px;
 	pointer-events: none;
 }
 
@@ -808,7 +1027,6 @@ const today0 = computed(() => startOfDay(now.value))
 
 .col {
 	position: relative;
-	grid-row: 1;
 	border-left: 1px solid var(--grid-line);
 	min-width: 0;
 }
