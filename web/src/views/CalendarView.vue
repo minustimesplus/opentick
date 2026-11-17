@@ -57,15 +57,24 @@ const range = computed(() => {
 	return {start: s, end: addDays(s, 42)}
 })
 
-const days = computed(() => {
-	if (mode.value === 'day') return [startOfDay(anchor.value)]
+function daysAt(at: Date): Date[] {
+	if (mode.value === 'day') return [startOfDay(at)]
 	const out: Date[] = []
+	const s = startOfWeek(at)
 	for (let i = 0; i < 7; i++) {
-		const d = addDays(range.value.start, i)
+		const d = addDays(s, i)
 		if (prefs.calendarShowWeekends || (d.getDay() !== 0 && d.getDay() !== 6)) out.push(d)
 	}
 	return out
-})
+}
+
+const days = computed(() => daysAt(anchor.value))
+
+// The time grid scrolls sideways one page (a day or a week) at a time and
+// renders the neighbouring pages so they slide in while scrolling.
+const pageDays = computed(() => mode.value === 'day' ? 1 : 7)
+const daysBefore = computed(() => mode.value === 'month' ? [] : daysAt(addDays(anchor.value, -pageDays.value)))
+const daysAfter = computed(() => mode.value === 'month' ? [] : daysAt(addDays(anchor.value, pageDays.value)))
 
 watch(range, r => { data.loadDoneInRange(r.start, r.end).catch(() => {}) }, {immediate: true})
 
@@ -73,7 +82,10 @@ const hidden = computed(() => new Set(prefs.calendarHidden))
 
 // The month grid scrolls continuously and renders more weeks than the anchor month.
 const monthSpan = ref<{start: Date, end: Date} | null>(null)
-const taskRange = computed(() => mode.value === 'month' && monthSpan.value ? monthSpan.value : range.value)
+const taskRange = computed(() => {
+	if (mode.value === 'month') return monthSpan.value ?? range.value
+	return {start: addDays(range.value.start, -pageDays.value), end: addDays(range.value.end, pageDays.value)}
+})
 
 const visibleTasks = computed<Task[]>(() => data.allTasks.filter(task => {
 	if (!data.projectMap.has(task.project_id) || hidden.value.has(task.project_id)) return false
@@ -114,12 +126,34 @@ watch(
 	{immediate: true},
 )
 
-const visibleEvents = computed<CalEvent[]>(() => visibleSubs.value.flatMap(sub => {
-	const color = calendarColor(sub)
-	return (calendars.events.get(sub.id) ?? [])
-		.filter(e => prefs.calendarShowArchived || !e.archived)
-		.map(e => ({...e, color}))
-}))
+// Events of the weeks next to the shown one, from the prefetch cache, so the
+// days that slide in while scrolling sideways already show theirs.
+const neighbourEvents = computed(() => {
+	if (mode.value === 'month') return []
+	const ids = visibleSubs.value.map(s => s.id)
+	const own = eventRange.value.start.getTime()
+	const ranges = [daysBefore.value[0], daysAfter.value[0]]
+		.filter((d): d is Date => !!d)
+		.map(d => eventRangeFor(mode.value, d))
+		.filter(r => r.start.getTime() !== own)
+	return ranges.map(r => calendars.cachedEvents(r.start, r.end, ids))
+})
+
+const visibleEvents = computed<CalEvent[]>(() => {
+	const seen = new Set<string>()
+	return visibleSubs.value.flatMap(sub => {
+		const color = calendarColor(sub)
+		const lists = [calendars.events.get(sub.id) ?? [], ...neighbourEvents.value.map(m => m.get(sub.id) ?? [])]
+		return lists.flat()
+			.filter(e => {
+				// An event spanning two weeks is in both weeks' lists.
+				if (seen.has(e.key)) return false
+				seen.add(e.key)
+				return prefs.calendarShowArchived || !e.archived
+			})
+			.map(e => ({...e, color}))
+	})
+})
 
 function toggleSub(id: number) {
 	prefs.calendarHiddenSubs = hiddenSubs.value.has(id)
@@ -323,7 +357,16 @@ const addDefaults = computed(() => {
 			</header>
 
 			<div class="cal-body">
-				<TimeGrid v-if="mode !== 'month'" :days="days" :tasks="visibleTasks" :events="visibleEvents" @open-event="openEvent" />
+				<TimeGrid
+					v-if="mode !== 'month'"
+					:days="days"
+					:before="daysBefore"
+					:after="daysAfter"
+					:tasks="visibleTasks"
+					:events="visibleEvents"
+					@open-event="openEvent"
+					@page="step"
+				/>
 				<MonthGrid
 					v-else
 					:month="anchor"

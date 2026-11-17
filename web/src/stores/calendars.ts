@@ -71,6 +71,8 @@ export const useCalendars = defineStore('calendars', () => {
 	/** Events of the most recently requested range, by subscription id. */
 	const events = shallowRef(new Map<number, CalEvent[]>())
 	const cache = new Map<string, {at: number, events: CalEvent[], name: string}>()
+	/** Bumped whenever the cache changes, so `cachedEvents` callers recompute. */
+	const cacheVersion = ref(0)
 	/** Subscriptions created without a name: they take the feed's own name once known. */
 	const autoNamed = new Set<number>()
 	let latestRequest = 0
@@ -81,6 +83,7 @@ export const useCalendars = defineStore('calendars', () => {
 		errors.clear()
 		events.value = new Map()
 		cache.clear()
+		cacheVersion.value++
 		inflight.clear()
 		autoNamed.clear()
 	}
@@ -158,6 +161,7 @@ export const useCalendars = defineStore('calendars', () => {
 			color: '',
 		}))
 		cache.set(key, {at: Date.now(), events: list, name: res?.calendar_name ?? ''})
+		cacheVersion.value++
 		if (autoNamed.has(sub.id) && res?.calendar_name) {
 			autoNamed.delete(sub.id)
 			update(sub.id, {title: res.calendar_name})
@@ -196,6 +200,22 @@ export const useCalendars = defineStore('calendars', () => {
 		events.value = new Map(results)
 	}
 
+	/**
+	 * Already-loaded events (however old) of a range, by subscription id, without
+	 * requesting anything. Reactive: recomputes once a prefetch lands. The
+	 * horizontally scrolling time grid uses it to fill the neighbouring days.
+	 */
+	function cachedEvents(start: Date, end: Date, ids: number[]): Map<number, CalEvent[]> {
+		void cacheVersion.value
+		const out = new Map<number, CalEvent[]>()
+		for (const sub of subscriptions.value) {
+			if (!ids.includes(sub.id)) continue
+			const list = stale(sub, start, end)
+			if (list) out.set(sub.id, list)
+		}
+		return out
+	}
+
 	/** Warms the cache for a range the user is likely to navigate to next. */
 	function prefetchEvents(start: Date, end: Date, ids: number[]) {
 		for (const sub of subscriptions.value) {
@@ -228,6 +248,7 @@ export const useCalendars = defineStore('calendars', () => {
 		for (const [k, hit] of cache) {
 			if (k.startsWith(`${subscriptionId}|`) && hit.events.some(e => e.key === key)) hit.events = patch(hit.events)
 		}
+		cacheVersion.value++
 		const shown = events.value.get(subscriptionId)
 		if (shown?.some(e => e.key === key)) {
 			const next = new Map(events.value)
@@ -286,5 +307,5 @@ export const useCalendars = defineStore('calendars', () => {
 		}
 	}
 
-	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, preload, setArchived, create, update, remove}
+	return {subscriptions, loaded, errors, events, load, subscription, loadEvents, prefetchEvents, cachedEvents, preload, setArchived, create, update, remove}
 })
