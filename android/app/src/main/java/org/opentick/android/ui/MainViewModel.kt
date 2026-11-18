@@ -39,11 +39,8 @@ import org.opentick.android.data.joinIds
 import org.opentick.android.util.QuickAddParser
 import org.opentick.android.util.allDayMillis
 import org.opentick.android.util.atTimeMillis
-import org.opentick.android.util.isOverdue
-import org.opentick.android.util.toLocalDate
 import org.opentick.android.util.today
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 /** Which list the Tasks tab shows. */
 sealed interface ListSel {
@@ -116,12 +113,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val snack = MutableStateFlow<Snack?>(null)
     val pages = mutableStateListOf<Page>()
 
+    /** A widget's + asked for quick add in this tab; the tab opens it and clears this. */
+    val quickAddTab = MutableStateFlow<Tab?>(null)
+
     fun open(page: Page) { pages.add(page) }
     fun back() { if (pages.isNotEmpty()) pages.removeAt(pages.lastIndex) }
 
     init {
         viewModelScope.launch {
             prefs.mode.collect { if (it != AccountMode.NONE && data.value.inbox == null) repo.ensureInbox() }
+        }
+        // The habit widgets show what the Habits tab loaded and changed.
+        viewModelScope.launch {
+            combine(habits.habits, habits.loaded) { h, loaded -> h.takeIf { loaded } }
+                .collect { h -> if (h != null) ot.habitWidgets.publish(h) }
         }
     }
 
@@ -153,35 +158,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Tasks that belong to a list, including completed ones. */
-    fun tasksFor(sel: ListSel, d: Data): List<TaskEntity> {
-        val now = System.currentTimeMillis()
-        val t = today()
-        fun dayDiff(task: TaskEntity) = task.dueDate?.let { ChronoUnit.DAYS.between(t, it.toLocalDate()) }
-        return when (sel) {
-            is ListSel.Smart -> when (sel.kind) {
-                SmartList.TODAY -> d.tasks.filter { task ->
-                    val dd = dayDiff(task) ?: return@filter false
-                    if (task.done) dd == 0L || (task.doneAt?.toLocalDate() == t && dd <= 0)
-                    else dd <= 0L || isOverdue(task.dueDate!!, now)
-                }
-                SmartList.TOMORROW -> d.tasks.filter { dayDiff(it) == 1L }
-                SmartList.NEXT7 -> d.tasks.filter { task ->
-                    val dd = dayDiff(task) ?: return@filter false
-                    dd < 7 && (dd >= 0 || !task.done)
-                }
-                SmartList.INBOX -> d.tasks.filter { it.projectId == d.inbox?.id }
-                SmartList.ALL -> d.tasks
-                SmartList.COMPLETED -> d.tasks.filter { it.done && !it.wontDo }.sortedByDescending { it.doneAt ?: 0 }
-                SmartList.WONT_DO -> d.tasks.filter { it.done && it.wontDo }.sortedByDescending { it.doneAt ?: 0 }
-            }
-            is ListSel.Project -> {
-                // A folder shows the tasks of all its lists.
-                val ids = setOf(sel.id) + d.children[sel.id].orEmpty().map { it.id }
-                d.tasks.filter { it.projectId in ids }
-            }
-            is ListSel.Label -> d.tasks.filter { sel.id in it.labelIdList }
-        }
-    }
+    fun tasksFor(sel: ListSel, d: Data): List<TaskEntity> = org.opentick.android.ui.tasks.tasksFor(sel, d)
 
     fun counts(d: Data): Map<Any, Int> {
         val m = HashMap<Any, Int>()

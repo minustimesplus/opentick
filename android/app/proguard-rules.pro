@@ -13,3 +13,4 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }

@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">OpenTick</string>
+
+    <!-- Home screen widgets -->
+    <string name="widget_tasks">Tasks</string>
+    <string name="widget_tasks_desc">View a list\'s tasks and tick them off.</string>
+    <string name="widget_add_task">Add Task</string>
+    <string name="widget_add_task_desc">Quickly add a task to the inbox.</string>
+    <string name="widget_matrix">Eisenhower Matrix</string>
+    <string name="widget_matrix_desc">Your tasks in the four quadrants.</string>
+    <string name="widget_calendar">Month</string>
+    <string name="widget_calendar_desc">All your tasks of the month at a glance.</string>
+    <string name="widget_today_habits">Today Habits</string>
+    <string name="widget_today_habits_desc">Today\'s habits; tap one to check in.</string>
+    <string name="widget_weekly_habits">Weekly Habits</string>
+    <string name="widget_weekly_habits_desc">How your habits went this week.</string>
 </resources>

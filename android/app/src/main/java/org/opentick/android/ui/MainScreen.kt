@@ -108,12 +108,13 @@ fun TabIcon(tab: Tab, color: Color, modifier: Modifier = Modifier) = when (tab) 
 }
 
 @Composable
-fun MainScreen(vm: MainViewModel, initialTab: Tab?, oauthError: String?, onOAuthErrorShown: () -> Unit) {
+fun MainScreen(vm: MainViewModel, tabRequest: Pair<Tab, Int>?, oauthError: String?, onOAuthErrorShown: () -> Unit) {
     val tabsPref by vm.prefs.tabs.collectAsState()
     val tabs = Tab.parse(tabsPref)
-    var tab by rememberSaveable { mutableStateOf(initialTab ?: Tab.TASKS) }
-    LaunchedEffect(initialTab) { if (initialTab != null) tab = initialTab }
-    if (tab !in tabs && tab != Tab.POMO) tab = Tab.TASKS
+    var tab by rememberSaveable { mutableStateOf(tabRequest?.first ?: Tab.TASKS) }
+    LaunchedEffect(tabRequest) { if (tabRequest != null) tab = tabRequest.first }
+    // Pomodoro, and a tab a widget asked for, open even when they're not in the tab bar.
+    if (tab !in tabs && tab != Tab.POMO && tab != tabRequest?.first) tab = Tab.TASKS
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }

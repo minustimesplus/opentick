@@ -44,6 +44,54 @@
             </intent-filter>
         </activity>
 
+        <!-- Home screen widgets (widget/) and their settings. -->
+        <activity
+            android:name=".widget.WidgetSettingsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.OpenTick">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <receiver android:name=".widget.TasksWidgetReceiver" android:exported="true" android:label="@string/widget_tasks">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_tasks" />
+        </receiver>
+        <receiver android:name=".widget.AddTaskWidgetReceiver" android:exported="true" android:label="@string/widget_add_task">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_add_task" />
+        </receiver>
+        <receiver android:name=".widget.MatrixWidgetReceiver" android:exported="true" android:label="@string/widget_matrix">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_matrix" />
+        </receiver>
+        <receiver android:name=".widget.CalendarWidgetReceiver" android:exported="true" android:label="@string/widget_calendar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_calendar" />
+        </receiver>
+        <receiver android:name=".widget.TodayHabitsWidgetReceiver" android:exported="true" android:label="@string/widget_today_habits">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today_habits" />
+        </receiver>
+        <receiver android:name=".widget.WeeklyHabitsWidgetReceiver" android:exported="true" android:label="@string/widget_weekly_habits">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_weekly_habits" />
+        </receiver>
+
         <receiver android:name=".reminders.ReminderReceiver" android:exported="false" />
         <receiver android:name=".reminders.FocusReceiver" android:exported="false" />
         <receiver android:name=".update.UpdateReceiver" android:exported="false" />

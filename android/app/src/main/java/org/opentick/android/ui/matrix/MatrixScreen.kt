@@ -54,6 +54,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import org.opentick.android.ui.Tab
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -101,6 +103,9 @@ fun MatrixScreen(vm: MainViewModel) {
     val data by vm.data.collectAsState()
     val views by vm.views.collectAsState()
     var adding by remember { mutableStateOf<Quadrant?>(null) }
+    // Quick add from the matrix widget's +: into the first quadrant, like the + here.
+    val quickAdd by vm.quickAddTab.collectAsState()
+    LaunchedEffect(quickAdd) { if (quickAdd == Tab.MATRIX) { adding = QUADRANT_ROWS[0][0]; vm.quickAddTab.value = null } }
     var menu by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     val p = LocalExtra.current
