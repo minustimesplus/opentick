@@ -12,6 +12,7 @@ A native Android app (Kotlin, Jetpack Compose) that looks and works like TickTic
 - **People**: your contacts, searchable by name, company, school, tags or notes, sorted by name, company, location or recently updated, filtered by group or tag. A contact's page has Call, Message, Email and LinkedIn buttons, its groups and tags, editable fields (edited fields are locked against imports; tap the lock to unlock), experience, education, notes and photo. LinkedIn imports and the stats globe stay on the web.
 - **Tab Bar**: pick and reorder the bottom tabs in Settings → Tab Bar, like TickTick. Task, Matrix, Calendar, Habit and People by default; Pomodoro and Search can be swapped in.
 - **Reminders** as local notifications, **share to OpenTick** from other apps, light and dark theme.
+- **Home screen widgets**, styled after TickTick's: **Tasks** (any smart list, list or tag, with subtasks indented; tap the box to complete, the title to open, + to add, ▾ or ⋮ to pick the list), **Add Task**, **Eisenhower Matrix**, **Month** calendar, **Today Habits** (tap a tile to check in; it fills as a counter goes up) and **Weekly Habits**. Long press → Edit widget (or ⋮) sets the list, the theme (Auto follows dark mode, Light, Dark) and the background opacity. Lists that don't fit get pages (‹ 1/3 ›). Task widgets read the local database, so they work offline and update right away; habit widgets need a server account and show the last habits they loaded when offline.
 
 ## Offline first
 
@@ -115,6 +116,10 @@ against TickTick:
 ```sh
 ./gradlew testDebugUnitTest --tests '*ScreenshotTest*' -Pscreenshots   # app/build/screenshots/*.png
 ```
+
+This also renders each home screen widget from its real RemoteViews on a
+wallpaper-like background (`widget_*.png`). Robolectric ignores rounded
+corners from `cornerRadius`; on Android 12 and later they are round.
 
 The sync tests register throwaway users on the given server, so the server
 needs local accounts with registration enabled. Point them at a dev server only.

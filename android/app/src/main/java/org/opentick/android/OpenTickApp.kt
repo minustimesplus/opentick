@@ -21,6 +21,8 @@ import org.opentick.android.reminders.Reminders
 import org.opentick.android.sync.SyncWorker
 import org.opentick.android.update.UpdateWorker
 import org.opentick.android.update.Updater
+import org.opentick.android.widget.HabitsWidgetStore
+import org.opentick.android.widget.Widgets
 
 class OpenTickApp : Application(), Configuration.Provider {
     lateinit var prefs: Prefs
@@ -30,6 +32,8 @@ class OpenTickApp : Application(), Configuration.Provider {
     lateinit var reminders: Reminders
     lateinit var db: AppDatabase
     lateinit var updater: Updater
+    /** What the habit widgets show (habits live on the server). */
+    val habitWidgets by lazy { HabitsWidgetStore(this) }
     val scope = CoroutineScope(SupervisorJob())
 
     override val workManagerConfiguration: Configuration
@@ -54,6 +58,19 @@ class OpenTickApp : Application(), Configuration.Provider {
             combine(repo.allTasks, repo.allProjects) { tasks, projects -> tasks to projects }
                 .debounce(500)
                 .collect { (tasks, projects) -> reminders.reschedule(tasks, projects) }
+        }
+
+        // Redraw the home screen widgets when what they show changes.
+        scope.launch {
+            combine(repo.allTasks, repo.allProjects, repo.allLabels, prefs.views, prefs.weekStart) { t, p, l, v, w -> listOf(t, p, l, v, w) }
+                .debounce(500)
+                .collect { Widgets.updateTasks(this@OpenTickApp) }
+        }
+        scope.launch {
+            prefs.mode.collect { mode ->
+                if (mode != AccountMode.SERVER) habitWidgets.clear()
+                Widgets.updateAll(this@OpenTickApp)
+            }
         }
 
         // Sync whenever the app comes to the foreground.

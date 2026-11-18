@@ -21,11 +21,15 @@ import org.opentick.android.ui.MainViewModel
 import org.opentick.android.ui.Tab
 import org.opentick.android.ui.auth.LoginScreen
 import org.opentick.android.ui.theme.OpenTickTheme
+import org.opentick.android.widget.parseWidgetKey
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
     private var oauthError by mutableStateOf<String?>(null)
-    private var initialTab by mutableStateOf<Tab?>(null)
+    /** The tab to switch to, with a counter so asking for the same tab again switches back to it. */
+    private var tabRequest by mutableStateOf<Pair<Tab, Int>?>(null)
+
+    private fun requestTab(tab: Tab) { tabRequest = tab to (tabRequest?.second ?: 0) + 1 }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -41,7 +45,7 @@ class MainActivity : ComponentActivity() {
                 if (mode == AccountMode.NONE) {
                     LoginScreen(vm, oauthError, { oauthError = null })
                 } else {
-                    MainScreen(vm, initialTab, oauthError) { oauthError = null }
+                    MainScreen(vm, tabRequest, oauthError) { oauthError = null }
                 }
             }
         }
@@ -78,12 +82,39 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(EXTRA_INSTALL_UPDATE)
             vm.installUpdate()
         }
-        intent.getLongExtra("open_task", 0).takeIf { it != 0L }?.let { vm.openTaskId.value = it; initialTab = Tab.TASKS }
-        if (intent.getStringExtra("open_tab") == "focus") initialTab = Tab.POMO
+        intent.getLongExtra("open_task", 0).takeIf { it != 0L }?.let { vm.openTaskId.value = it; requestTab(Tab.TASKS) }
+        // From a home screen widget: a list (maybe with quick add), a tab or a habit.
+        val quickAdd = intent.getBooleanExtra(EXTRA_QUICK_ADD, false)
+        intent.getStringExtra(EXTRA_WIDGET_LIST)?.let { key ->
+            vm.openTaskId.value = null
+            vm.selection.value = parseWidgetKey(key)
+            requestTab(Tab.TASKS)
+            if (quickAdd) vm.quickAddTab.value = Tab.TASKS
+        }
+        val tab = when (intent.getStringExtra("open_tab")) {
+            "focus" -> Tab.POMO
+            "tasks" -> Tab.TASKS
+            "matrix" -> Tab.MATRIX
+            "calendar" -> Tab.CALENDAR
+            "habits" -> Tab.HABITS
+            else -> null
+        }
+        if (tab != null) {
+            if (intent.getBooleanExtra(EXTRA_FROM_WIDGET, false)) vm.openTaskId.value = null
+            requestTab(tab)
+            if (quickAdd) vm.quickAddTab.value = tab
+        }
+        intent.getLongExtra(EXTRA_OPEN_HABIT, 0).takeIf { it != 0L }?.let { vm.habits.openId.value = it }
     }
 
     companion object {
         /** From the "update available" notification: download and install it. */
         const val EXTRA_INSTALL_UPDATE = "install_update"
+        const val EXTRA_FROM_WIDGET = "from_widget"
+        /** A widget's list (see parseWidgetKey) to show in the Tasks tab. */
+        const val EXTRA_WIDGET_LIST = "widget_list"
+        /** Opens quick add in the tab or list the intent opens. */
+        const val EXTRA_QUICK_ADD = "quick_add"
+        const val EXTRA_OPEN_HABIT = "open_habit"
     }
 }

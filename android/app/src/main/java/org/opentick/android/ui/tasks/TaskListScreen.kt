@@ -73,6 +73,7 @@ import org.opentick.android.ui.Data
 import org.opentick.android.ui.GroupMode
 import org.opentick.android.ui.ListSel
 import org.opentick.android.ui.MainViewModel
+import org.opentick.android.ui.Tab
 import org.opentick.android.ui.SmartList
 import org.opentick.android.ui.components.OtFab
 import org.opentick.android.ui.components.PageHeader
@@ -101,6 +102,9 @@ fun TaskListScreen(vm: MainViewModel, snackbar: SnackbarHostState, onMenu: () ->
     vm.views.collectAsState().value
     vm.positions.collectAsState().value
     var adding by remember { mutableStateOf(false) }
+    // Quick add from a home screen widget's +.
+    val quickAdd by vm.quickAddTab.collectAsState()
+    LaunchedEffect(quickAdd) { if (quickAdd == Tab.TASKS) { adding = true; vm.quickAddTab.value = null } }
     var groupOverride by rememberSaveable { mutableStateOf<GroupMode?>(null) }
     var menu by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }

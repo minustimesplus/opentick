@@ -6,7 +6,11 @@ import org.opentick.android.data.viewKey
 import org.opentick.android.ui.Data
 import org.opentick.android.ui.ListSel
 import org.opentick.android.ui.SmartList
+import org.opentick.android.util.isOverdue
 import org.opentick.android.util.splitEmoji
+import org.opentick.android.util.toLocalDate
+import org.opentick.android.util.today
+import java.time.temporal.ChronoUnit
 import java.text.Collator
 
 /**
@@ -25,6 +29,37 @@ fun layoutProject(sel: ListSel, d: Data): Long? = when (sel) {
     is ListSel.Project -> sel.id
     is ListSel.Smart -> if (sel.kind == SmartList.INBOX) d.inbox?.id else null
     is ListSel.Label -> null
+}
+
+/** Tasks that belong to a list, including completed ones. */
+fun tasksFor(sel: ListSel, d: Data): List<TaskEntity> {
+    val now = System.currentTimeMillis()
+    val t = today()
+    fun dayDiff(task: TaskEntity) = task.dueDate?.let { ChronoUnit.DAYS.between(t, it.toLocalDate()) }
+    return when (sel) {
+        is ListSel.Smart -> when (sel.kind) {
+            SmartList.TODAY -> d.tasks.filter { task ->
+                val dd = dayDiff(task) ?: return@filter false
+                if (task.done) dd == 0L || (task.doneAt?.toLocalDate() == t && dd <= 0)
+                else dd <= 0L || isOverdue(task.dueDate!!, now)
+            }
+            SmartList.TOMORROW -> d.tasks.filter { dayDiff(it) == 1L }
+            SmartList.NEXT7 -> d.tasks.filter { task ->
+                val dd = dayDiff(task) ?: return@filter false
+                dd < 7 && (dd >= 0 || !task.done)
+            }
+            SmartList.INBOX -> d.tasks.filter { it.projectId == d.inbox?.id }
+            SmartList.ALL -> d.tasks
+            SmartList.COMPLETED -> d.tasks.filter { it.done && !it.wontDo }.sortedByDescending { it.doneAt ?: 0 }
+            SmartList.WONT_DO -> d.tasks.filter { it.done && it.wontDo }.sortedByDescending { it.doneAt ?: 0 }
+        }
+        is ListSel.Project -> {
+            // A folder shows the tasks of all its lists.
+            val ids = setOf(sel.id) + d.children[sel.id].orEmpty().map { it.id }
+            d.tasks.filter { it.projectId in ids }
+        }
+        is ListSel.Label -> d.tasks.filter { sel.id in it.labelIdList }
+    }
 }
 
 /** Completed and Won't Do list closed tasks; they have no sort, layout or add button. */
