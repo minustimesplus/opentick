@@ -36,10 +36,13 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -178,17 +181,20 @@ fun CalendarDayIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 26.d
     }
 }
 
-/** A ring around a check: the Habit tab. */
+/**
+ * A streak flame with a smaller inner flame cut out: the Habit tab. Same path
+ * (24x24 viewBox) as `HabitIcon` in web/src/lib/icons.ts.
+ */
+private val habitFlame = PathParser().parsePathString(
+    "M12.3 2.2c.5 2.7 2.2 4.3 3.9 6.1 1.8 1.9 3.3 3.9 3.3 6.6a7.5 7.5 0 0 1-15 0c0-2.5 1.1-4.5 2.8-6 .3 1.5 1 2.6 2.2 3.2-.1-3.6.8-7 2.8-9.9z" +
+        "M12 12.6c1.7 1.8 3.2 3.2 3.2 5.1a3.2 3.2 0 0 1-6.4 0c0-1.9 1.5-3.3 3.2-5.1z",
+).toPath().apply { fillType = PathFillType.EvenOdd }
+
 @Composable
 fun HabitTabIcon(color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier.size(26.dp)) {
-        val s = size.minDimension
-        drawCircle(color, radius = s * 0.46f)
-        val stroke = Stroke(width = s * 0.1f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        val path = androidx.compose.ui.graphics.Path().apply {
-            moveTo(s * 0.3f, s * 0.52f); lineTo(s * 0.45f, s * 0.66f); lineTo(s * 0.71f, s * 0.38f)
-        }
-        drawPath(path, Color.White, style = stroke)
+        val k = size.minDimension / 24f
+        scale(k, k, pivot = Offset.Zero) { drawPath(habitFlame, color) }
     }
 }
 
