@@ -6,6 +6,8 @@
 //   priority: !high !medium !low  (!h !m !l, !3 !2 !1, !!! !! , !haute !moyenne !faible)
 //   tags:     #tag
 //   list:     ~List  or  ^List
+//   assignee: @username  (@ followed by a digit is a time: @3pm)
+//   date:     *tomorrow  (the star opens date suggestions; it is optional)
 
 import {addDays, endOfDay, startOfDay, withMinutes} from './dates'
 import type {Level} from './tasks'
@@ -18,6 +20,8 @@ export interface Parsed {
 	priority: Level | null
 	labels: string[]
 	list: string | null
+	/** Usernames after @. */
+	assignees: string[]
 	/** Text fragments that were recognised, for highlighting. */
 	matches: string[]
 }
@@ -71,7 +75,8 @@ function escapeRe(s: string): string {
  * the first space.
  */
 export function parseQuickAdd(input: string, now = new Date(), listNames: string[] = []): Parsed {
-	let text = ' ' + input + ' '
+	// A star marks a date picked from the suggestions: *tomorrow is tomorrow.
+	let text = ' ' + input.replace(/(^|\s)\*(?=[\p{L}\p{N}])/gu, '$1') + ' '
 	const matches: string[] = []
 	const take = (re: RegExp): RegExpMatchArray | null => {
 		const m = text.match(re)
@@ -97,6 +102,11 @@ export function parseQuickAdd(input: string, now = new Date(), listNames: string
 	const labels: string[] = []
 	let lm: RegExpMatchArray | null
 	while ((lm = take(/\s#([\p{L}\p{N}_\-/]+)(?=\s)/u))) labels.push(lm[1])
+
+	// assignees (a letter after @: @3pm is a time)
+	const assignees: string[] = []
+	let am: RegExpMatchArray | null
+	while ((am = take(/\s@(\p{L}[\p{L}\p{N}_.\-]*)(?=\s)/u))) assignees.push(am[1])
 
 	// list
 	let list: string | null = null
@@ -186,7 +196,7 @@ export function parseQuickAdd(input: string, now = new Date(), listNames: string
 	}
 
 	const title = text.replace(/\s+/g, ' ').trim()
-	return {title: title || input.trim(), date, allDay, end, priority, labels, list, matches}
+	return {title: title || input.trim(), date, allDay, end, priority, labels, list, assignees, matches}
 }
 
 function monthDay(d: number, monthName: string, yearStr: string | undefined, today: Date): Date | null {

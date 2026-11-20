@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {Archive, ArchiveRestore, ArrowUpDown, ChevronDown, ChevronRight, Columns3, ChartGantt, ChartSpline, List, ListCollapse, Menu, MoreHorizontal, PanelLeft, Pencil, Plus, Printer, Settings2, Share2, SquareCheckBig, Trash2, Check, Tag, Filter} from 'lucide-vue-next'
 import ListSidebar from '@/components/ListSidebar.vue'
@@ -23,7 +23,9 @@ import {
 	schedulePatch, startOfDay,
 } from '@/lib/dates'
 import {compareTitles, level, splitEmoji} from '@/lib/tasks'
-import {openTaskDrawer, type DropZone} from '@/lib/ui'
+import {openTaskDrawer, ui, type DropZone} from '@/lib/ui'
+import {useShortcuts} from '@/lib/shortcuts'
+import {targetTaskId} from '@/lib/taskActions'
 import {clamp, startResize} from '@/lib/resize'
 import {isMobile} from '@/lib/viewport'
 
@@ -221,7 +223,20 @@ const doneTasks = computed(() => {
 	return list.sort((a, b) => (parseDate(b.done_at)?.getTime() ?? 0) - (parseDate(a.done_at)?.getTime() ?? 0))
 })
 
+// Pinned tasks come first, in a section of their own.
 const sections = computed<Section[]>(() => {
+	const base = baseSections.value
+	if (CLOSED.has(view.value.kind)) return base
+	const pinned = openTasks.value.filter(task => task.is_favorite)
+	if (!pinned.length) return base
+	const ids = new Set(pinned.map(task => task.id))
+	const rest = base
+		.map(sec => ({...sec, tasks: sec.tasks.filter(task => !ids.has(task.id))}))
+		.filter(sec => sec.tasks.length || sec.key === 'today')
+	return [{key: 'pinned', title: t('pinned'), tasks: pinned}, ...rest]
+})
+
+const baseSections = computed<Section[]>(() => {
 	const v = view.value
 	const now = new Date()
 	if (CLOSED.has(v.kind)) {
@@ -318,10 +333,12 @@ const placeholder = computed(() => READ_ONLY.has(view.value.kind) ? '' : t('addT
 
 // ---- selection ----
 // The inline detail pane is hidden on narrow windows; use the drawer there.
+// So does the split view shortcut, which hides the pane.
 const narrow = () => window.innerWidth <= 1100
+const useDrawer = () => narrow() || !prefs.tasksDetail
 
 function select(id: number) {
-	if (narrow()) {
+	if (useDrawer()) {
 		openTaskDrawer(id)
 		return
 	}
@@ -329,17 +346,78 @@ function select(id: number) {
 }
 
 // A link to a task (/tasks/today/42) opened on a narrow window.
-watch(selectedId, id => {
-	if (!id || !narrow()) return
+watch([selectedId, () => prefs.tasksDetail], ([id]) => {
+	if (!id || !useDrawer()) return
 	openTaskDrawer(id)
 	router.replace(`/tasks/${listKey.value}`)
 }, {immediate: true})
 
-function onCreated(id: number) {
+watch(selectedId, id => { ui.selectedTaskId = id }, {immediate: true})
+onBeforeUnmount(() => { ui.selectedTaskId = null })
+
+/** The task Enter was pressed on: the next task added goes below it. */
+const insertAfter = ref<number | null>(null)
+watch(listKey, () => { insertAfter.value = null })
+
+async function onCreated(id: number) {
 	// Tasks added in Assigned to Me are assigned to you.
 	if (view.value.kind === 'assigned' && data.user) data.assign(id, data.user)
+	const after = insertAfter.value !== null ? data.tasks.get(insertAfter.value) : undefined
+	insertAfter.value = null
 	if (selectedId.value) select(id)
+	if (!after) return
+	// Below the task means beside it: under the same parent, and next in a manual order.
+	const p = parentId(after)
+	if (p !== undefined) await data.setParent(id, p)
+	if (sortKey.value === 'custom' && orderProject.value) await onRowDrop(id, after.id, 'after')
 }
+
+// ---- keyboard shortcuts ----
+const canAdd = computed(() => !READ_ONLY.has(view.value.kind) && !archived.value)
+const listLayout = () => layout.value === 'list'
+
+function toggleAllGroups() {
+	const titled = sections.value.filter(sec => sec.title)
+	if (!titled.length) return false
+	const open = titled.some(sec => collapsed.value[sec.key])
+	for (const sec of titled) collapsed.value[sec.key] = !open
+}
+
+function toggleAllSubtasks() {
+	const listed = new Set(openTasks.value.map(task => task.id))
+	const parents = new Set<number>()
+	for (const task of openTasks.value) {
+		const p = parentId(task)
+		if (p !== undefined && listed.has(p)) parents.add(p)
+	}
+	if (!parents.size) return false
+	const expand = [...parents].some(id => prefs.collapsed[`t${id}`])
+	for (const id of parents) prefs.collapsed[`t${id}`] = !expand
+}
+
+useShortcuts({
+	addBelow: {
+		when: () => canAdd.value && listLayout() && targetTaskId() !== null,
+		run: () => {
+			insertAfter.value = targetTaskId()
+			ui.focusQuickAdd++
+		},
+	},
+	addSubtask: {
+		when: () => targetTaskId() !== null,
+		run: () => {
+			const id = targetTaskId()!
+			if (ui.drawerTaskId !== id && selectedId.value !== id) select(id)
+			ui.subtaskAdd = {taskId: id, n: Date.now()}
+		},
+	},
+	toggleGroups: {when: listLayout, run: toggleAllGroups},
+	toggleSubtasks: {when: listLayout, run: toggleAllSubtasks},
+	listView: {when: () => !!project.value, run: () => { layout.value = 'list' }},
+	kanbanView: {when: () => !!project.value, run: () => { layout.value = 'kanban' }},
+	timelineView: {when: () => !!project.value, run: () => { layout.value = 'timeline' }},
+	splitView: () => { prefs.tasksDetail = !prefs.tasksDetail },
+})
 
 const collapsed = ref<Record<string, boolean>>({})
 
@@ -503,6 +581,11 @@ function cancelTitleEdit() {
 
 watch(() => project.value?.id, cancelTitleEdit)
 
+function printList() {
+	// Let the menu close before the print dialog freezes the page.
+	nextTick(() => window.print())
+}
+
 const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 	{key: 'date', label: 'sortDate'},
 	{key: 'priority', label: 'sortPriority'},
@@ -658,7 +741,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 			</div>
 		</section>
 
-		<template v-if="layout === 'list' || selectedId">
+		<template v-if="(layout === 'list' || selectedId) && prefs.tasksDetail">
 		<div class="resizer detail-resizer" @pointerdown="startResize($event, 'detailWidth', DETAIL_RANGE, -1)" />
 		<section class="detail-pane" :style="{width: clamp(prefs.detailWidth, DETAIL_RANGE) + 'px'}">
 			<TaskDetail v-if="selectedId && data.tasks.has(selectedId)" :key="selectedId" :task-id="selectedId" @deleted="router.push(`/tasks/${listKey}`)" @open="select" />
@@ -709,7 +792,7 @@ const sorts: {key: SortKey, label: Parameters<typeof t>[0]}[] = [
 					><Plus :size="15" /> {{ t('addSection') }}</button>
 					<button v-if="!archived" class="menu-item" :class="{accent: shared}" @click="sharing = true; pop = null"><Share2 :size="15" /> {{ t('share') }}</button>
 					<button class="menu-item" disabled :title="t('comingSoon')"><ChartSpline :size="15" /> {{ t('listActivities') }}</button>
-					<button class="menu-item" disabled :title="t('comingSoon')"><Printer :size="15" /> {{ t('print') }}<ChevronRight :size="14" class="menu-chevron" /></button>
+					<button class="menu-item" @click="pop = null; printList()"><Printer :size="15" /> {{ t('print') }}</button>
 				</template>
 				<template v-if="view.kind === 'filter' && savedFilter">
 					<div class="menu-sep" />

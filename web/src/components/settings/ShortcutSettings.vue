@@ -1,103 +1,96 @@
 <script setup lang="ts">
-import {t, type MessageKey} from '@/lib/i18n'
+import {onBeforeUnmount, ref} from 'vue'
+import {t} from '@/lib/i18n'
+import {toast} from '@/lib/toast'
+import {
+	binding, formatBinding, formatSequence, keyToken, rebind, resetShortcuts, SHORTCUT_SECTIONS, isDefault,
+	type ShortcutId,
+} from '@/lib/shortcuts'
+import {prefs} from '@/lib/prefs'
 
-/** Label, key combo (null: not set) and whether the user may rebind it. */
-type Shortcut = [MessageKey, string | null, boolean?]
+/** The shortcut waiting for new keys, and the keys pressed so far. */
+const recording = ref<ShortcutId | null>(null)
+const draft = ref<string[]>([])
+let timer: number | undefined
 
-// Shortcuts the app handles today (App.vue, QuickAdd, Escape in dialogs); the rest are planned.
-const working = new Set<MessageKey>([
-	'cancel', 'addTask', 'scSetPriority', 'scSetTag', 'scMoveToList',
-	'scGoCalendar', 'scGoMatrix', 'scGoSearch', 'scGoAll', 'scGoToday', 'scGoTomorrow', 'scGoNext7', 'scGoInbox',
-	'scGoSummary', 'scGoTrash',
-])
+const labels = new Map(SHORTCUT_SECTIONS.flatMap(s => s.rows).filter(r => r.id).map(r => [r.id!, r.label]))
 
-const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
-	{title: 'general', items: [
-		['save', 'Ctrl+S'],
-		['sync', '.', true],
-		['cancel', 'Esc'],
-		['undo', 'Ctrl+Z'],
-		['scRedo', 'Ctrl+Shift+Z'],
-		['scPrint', 'Ctrl+P', true],
-		['scCommandMenu', 'Ctrl+K', true],
-		['shortcutsShort', '?'],
-	]},
-	{title: 'scTask', items: [
-		['addTask', 'N', true],
-		['scAddBelow', 'Enter'],
-		['scAddSubtask', 'Shift+Enter'],
-		['scToggleGroups', null, true],
-		['scToggleSubtasks', 'Tab+E', true],
-		['scListView', 'V then L'],
-		['scKanbanView', 'V then K'],
-		['scTimelineView', 'V then T'],
-	]},
-	{title: 'scQuickAdd', desc: 'scQuickAddDesc', items: [
-		['scSetDueDate', '*'],
-		['scSetPriority', '!'],
-		['scSetTag', '#'],
-		['scMoveToList', '~ / ^'],
-		['scAssign', '@'],
-	]},
-	{title: 'scEditTasks', desc: 'scEditTasksDesc', items: [
-		['scComplete', 'Tab+M', true],
-		['scPin', 'Tab+P'],
-		['scDelete', 'Ctrl+Del'],
-		['scSetDate', 'Tab+D'],
-		['scClearTime', 'Tab+0'],
-		['scSetToday', 'Tab+1'],
-		['scSetTomorrow', 'Tab+2'],
-		['scSetNextWeek', 'Tab+3'],
-		['scSetPriorityLevel', 'Alt+0/1/2/3'],
-	]},
-	{title: 'scNavigation', desc: 'scNavigationDesc', items: [
-		['scGoCalendar', 'G then C', true],
-		['scGoMatrix', 'G then M', true],
-		['scGoAi', null, true],
-		['scSplitView', null, true],
-		['scGoSearch', '/', true],
-		['scGoSettings', 'G then S'],
-		['scGoAll', 'G then A'],
-		['scGoToday', 'G then T'],
-		['scGoTomorrow', 'G then R'],
-		['scGoNext7', 'G then W'],
-		['scGoAssigned', null],
-		['scGoInbox', 'G then I'],
-		['scGoCompleted', null],
-		['scGoWontDo', null],
-		['scGoSummary', 'G then B'],
-		['scGoTrash', 'G then G'],
-	]},
-	{title: 'featCalendar', items: [
-		['scDayView', 'D / 1'],
-		['scWeekView', 'W / 2'],
-		['scMonthView', 'M / 3'],
-		['scYearView', 'Y / 4'],
-		['scAgenda', 'A / 5'],
-		['scBackToToday', 'T'],
-		['scGoToDate', null, true],
-	]},
-]
+function start(id: ShortcutId) {
+	stop()
+	recording.value = id
+	draft.value = []
+	window.addEventListener('keydown', onKey, true)
+}
+
+function stop() {
+	clearTimeout(timer)
+	recording.value = null
+	draft.value = []
+	window.removeEventListener('keydown', onKey, true)
+}
+
+function commit() {
+	const id = recording.value
+	const seq = draft.value.join(' ')
+	stop()
+	if (!id || !seq) return
+	const taken = rebind(id, seq)
+	if (taken) toast(t('scTakenFrom', {keys: formatSequence(seq), name: t(labels.get(taken) ?? 'shortcutsShort')}))
+}
+
+// A plain key may start a two-key sequence (G then C, Tab+M): wait briefly for a second one.
+function onKey(e: KeyboardEvent) {
+	const token = keyToken(e)
+	if (!token) return
+	e.preventDefault()
+	e.stopPropagation()
+	if (!draft.value.length) {
+		if (token === 'esc') return stop()
+		if (token === 'backspace' || token === 'delete') {
+			const id = recording.value!
+			stop()
+			rebind(id, null)
+			return
+		}
+	}
+	draft.value = [...draft.value, token]
+	clearTimeout(timer)
+	if (draft.value.length >= 2 || token.includes('+')) commit()
+	else timer = window.setTimeout(commit, 900)
+}
+
+onBeforeUnmount(stop)
+
+function reset() {
+	stop()
+	resetShortcuts()
+}
 </script>
 
 <template>
-	<template v-for="section in sections" :key="section.title">
+	<template v-for="section in SHORTCUT_SECTIONS" :key="section.title">
 		<h2 class="s-title">{{ t(section.title) }}</h2>
 		<p v-if="section.desc" class="section-desc">{{ t(section.desc) }}</p>
 		<div class="s-card">
-			<div v-for="[label, keys, custom] in section.items" :key="label" class="s-row" :class="{soon: !working.has(label)}">
-				<span class="s-label">
-					{{ t(label) }}
-					<span v-if="!working.has(label)" class="s-soon">{{ t('comingSoon') }}</span>
-				</span>
-				<!-- Rebinding is not built yet. -->
-				<button class="key" :class="{custom}" disabled :title="custom ? t('comingSoon') : undefined">{{ keys ?? t('scSetShortcut') }}</button>
+			<div v-for="row in section.rows" :key="row.label" class="s-row">
+				<span class="s-label">{{ t(row.label) }}</span>
+				<span v-if="row.keys" class="key">{{ row.keys }}</span>
+				<button
+					v-else-if="row.id"
+					class="key custom"
+					:class="{recording: recording === row.id, changed: !isDefault(row.id)}"
+					:title="recording === row.id ? t('scRecordHint') : t('scClickToChange')"
+					@click="recording === row.id ? stop() : start(row.id)"
+				>
+					<template v-if="recording === row.id">{{ draft.length ? draft.map(formatSequence).join(' ') + '…' : t('scPressKeys') }}</template>
+					<template v-else>{{ binding(row.id).length ? formatBinding(row.id) : t('scSetShortcut') }}</template>
+				</button>
 			</div>
 		</div>
 	</template>
 
 	<div class="footer">
-		<button class="btn reset soon" disabled>{{ t('resetDefault') }}</button>
+		<button class="btn reset" :disabled="!Object.keys(prefs.shortcuts).length" @click="reset">{{ t('resetDefault') }}</button>
 	</div>
 </template>
 
@@ -109,7 +102,11 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 }
 
 .key {
-	width: 84px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 84px;
+	max-width: 160px;
 	height: 18px;
 	flex-shrink: 0;
 	padding: 0 6px;
@@ -127,8 +124,21 @@ const sections: {title: MessageKey, desc?: MessageKey, items: Shortcut[]}[] = [
 	color: var(--text-2);
 }
 
-.key.custom:hover:not(:disabled) {
+.key.custom {
+	cursor: pointer;
+}
+
+.key.custom:hover,
+.key.recording {
 	border-color: var(--accent);
+}
+
+.key.recording {
+	color: var(--accent);
+}
+
+.key.changed {
+	color: var(--text);
 }
 
 .footer {

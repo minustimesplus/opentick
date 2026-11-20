@@ -32,6 +32,7 @@ import {prefs, type Feature} from '@/lib/prefs'
 import {moveKey, orderKeys} from '@/lib/navOrder'
 import {isMobile} from '@/lib/viewport'
 import {lastPeoplePath, lastTasksList} from '@/router'
+import {binding, formatBinding, type ShortcutId} from '@/lib/shortcuts'
 
 const data = useData()
 const focus = useFocus()
@@ -271,23 +272,29 @@ function sync() {
 	data.loadAll().catch(() => {})
 }
 
+// The sync shortcut.
+watch(() => ui.sync, sync)
+
 // On phones the rail is a tab bar at the bottom, so menus open upwards.
 const placement = computed(() => isMobile.value ? 'top-start' : 'right-start')
 
-const allShortcuts: [string, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' | 'matrix' | 'week' | 'habits' | 'focus' | 'countdowns' | 'people', Feature?][] = [
-	['N', 'addTask'],
-	['/', 'search', 'search'],
-	['G T', 'today'],
-	['G W', 'next7'],
-	['G I', 'inbox'],
-	['G M', 'matrix', 'matrix'],
-	['G C', 'week', 'calendar'],
-	['G H', 'habits', 'habit'],
-	['G F', 'focus', 'pomo'],
-	['G D', 'countdowns', 'countdown'],
-	['G P', 'people', 'people'],
+const allShortcuts: [ShortcutId, 'addTask' | 'search' | 'today' | 'next7' | 'inbox' | 'matrix' | 'week' | 'habits' | 'focus' | 'countdowns' | 'people' | 'scCommandMenu', Feature?][] = [
+	['commandMenu', 'scCommandMenu'],
+	['addTask', 'addTask'],
+	['goSearch', 'search', 'search'],
+	['goToday', 'today'],
+	['goNext7', 'next7'],
+	['goInbox', 'inbox'],
+	['goMatrix', 'matrix', 'matrix'],
+	['goCalendar', 'week', 'calendar'],
+	['goHabits', 'habits', 'habit'],
+	['goFocus', 'focus', 'pomo'],
+	['goCountdowns', 'countdowns', 'countdown'],
+	['goPeople', 'people', 'people'],
 ]
-const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature || featureOn(feature)))
+const shortcuts = computed(() => allShortcuts
+	.filter(([id, , feature]) => (!feature || featureOn(feature)) && binding(id).length)
+	.map(([id, label]) => [formatBinding(id), label] as const))
 </script>
 
 <template>
@@ -384,6 +391,7 @@ const shortcuts = computed(() => allShortcuts.filter(([, , feature]) => !feature
 					<span>{{ t(label) }}</span>
 					<kbd>{{ k }}</kbd>
 				</div>
+				<button class="menu-item" @click="menu = null; openSettings('shortcuts')">{{ t('allShortcuts') }}</button>
 				<div class="menu-sep" />
 				<div class="muted small pad">{{ t('quickAddHint') }}</div>
 			</div>

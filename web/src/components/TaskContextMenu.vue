@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {Ban, Bot, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
+import {ArrowUpToLine, Ban, Bot, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import ListPicker from './ListPicker.vue'
 import DatePicker from './DatePicker.vue'
@@ -8,16 +8,16 @@ import {useData} from '@/stores/data'
 import {AGENTS, agentName, useAgents} from '@/stores/agents'
 import {openAgentSend, ui} from '@/lib/ui'
 import {t} from '@/lib/i18n'
-import {addDays, getSchedule, moveSchedule, schedulePatch, startOfDay, startOfWeek, withMinutes, minutesOfDay} from '@/lib/dates'
+import {schedulePatch} from '@/lib/dates'
 import {level, PRIORITY_COLORS, priorityName, type Level} from '@/lib/tasks'
-import {toast} from '@/lib/toast'
+import {nextWeek, setTaskDay, today, togglePin, tomorrow, trashTask} from '@/lib/taskActions'
 
 const data = useData()
 const agents = useAgents()
 const task = computed(() => ui.ctx ? data.tasks.get(ui.ctx.taskId) : undefined)
 const anchor = computed(() => ui.ctx ? {x: ui.ctx.x, y: ui.ctx.y} : null)
 const moveEl = ref<HTMLElement | null>(null)
-const sub = ref<'move' | 'date' | null>(null)
+const sub = ref<'move' | 'date' | null>(ui.ctx?.date ? 'date' : null)
 
 function close() {
 	ui.ctx = null
@@ -25,13 +25,12 @@ function close() {
 }
 
 function setDay(d: Date) {
-	const tk = task.value
-	if (!tk) return
-	const s = getSchedule(tk)
-	const patch = s && !s.allDay
-		? moveSchedule(s, withMinutes(d, minutesOfDay(s.start)), false)
-		: schedulePatch(d, true)
-	data.updateTask(tk.id, patch)
+	if (task.value) setTaskDay(task.value.id, d)
+	close()
+}
+
+function pin() {
+	if (task.value) togglePin(task.value.id)
 	close()
 }
 
@@ -65,11 +64,8 @@ function remove() {
 	const tk = task.value
 	if (!tk) return
 	close()
-	data.deleteTask(tk.id)
-	toast(t('movedToTrash', {name: tk.title}), {label: t('undo'), run: () => data.restoreTask(tk.id)})
+	trashTask(tk.id)
 }
-
-const today = startOfDay(new Date())
 </script>
 
 <template>
@@ -77,9 +73,9 @@ const today = startOfDay(new Date())
 		<div class="menu ctx">
 			<div class="menu-label">{{ t('date') }}</div>
 			<div class="icons">
-				<button :title="t('today')" @click="setDay(today)"><Sun :size="18" /></button>
-				<button :title="t('tomorrow')" @click="setDay(addDays(today, 1))"><Sunrise :size="18" /></button>
-				<button :title="t('nextWeek')" @click="setDay(addDays(startOfWeek(today, 1), 7))"><span class="plus7">+7</span></button>
+				<button :title="t('today')" @click="setDay(today())"><Sun :size="18" /></button>
+				<button :title="t('tomorrow')" @click="setDay(tomorrow())"><Sunrise :size="18" /></button>
+				<button :title="t('nextWeek')" @click="setDay(nextWeek())"><span class="plus7">+7</span></button>
 				<button :title="t('date')" @click="sub = 'date'"><CalendarPlus :size="18" /></button>
 				<button :title="t('clearDate')" @click="data.updateTask(task.id, schedulePatch(null, false)); close()"><CalendarX :size="18" /></button>
 			</div>
@@ -90,6 +86,7 @@ const today = startOfDay(new Date())
 				</button>
 			</div>
 			<div class="menu-sep" />
+			<button class="menu-item" @click="pin"><ArrowUpToLine :size="16" /> {{ task.is_favorite ? t('unpin') : t('pin') }}</button>
 			<button ref="moveEl" class="menu-item" @click="sub = 'move'"><FolderInput :size="16" /> {{ t('moveTo') }} <ChevronRight :size="14" class="end" /></button>
 			<button class="menu-item" @click="toggleWontDo">
 				<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
