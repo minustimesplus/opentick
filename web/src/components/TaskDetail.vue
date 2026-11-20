@@ -15,7 +15,8 @@ import AssigneeMenu from './AssigneeMenu.vue'
 import PersonAvatar from './PersonAvatar.vue'
 import {parentId, useData} from '@/stores/data'
 import {AGENTS, agentName, useAgents} from '@/stores/agents'
-import {openAgentSend} from '@/lib/ui'
+import {openAgentSend, ui} from '@/lib/ui'
+import {togglePin} from '@/lib/taskActions'
 import type {AgentKind} from '@/api/types'
 import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} from '@/lib/dates'
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
@@ -116,6 +117,11 @@ function addSubtask() {
 	pop.value = null
 	subtaskEl.value?.focusAdd()
 }
+
+// Shift+Enter on this task.
+watch(() => ui.subtaskAdd, req => {
+	if (req?.taskId === props.taskId) nextTick(addSubtask)
+}, {immediate: true})
 
 // attachments and comments
 const fileEl = ref<HTMLInputElement | null>(null)
@@ -319,7 +325,7 @@ const meta = computed(() => {
 				<button class="menu-item" @click="addSubtask"><ListTree :size="16" /> {{ t('addSubtask') }}</button>
 				<button v-if="parent" class="menu-item" @click="detach"><Unlink :size="16" /> {{ t('detachSubtask') }}</button>
 				<button v-else class="menu-item" disabled :title="t('comingSoon')"><Link2 :size="16" /> {{ t('linkParentTask') }}</button>
-				<button class="menu-item" disabled :title="t('comingSoon')"><ArrowUpToLine :size="16" /> {{ t('pin') }}</button>
+				<button class="menu-item" @click="togglePin(task.id); pop = null"><ArrowUpToLine :size="16" /> {{ task.is_favorite ? t('unpin') : t('pin') }}</button>
 				<button class="menu-item" @click="data.toggleWontDo(task.id); pop = null">
 					<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
 					<template v-else><SquareX :size="16" /> {{ t('wontDo') }}</template>

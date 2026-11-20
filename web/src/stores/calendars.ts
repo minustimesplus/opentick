@@ -4,7 +4,7 @@ import {api, fetchAll} from '@/api/client'
 import type {CalendarSubscription, CalendarSubscriptionEvents} from '@/api/types'
 import {useData} from '@/stores/data'
 import {toast} from '@/lib/toast'
-import {prefs} from '@/lib/prefs'
+import {prefs, type CalendarMode} from '@/lib/prefs'
 import {addDays, startOfDay, startOfMonth, startOfWeek} from '@/lib/dates'
 
 const MERGE = 'application/merge-patch+json'
@@ -45,6 +45,9 @@ function hostnameOf(url: string): string {
 	}
 }
 
+/** Days the agenda lists from its anchor day. */
+export const AGENDA_DAYS = 30
+
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 /**
@@ -53,7 +56,15 @@ const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
  * month (whose month is the one of its third row), so it loads a wider window.
  * Day and week views load whole weeks, so stepping through days stays in cache.
  */
-export function eventRangeFor(mode: 'day' | 'week' | 'month', at: Date): {start: Date, end: Date} {
+export function eventRangeFor(mode: CalendarMode, at: Date): {start: Date, end: Date} {
+	if (mode === 'year') {
+		const s = new Date(at.getFullYear(), 0, 1)
+		return {start: startOfWeek(s), end: addDays(new Date(at.getFullYear() + 1, 0, 1), 7)}
+	}
+	if (mode === 'agenda') {
+		const s = startOfDay(at)
+		return {start: s, end: addDays(s, AGENDA_DAYS)}
+	}
 	if (mode === 'month') {
 		const s = startOfWeek(startOfMonth(at))
 		return {start: addDays(s, -21), end: addDays(s, 70)}
