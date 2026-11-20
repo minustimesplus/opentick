@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import {reactive} from 'vue'
 import {Check, CircleQuestionMark, Inbox} from 'lucide-vue-next'
 import DayIcon from '../DayIcon.vue'
 import {t} from '@/lib/i18n'
-
-// Not wired up yet: the sidebar and task rows ignore these.
-const state = reactive({
-	count: 'all' as 'all' | 'hideNote' | 'none',
-	listColor: true,
-	strike: false,
-})
+import {prefs} from '@/lib/prefs'
 
 const counts = [
 	{value: 'all' as const, label: 'countShowAll' as const, today: 3, inbox: 16},
@@ -19,37 +12,37 @@ const counts = [
 </script>
 
 <template>
-	<h2 class="s-title group">{{ t('sidebarCount') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
-	<div class="options soon">
-		<button v-for="o in counts" :key="o.value" class="option" disabled @click="state.count = o.value">
-			<span class="card" :class="{active: state.count === o.value}">
+	<h2 class="s-title group">{{ t('sidebarCount') }}</h2>
+	<div class="options">
+		<button v-for="o in counts" :key="o.value" class="option" @click="prefs.sidebarCount = o.value">
+			<span class="card" :class="{active: prefs.sidebarCount === o.value}">
 				<span class="line"><DayIcon :label="new Date().getDate()" :size="11" />{{ t('today') }}<em>{{ o.today }}</em></span>
 				<span class="line"><Inbox :size="11" />{{ t('inbox') }}<em>{{ o.inbox }}</em></span>
-				<span v-if="state.count === o.value" class="badge"><Check :size="10" :stroke-width="3" /></span>
+				<span v-if="prefs.sidebarCount === o.value" class="badge"><Check :size="10" :stroke-width="3" /></span>
 			</span>
 			<span class="name">{{ t(o.label) }}</span>
 		</button>
 	</div>
 
-	<h2 class="s-title group">{{ t('listColor') }} <CircleQuestionMark :size="13" /> <span class="s-soon">{{ t('comingSoon') }}</span></h2>
-	<div class="options soon">
-		<button v-for="on in [true, false]" :key="String(on)" class="option" disabled @click="state.listColor = on">
-			<span class="card" :class="{active: state.listColor === on, colored: on}">
+	<h2 class="s-title group">{{ t('listColor') }} <CircleQuestionMark :size="13" class="help" :title="t('listColorHelp')" /></h2>
+	<div class="options">
+		<button v-for="on in [true, false]" :key="String(on)" class="option" @click="prefs.listColor = on">
+			<span class="card" :class="{active: prefs.listColor === on, colored: on}">
 				<span class="line"><i class="box" />{{ t('taskTitle') }}</span>
 				<span class="line"><i class="box" />{{ t('taskTitle') }}</span>
-				<span v-if="state.listColor === on" class="badge"><Check :size="10" :stroke-width="3" /></span>
+				<span v-if="prefs.listColor === on" class="badge"><Check :size="10" :stroke-width="3" /></span>
 			</span>
 			<span class="name">{{ on ? t('show') : t('hide') }}</span>
 		</button>
 	</div>
 
-	<h2 class="s-title group">{{ t('completedStyle') }} <span class="s-soon">{{ t('comingSoon') }}</span></h2>
-	<div class="options soon">
-		<button v-for="strike in [false, true]" :key="String(strike)" class="option" disabled @click="state.strike = strike">
-			<span class="card done" :class="{active: state.strike === strike, strike}">
+	<h2 class="s-title group">{{ t('completedStyle') }}</h2>
+	<div class="options">
+		<button v-for="strike in [false, true]" :key="String(strike)" class="option" @click="prefs.completedStrike = strike">
+			<span class="card done" :class="{active: prefs.completedStrike === strike, strike}">
 				<span class="line"><i class="box checked" /><span class="title">{{ t('taskTitle') }}</span></span>
 				<span class="line"><i class="box checked" /><span class="title">{{ t('taskTitle') }}</span></span>
-				<span v-if="state.strike === strike" class="badge"><Check :size="10" :stroke-width="3" /></span>
+				<span v-if="prefs.completedStrike === strike" class="badge"><Check :size="10" :stroke-width="3" /></span>
 			</span>
 			<span class="name">{{ strike ? t('completedStrikethrough') : t('themeDefault') }}</span>
 		</button>

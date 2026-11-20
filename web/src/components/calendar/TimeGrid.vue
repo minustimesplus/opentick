@@ -945,7 +945,7 @@ const today0 = computed(() => startOfDay(now.value))
 
 .ad-chip.done .ad-title,
 .ev.done .ev-title {
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .ad-more {

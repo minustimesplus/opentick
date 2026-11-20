@@ -87,11 +87,19 @@ export interface Prefs {
 	navOrder: string[]
 	/** Settings > Smart List: whether each smart list shows in the sidebar. */
 	smartLists: Record<SmartListKey, Visibility>
+	/** Settings > Appearance > Display: open-task counts next to sidebar lists. 'hideNote' leaves notes out of the counts. */
+	sidebarCount: SidebarCount
+	/** Show each task's list color as a bar at the left edge of its row. */
+	listColor: boolean
+	/** Strike through completed tasks' titles instead of only greying them. */
+	completedStrike: boolean
 	/** Keys the user rebound in Settings > Shortcuts, by shortcut id; missing ones use the defaults. */
 	shortcuts: Record<string, string[]>
 	/** Whether the tasks view shows the task detail pane next to the list (split view). */
 	tasksDetail: boolean
 }
+
+export type SidebarCount = 'all' | 'hideNote' | 'none'
 
 const KEY = 'tt.prefs'
 
@@ -144,6 +152,9 @@ const defaults: Prefs = {
 	navOrder: [],
 	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, search: true, ai: true},
 	smartLists: {...smartListDefaults},
+	sidebarCount: 'all',
+	listColor: true,
+	completedStrike: false,
 	shortcuts: {},
 	tasksDetail: true,
 }
