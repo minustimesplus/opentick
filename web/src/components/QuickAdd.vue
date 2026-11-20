@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import {computed, nextTick, ref, watch} from 'vue'
-import {Plus, CalendarDays, Flag, Hash, Inbox, ListIcon, Menu, Tag} from 'lucide-vue-next'
+import {AtSign, Plus, CalendarDays, CircleUserRound, Flag, Hash, Inbox, ListIcon, Menu, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import DatePicker from './DatePicker.vue'
 import {useData, type TaskPatch} from '@/stores/data'
 import {parseQuickAdd} from '@/lib/parse'
-import {parseDate, schedulePatch, scheduleLabel} from '@/lib/dates'
-import {labelColor, PRIORITY_COLORS, priorityName, splitEmoji, type Level} from '@/lib/tasks'
+import {addDays, fmtWeekdayLong, parseDate, schedulePatch, scheduleLabel, startOfDay} from '@/lib/dates'
+import {displayName, labelColor, PRIORITY_COLORS, priorityName, splitEmoji, type Level} from '@/lib/tasks'
 import {t} from '@/lib/i18n'
 import {ui} from '@/lib/ui'
+import {prefs} from '@/lib/prefs'
 
 const props = defineProps<{
 	placeholder?: string
@@ -46,6 +47,7 @@ const chips = computed(() => {
 	if (p.priority !== null) out.push({icon: Flag, label: priorityName(p.priority as Level), color: PRIORITY_COLORS[p.priority as Level]})
 	p.labels.forEach(l => out.push({icon: Hash, label: l}))
 	if (parsedList.value) out.push({icon: ListIcon, label: splitEmoji(parsedList.value.title).name})
+	p.assignees.forEach(a => out.push({icon: CircleUserRound, label: a}))
 	return out
 })
 
@@ -84,9 +86,9 @@ function syncScroll() {
 	if (backdrop.value && input.value) backdrop.value.scrollLeft = input.value.scrollLeft
 }
 
-// ---- suggestions for ~list, #tag and !priority ----
+// ---- suggestions for ~list, #tag, !priority, *date and @member ----
 
-type Trigger = '~' | '#' | '!'
+type Trigger = '~' | '#' | '!' | '*' | '@'
 
 interface Suggestion {
 	key: string
@@ -112,7 +114,12 @@ function readToken() {
 	const start = before.lastIndexOf(' ') + 1
 	const word = before.slice(start)
 	const trigger = word[0] === '^' ? '~' : word[0]
-	if (trigger === '~' || trigger === '#' || trigger === '!') {
+	// @ and a digit is a time (@3pm), not a person.
+	if (trigger === '@' && /^@\d/.test(word)) {
+		token.value = null
+		return
+	}
+	if (trigger === '~' || trigger === '#' || trigger === '!' || trigger === '*' || trigger === '@') {
 		token.value = {trigger, start, end: caret, query: word.slice(1)}
 		return
 	}
@@ -150,10 +157,46 @@ const suggestions = computed<Suggestion[]>(() => {
 		}
 		return tags
 	}
+	if (tk.trigger === '*') {
+		const today = startOfDay(new Date())
+		const days: {word: string, label: string}[] = [
+			{word: 'today', label: t('today')},
+			{word: 'tomorrow', label: t('tomorrow')},
+			{word: 'next week', label: t('nextWeek')},
+		]
+		const names = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+		for (let i = 2; i < 7; i++) {
+			const d = addDays(today, i)
+			days.push({word: names[d.getDay()], label: fmtWeekdayLong(d)})
+		}
+		return days
+			.filter(d => !q || d.word.startsWith(q) || d.label.toLowerCase().startsWith(q))
+			.map(d => ({key: `*${d.word}`, label: d.label, icon: CalendarDays, insert: `*${d.word}`}))
+	}
+	if (tk.trigger === '@') {
+		return assignable.value
+			.filter(u => u.username.toLowerCase().includes(q) || displayName(u).toLowerCase().includes(q))
+			.slice(0, 8)
+			.map(u => ({key: `@${u.id}`, label: displayName(u) === u.username ? u.username : `${displayName(u)} (${u.username})`, icon: AtSign, insert: `@${u.username}`}))
+	}
 	const levels: {l: Level, word: string}[] = [{l: 3, word: 'high'}, {l: 2, word: 'medium'}, {l: 1, word: 'low'}, {l: 0, word: 'none'}]
 	return levels
 		.filter(x => !q || x.word.startsWith(q) || priorityName(x.l).toLowerCase().startsWith(q))
 		.map(x => ({key: `!${x.l}`, label: priorityName(x.l), icon: Flag, color: PRIORITY_COLORS[x.l], insert: `!${x.word}`}))
+})
+
+/** The list the task goes to, whose members it can be assigned to. */
+const targetProject = computed(() => parsedList.value?.id ?? props.defaults?.project_id ?? (prefs.defaultListId || data.inboxId))
+
+watch(() => token.value?.trigger === '@' && targetProject.value, id => {
+	if (id) data.loadMembers(id)
+})
+
+/** Members of the target list, you included. */
+const assignable = computed(() => {
+	const list = [...(data.members.get(targetProject.value) ?? [])]
+	if (data.user && !list.some(u => u.id === data.user!.id)) list.unshift(data.user)
+	return list
 })
 
 watch(suggestions, () => {
@@ -247,7 +290,16 @@ async function submit() {
 	pickedDate.value = null
 	token.value = null
 	const created = await data.createTask(body, [...(props.defaultLabels ?? []), ...p.labels])
-	if (created) emit('created', created.id)
+	if (!created) return
+	if (p.assignees.length) {
+		const members = await data.loadMembers(created.project_id)
+		const people = data.user ? [data.user, ...members] : members
+		for (const name of p.assignees) {
+			const u = people.find(m => m.username.toLowerCase() === name.toLowerCase())
+			if (u) await data.assign(created.id, u)
+		}
+	}
+	emit('created', created.id)
 }
 </script>
 

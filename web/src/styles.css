@@ -358,3 +358,32 @@ body.row-resizing {
 		height: 40px;
 	}
 }
+
+/* Printing (Ctrl+P, a list's More > Print): the open view on plain paper,
+   without the nav rail, sidebars, panes beside the list or overlays. */
+@media print {
+	html, body, #app {
+		height: auto !important;
+		overflow: visible !important;
+		background: #fff !important;
+		color: #000 !important;
+	}
+
+	.rail, .window-controls, .toasts, .resizer, .detail-pane, aside.sidebar, .main-bg,
+	.head .icon-btn, .qa, .backdrop, .popover {
+		display: none !important;
+	}
+
+	.shell, .main, .tasks-view, .list-pane, .content, .sections {
+		display: block !important;
+		height: auto !important;
+		overflow: visible !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: none !important;
+	}
+
+	.row {
+		break-inside: avoid;
+	}
+}

@@ -8,13 +8,16 @@ import {
 import TimeGrid from '@/components/calendar/TimeGrid.vue'
 import MonthGrid from '@/components/calendar/MonthGrid.vue'
 import MiniMonth from '@/components/calendar/MiniMonth.vue'
+import YearGrid from '@/components/calendar/YearGrid.vue'
+import AgendaList from '@/components/calendar/AgendaList.vue'
 import Popover from '@/components/Popover.vue'
 import QuickAdd from '@/components/QuickAdd.vue'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import SubscriptionDialog from '@/components/SubscriptionDialog.vue'
 import type {CalendarSubscription, Task} from '@/api/types'
 import {useData} from '@/stores/data'
-import {calendarColor, eventRangeFor, useCalendars, type CalEvent} from '@/stores/calendars'
+import {AGENDA_DAYS, calendarColor, eventRangeFor, useCalendars, type CalEvent} from '@/stores/calendars'
+import {useShortcuts} from '@/lib/shortcuts'
 import {prefs} from '@/lib/prefs'
 import {t} from '@/lib/i18n'
 import {
@@ -47,7 +50,15 @@ const mode = computed({
 	set: v => { prefs.calendarMode = v },
 })
 
+/** Day and week show the time grid, which scrolls sideways a page at a time. */
+const timeGrid = computed(() => mode.value === 'day' || mode.value === 'week')
+
 const range = computed(() => {
+	if (mode.value === 'year') {
+		const s = new Date(anchor.value.getFullYear(), 0, 1)
+		return {start: s, end: new Date(s.getFullYear() + 1, 0, 1)}
+	}
+	if (mode.value === 'agenda') return {start: startOfDay(anchor.value), end: addDays(startOfDay(anchor.value), AGENDA_DAYS)}
 	if (mode.value === 'day') return {start: startOfDay(anchor.value), end: addDays(startOfDay(anchor.value), 1)}
 	if (mode.value === 'week') {
 		const s = startOfWeek(anchor.value)
@@ -73,8 +84,8 @@ const days = computed(() => daysAt(anchor.value))
 // The time grid scrolls sideways one page (a day or a week) at a time and
 // renders the neighbouring pages so they slide in while scrolling.
 const pageDays = computed(() => mode.value === 'day' ? 1 : 7)
-const daysBefore = computed(() => mode.value === 'month' ? [] : daysAt(addDays(anchor.value, -pageDays.value)))
-const daysAfter = computed(() => mode.value === 'month' ? [] : daysAt(addDays(anchor.value, pageDays.value)))
+const daysBefore = computed(() => timeGrid.value ? daysAt(addDays(anchor.value, -pageDays.value)) : [])
+const daysAfter = computed(() => timeGrid.value ? daysAt(addDays(anchor.value, pageDays.value)) : [])
 
 watch(range, r => { data.loadDoneInRange(r.start, r.end).catch(() => {}) }, {immediate: true})
 
@@ -84,6 +95,7 @@ const hidden = computed(() => new Set(prefs.calendarHidden))
 const monthSpan = ref<{start: Date, end: Date} | null>(null)
 const taskRange = computed(() => {
 	if (mode.value === 'month') return monthSpan.value ?? range.value
+	if (!timeGrid.value) return range.value
 	return {start: addDays(range.value.start, -pageDays.value), end: addDays(range.value.end, pageDays.value)}
 })
 
@@ -115,7 +127,8 @@ watch(
 		await calendars.loadEvents(eventRange.value.start, eventRange.value.end, ids)
 		// Prefetch the neighbouring ranges (the next two weeks, or the adjacent
 		// months) so navigating shows events immediately.
-		const neighbours = mode.value === 'month'
+		const neighbours = mode.value === 'year' || mode.value === 'agenda' ? []
+			: mode.value === 'month'
 			? [addMonths(startOfMonth(anchor.value), 1), addMonths(startOfMonth(anchor.value), -1)]
 			: [addDays(anchor.value, 7), addDays(anchor.value, 14), addDays(anchor.value, -7)]
 		for (const at of neighbours) {
@@ -129,7 +142,7 @@ watch(
 // Events of the weeks next to the shown one, from the prefetch cache, so the
 // days that slide in while scrolling sideways already show theirs.
 const neighbourEvents = computed(() => {
-	if (mode.value === 'month') return []
+	if (!timeGrid.value) return []
 	const ids = visibleSubs.value.map(s => s.id)
 	const own = eventRange.value.start.getTime()
 	const ranges = [daysBefore.value[0], daysAfter.value[0]]
@@ -200,10 +213,15 @@ function safeLink(url: string): string | null {
 	return /^https?:\/\//i.test(url.trim()) ? url.trim() : null
 }
 
-const title = computed(() => fmtMonthYear(mode.value === 'month' ? anchor.value : days.value[0] ?? anchor.value))
+const title = computed(() => {
+	if (mode.value === 'year') return String(anchor.value.getFullYear())
+	return fmtMonthYear(mode.value === 'month' || mode.value === 'agenda' ? anchor.value : days.value[0] ?? anchor.value)
+})
 
 function step(dir: number) {
-	if (mode.value === 'day') anchor.value = addDays(anchor.value, dir)
+	if (mode.value === 'year') anchor.value = new Date(anchor.value.getFullYear() + dir, anchor.value.getMonth(), 1)
+	else if (mode.value === 'agenda') anchor.value = addDays(anchor.value, AGENDA_DAYS * dir)
+	else if (mode.value === 'day') anchor.value = addDays(anchor.value, dir)
 	else if (mode.value === 'week') anchor.value = addDays(anchor.value, 7 * dir)
 	else anchor.value = addMonths(startOfMonth(anchor.value), dir)
 }
@@ -281,12 +299,30 @@ function onArrangeDrop(e: DragEvent) {
 const modeEl = ref<HTMLElement | null>(null)
 const moreEl = ref<HTMLElement | null>(null)
 const addEl = ref<HTMLElement | null>(null)
-const pop = ref<'mode' | 'more' | 'add' | null>(null)
+const titleEl = ref<HTMLElement | null>(null)
+const pop = ref<'mode' | 'more' | 'add' | 'date' | null>(null)
 const modes = [
 	{key: 'day', label: 'day'},
 	{key: 'week', label: 'week'},
 	{key: 'month', label: 'month'},
+	{key: 'year', label: 'year'},
+	{key: 'agenda', label: 'agenda'},
 ] as const
+
+useShortcuts({
+	dayView: () => { mode.value = 'day' },
+	weekView: () => { mode.value = 'week' },
+	monthView: () => { mode.value = 'month' },
+	yearView: () => { mode.value = 'year' },
+	agendaView: () => { mode.value = 'agenda' },
+	backToToday: goToday,
+	goToDate: () => { pop.value = 'date' },
+})
+
+function goToDate(d: Date) {
+	pop.value = null
+	anchor.value = d
+}
 
 const addDefaults = computed(() => {
 	const now = new Date()
@@ -343,7 +379,7 @@ const addDefaults = computed(() => {
 		<section class="cal-main">
 			<header class="head">
 				<button class="icon-btn" @click="sidebarOpen = !sidebarOpen"><PanelLeft :size="19" /></button>
-				<h1>{{ title }}</h1>
+				<h1 ref="titleEl" class="title-btn" :title="t('scGoToDate')" @click="pop = 'date'">{{ title }}</h1>
 				<div class="spacer" />
 				<button ref="addEl" class="hbtn square add" :title="t('addTask')" @click="pop = 'add'"><Plus :size="18" /></button>
 				<button ref="modeEl" class="hbtn" @click="pop = 'mode'">{{ t(mode) }} <ChevronDown :size="14" /></button>
@@ -357,8 +393,23 @@ const addDefaults = computed(() => {
 			</header>
 
 			<div class="cal-body">
+				<YearGrid
+					v-if="mode === 'year'"
+					:year="anchor.getFullYear()"
+					:tasks="visibleTasks"
+					:events="visibleEvents"
+					@day="openDay"
+				/>
+				<AgendaList
+					v-else-if="mode === 'agenda'"
+					:start="anchor"
+					:tasks="visibleTasks"
+					:events="visibleEvents"
+					@open-task="openTaskDrawer"
+					@open-event="openEvent"
+				/>
 				<TimeGrid
-					v-if="mode !== 'month'"
+					v-else-if="timeGrid"
 					:days="days"
 					:before="daysBefore"
 					:after="daysAfter"
@@ -401,6 +452,11 @@ const addDefaults = computed(() => {
 			</div>
 		</aside>
 
+		<Popover v-if="pop === 'date'" :anchor="titleEl" placement="bottom-start" @close="pop = null">
+			<div class="go-date">
+				<MiniMonth :selected="anchor" :tasks="data.openTasks" :range-start="range.start" :range-end="range.start" @pick="goToDate" />
+			</div>
+		</Popover>
 		<Popover v-if="pop === 'mode'" :anchor="modeEl" placement="bottom-end" @close="pop = null">
 			<div class="menu">
 				<button v-for="m in modes" :key="m.key" class="menu-item" @click="mode = m.key; pop = null">
@@ -627,6 +683,15 @@ h1 {
 	font-size: 22px;
 	font-weight: 700;
 	white-space: nowrap;
+}
+
+.title-btn {
+	cursor: pointer;
+}
+
+.go-date {
+	width: 260px;
+	padding: 8px;
 }
 
 .spacer {

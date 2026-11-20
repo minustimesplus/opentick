@@ -6,8 +6,18 @@ export const ui = reactive({
 	drawerTaskId: null as number | null,
 	/** Increments to ask the active view to focus its quick-add input. */
 	focusQuickAdd: 0,
-	/** Right-click task menu. */
-	ctx: null as {taskId: number, x: number, y: number} | null,
+	/** Right-click task menu; `date` opens straight on the date picker (Tab+D). */
+	ctx: null as {taskId: number, x: number, y: number, date?: boolean} | null,
+	/** Task row under the mouse, which the task shortcuts act on first. */
+	hoverTaskId: null as number | null,
+	/** Task open in the tasks view's detail pane. */
+	selectedTaskId: null as number | null,
+	/** Asks the detail pane of this task to open its subtask input (Shift+Enter). */
+	subtaskAdd: null as {taskId: number, n: number} | null,
+	/** The command menu (Ctrl+K). */
+	commandMenu: false,
+	/** Increments to sync now, with the nav rail's spinner. */
+	sync: 0,
 	/** Task being dragged from a task row, so drop targets can react during dragover. */
 	dragTaskId: null as number | null,
 	/** Section shown in the settings dialog, null while it is closed. */

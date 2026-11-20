@@ -6,6 +6,7 @@ import type {AppNotification, Attachment, CurrentUser, Label, Project, ProjectIn
 import {addDays, dayDiff, getSchedule, isOverdue, startOfDay} from '@/lib/dates'
 import {prefs} from '@/lib/prefs'
 import {toast} from '@/lib/toast'
+import {clearHistory, record} from '@/lib/history'
 import {signOutOfClerk} from '@/lib/clerk'
 import {useAgents} from './agents'
 import {DEMO, isLocal, setLocal} from '@/lib/localMode'
@@ -102,6 +103,7 @@ export const useData = defineStore('data', () => {
 		positions.clear()
 		members.clear()
 		invitations.value = []
+		clearHistory()
 		setAvatarUrl(null)
 		avatarLoadedFor = null
 	}
@@ -460,6 +462,7 @@ export const useData = defineStore('data', () => {
 			const created = await api<Task>('POST', `/projects/${projectId}/tasks`, {body: {...input, project_id: projectId}, query: {format: 'markdown'}})
 			tasks.set(created.id, created)
 			if (inflight) createdDuringSync.add(created.id)
+			record({undo: () => deleteTask(created.id), redo: () => restoreTask(created.id)})
 			useAgents().afterTaskCreated(created)
 			for (const title of labelTitles) {
 				await addLabelByTitle(created.id, title)
@@ -474,6 +477,7 @@ export const useData = defineStore('data', () => {
 	async function updateTask(id: number, patch: TaskPatch): Promise<Task | null> {
 		const before = tasks.get(id)
 		if (!before) return null
+		recordUpdate(before, patch)
 		tasks.set(id, {...before, ...patch} as Task)
 		try {
 			const updated = await api<Task>('PATCH', `/tasks/${id}`, {body: patch, contentType: MERGE, query: {format: 'markdown'}})
@@ -490,6 +494,21 @@ export const useData = defineStore('data', () => {
 			toast(String((e as Error).message))
 			return null
 		}
+	}
+
+	/** Records the fields a patch changes, so undo can put them back. */
+	function recordUpdate(before: Task, patch: TaskPatch) {
+		const keys = Object.keys(patch) as (keyof TaskPatch)[]
+		// Completing a repeating task moves its dates on the server.
+		if ('done' in patch) keys.push(...(['due_date', 'start_date', 'end_date'] as const).filter(k => !(k in patch)))
+		const old: Record<string, unknown> = {}
+		for (const k of keys) old[k] = before[k] ?? (typeof patch[k] === 'string' ? '' : null)
+		const id = before.id
+		record({
+			key: `u${id}:${Object.keys(patch).sort().join(',')}`,
+			undo: () => updateTask(id, old as TaskPatch),
+			redo: () => updateTask(id, patch),
+		})
 	}
 
 	async function toggleDone(id: number) {
@@ -518,6 +537,7 @@ export const useData = defineStore('data', () => {
 
 	async function deleteTask(id: number) {
 		const before = tasks.get(id)
+		if (before) record({undo: () => restoreTask(id), redo: () => deleteTask(id)})
 		const parent = before ? parentId(before) : undefined
 		if (parent !== undefined) setRelated(parent, 'subtask', l => l.filter(x => x.id !== id))
 		tasks.delete(id)
@@ -661,6 +681,7 @@ export const useData = defineStore('data', () => {
 		if (!c) return
 		const old = parentId(c)
 		if (old === (parent ?? undefined) || child === parent) return
+		record({undo: () => setParent(child, old ?? null), redo: () => setParent(child, parent)})
 		try {
 			if (old !== undefined) {
 				unlinkLocal(old, child)

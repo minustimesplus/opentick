@@ -7,6 +7,8 @@ import {smartListDefaults, type SmartListKey, type Visibility} from './smartList
 /** Optional features from Settings > Features. Turning one off only hides it; its data stays. */
 export type Feature = 'calendar' | 'matrix' | 'habit' | 'pomo' | 'countdown' | 'people' | 'search' | 'ai'
 
+export type CalendarMode = 'day' | 'week' | 'month' | 'year' | 'agenda'
+
 export type DateFormat = 'mdy' | 'dmy' | 'ymd'
 export type AltCalendar = 'none' | 'chinese' | 'hebrew' | 'islamic' | 'persian' | 'indian'
 
@@ -33,7 +35,7 @@ export interface Prefs {
 	altCalendar: AltCalendar
 	showWeekNumbers: boolean
 	defaultListId: number | null
-	calendarMode: 'day' | 'week' | 'month'
+	calendarMode: CalendarMode
 	calendarHidden: number[]
 	/** Subscribed calendars hidden from the calendar view. */
 	calendarHiddenSubs: number[]
@@ -91,6 +93,10 @@ export interface Prefs {
 	listColor: boolean
 	/** Strike through completed tasks' titles instead of only greying them. */
 	completedStrike: boolean
+	/** Keys the user rebound in Settings > Shortcuts, by shortcut id; missing ones use the defaults. */
+	shortcuts: Record<string, string[]>
+	/** Whether the tasks view shows the task detail pane next to the list (split view). */
+	tasksDetail: boolean
 }
 
 export type SidebarCount = 'all' | 'hideNote' | 'none'
@@ -149,6 +155,8 @@ const defaults: Prefs = {
 	sidebarCount: 'all',
 	listColor: true,
 	completedStrike: false,
+	shortcuts: {},
+	tasksDetail: true,
 }
 
 // Before color series, `theme` was 'dark' | 'light' | 'system'.

@@ -10,6 +10,7 @@ import WindowControls from './components/WindowControls.vue'
 import TaskContextMenu from './components/TaskContextMenu.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import AgentSendDialog from './components/AgentSendDialog.vue'
+import CommandMenu from './components/CommandMenu.vue'
 import {useAgents} from './stores/agents'
 import {useCalendars} from './stores/calendars'
 import InviteDialog from './components/collab/InviteDialog.vue'
@@ -18,8 +19,12 @@ import {pendingInviteToken} from './lib/inviteLink'
 import {useData} from './stores/data'
 import {startViewSync} from './stores/viewSync'
 import {prefs} from './lib/prefs'
-import {locale} from './lib/i18n'
-import {ui} from './lib/ui'
+import {locale, t} from './lib/i18n'
+import {openSettings, ui} from './lib/ui'
+import {dispatchKey, useShortcuts} from './lib/shortcuts'
+import {redo, undo} from './lib/history'
+import {clearTaskTime, nextWeek, pickTaskDate, setTaskDay, setTaskPriority, targetTaskId, today, togglePin, tomorrow, trashTask} from './lib/taskActions'
+import {toast} from './lib/toast'
 import {featureOn, routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
 import {applyDisplayPrefs, applyTheme} from './lib/theme'
@@ -114,33 +119,85 @@ watch(() => agents.enabled, on => {
 	if (on && data.authed) agents.load()
 })
 
+// ---- keyboard shortcuts (lib/shortcuts.ts) ----
+
 function onKey(e: KeyboardEvent) {
-	const target = e.target as HTMLElement
-	if (target.closest('input, textarea, [contenteditable="true"]')) return
-	if (e.metaKey || e.ctrlKey || e.altKey) return
-	if (ui.settings || showConsent.value || showOnboarding.value) return
-	if (e.key === '/') {
-		if (!featureOn('search')) return
-		e.preventDefault()
-		router.push('/search')
-	} else if (e.key === 'n' || e.key === 'N') {
-		e.preventDefault()
-		ui.focusQuickAdd++
-	} else if (e.key === 'g') {
-		const next = (ev: KeyboardEvent) => {
-			window.removeEventListener('keydown', next, true)
-			const map: Record<string, string> = {
-				a: '/tasks/all', t: '/tasks/today', r: '/tasks/tomorrow', w: '/tasks/week', i: '/tasks/inbox', b: '/tasks/summary', g: '/tasks/trash',
-				m: '/matrix', c: '/calendar', h: '/habits', f: '/focus', d: '/countdowns', p: '/people',
-			}
-			if (map[ev.key] && routeAllowed(router.resolve(map[ev.key]))) {
-				ev.preventDefault()
-				router.push(map[ev.key])
-			}
-		}
-		window.addEventListener('keydown', next, true)
+	// Dialogs (settings, the setup wizard, consent, modals) keep the keyboard to themselves.
+	const blocked = !!ui.settings || ui.commandMenu || showConsent.value || showOnboarding.value
+		|| !data.authed || !!document.querySelector('.overlay')
+	dispatchKey(e, blocked)
+}
+
+function go(path: string) {
+	return () => {
+		if (!routeAllowed(router.resolve(path))) return false
+		router.push(path)
 	}
 }
+
+const hasTarget = () => targetTaskId() !== null
+/** A shortcut that acts on the task under the cursor or the open one. */
+function onTask(fn: (id: number) => void) {
+	return {when: hasTarget, run: () => fn(targetTaskId()!)}
+}
+
+useShortcuts({
+	save: () => {
+		// Fields save when they lose focus; keep the caret where it was.
+		const el = document.activeElement as HTMLElement | null
+		if (!el || el === document.body) return
+		el.blur()
+		el.focus()
+	},
+	sync: () => { ui.sync++ },
+	undo: () => {
+		undo().then(done => toast(t(done ? 'undoneToast' : 'nothingToUndo')))
+	},
+	redo: () => {
+		redo().then(done => toast(t(done ? 'redoneToast' : 'nothingToRedo')))
+	},
+	print: () => { window.print() },
+	commandMenu: () => { ui.commandMenu = true },
+	shortcuts: () => openSettings('shortcuts'),
+	addTask: () => { ui.focusQuickAdd++ },
+	complete: onTask(id => data.toggleDone(id)),
+	pin: onTask(togglePin),
+	delete: onTask(trashTask),
+	setDate: onTask(pickTaskDate),
+	clearTime: onTask(clearTaskTime),
+	setToday: onTask(id => setTaskDay(id, today())),
+	setTomorrow: onTask(id => setTaskDay(id, tomorrow())),
+	setNextWeek: onTask(id => setTaskDay(id, nextWeek())),
+	priority0: onTask(id => setTaskPriority(id, 0)),
+	priority1: onTask(id => setTaskPriority(id, 1)),
+	priority2: onTask(id => setTaskPriority(id, 2)),
+	priority3: onTask(id => setTaskPriority(id, 3)),
+	goCalendar: go('/calendar'),
+	goMatrix: go('/matrix'),
+	goAi: () => {
+		if (!featureOn('ai')) return false
+		openSettings('aiFeatures')
+	},
+	goSearch: go('/search'),
+	goSettings: () => openSettings(),
+	goAll: go('/tasks/all'),
+	goToday: go('/tasks/today'),
+	goTomorrow: go('/tasks/tomorrow'),
+	goNext7: go('/tasks/week'),
+	goAssigned: go('/tasks/assigned'),
+	goInbox: go('/tasks/inbox'),
+	goCompleted: go('/tasks/completed'),
+	goWontDo: go('/tasks/wontdo'),
+	goSummary: go('/tasks/summary'),
+	goTrash: go('/tasks/trash'),
+	goHabits: go('/habits'),
+	goFocus: go('/focus'),
+	goCountdowns: go('/countdowns'),
+	goPeople: go('/people'),
+})
+
+// The hovered row is gone once the view changes.
+watch(() => route.fullPath, () => { ui.hoverTaskId = null })
 
 // A task or list created offline that is open right now has a server id now.
 onReconnect(ids => {
@@ -181,6 +238,7 @@ onBeforeUnmount(() => {
 		<TaskDrawer v-if="ui.drawerTaskId !== null" :key="ui.drawerTaskId" :task-id="ui.drawerTaskId" />
 		<TaskContextMenu v-if="ui.ctx" :key="ui.ctx.taskId + ':' + ui.ctx.x + ':' + ui.ctx.y" />
 		<SettingsDialog v-if="ui.settings" />
+		<CommandMenu v-if="ui.commandMenu" @close="ui.commandMenu = false" />
 		<AgentSendDialog
 			v-if="ui.agentSend"
 			:key="ui.agentSend.taskId"
