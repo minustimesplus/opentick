@@ -71,3 +71,10 @@ export function applyTheme() {
 		desktop?.setTheme?.(frame || root.dataset.theme)
 	})
 }
+
+/** Applies Settings > Appearance > Display options that are plain CSS to <html>. */
+export function applyDisplayPrefs() {
+	watchEffect(() => {
+		document.documentElement.style.setProperty('--done-decoration', prefs.completedStrike ? 'line-through' : 'none')
+	})
+}

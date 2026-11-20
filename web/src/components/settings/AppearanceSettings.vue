@@ -43,7 +43,7 @@ async function remove() {
 <template>
 	<div class="tabs">
 		<button :class="{active: tab === 'theme'}" @click="tab = 'theme'">{{ t('theme') }}</button>
-		<button :class="{active: tab === 'display'}" @click="tab = 'display'">{{ t('displayTab') }} <span class="s-soon">{{ t('comingSoon') }}</span></button>
+		<button :class="{active: tab === 'display'}" @click="tab = 'display'">{{ t('displayTab') }}</button>
 	</div>
 
 	<AppearanceDisplay v-if="tab === 'display'" />

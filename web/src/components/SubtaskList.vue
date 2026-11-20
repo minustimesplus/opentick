@@ -115,7 +115,7 @@ defineExpose({focusAdd})
 
 .done .sub-title {
 	color: var(--text-3);
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .sub-date {

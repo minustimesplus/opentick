@@ -610,7 +610,7 @@ h1 {
 
 .done .m-title {
 	color: var(--text-3);
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .m-list {

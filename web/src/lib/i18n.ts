@@ -1023,6 +1023,7 @@ const en = {
 	countHideNote: 'Show(Hide Note)',
 	countHideAll: 'Hide(All)',
 	listColor: 'List Color',
+	listColorHelp: 'Show each task\'s list color as a bar at the left of its row.',
 	completedStyle: 'Completed Task Style',
 	completedStrikethrough: 'Strikethrough',
 	taskTitle: 'Task Title',

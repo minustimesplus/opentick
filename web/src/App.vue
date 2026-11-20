@@ -22,7 +22,7 @@ import {locale} from './lib/i18n'
 import {ui} from './lib/ui'
 import {featureOn, routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
-import {applyTheme} from './lib/theme'
+import {applyDisplayPrefs, applyTheme} from './lib/theme'
 import {background, clearBackground, loadBackground} from './lib/background'
 import {onboardingPending} from './lib/onboarding'
 import {onReconnect, remapText} from './api/offline'
@@ -34,6 +34,7 @@ const router = useRouter()
 const route = useRoute()
 
 applyTheme()
+applyDisplayPrefs()
 watchEffect(() => {
 	document.documentElement.lang = locale.value
 })
