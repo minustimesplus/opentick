@@ -33,6 +33,8 @@ interface DesktopBridge {
 	minimizeWindow?(): void
 	toggleMaximizeWindow?(): void
 	closeWindow?(): void
+	/** Raises and focuses the window, e.g. when a notification is clicked. Missing in older builds. */
+	focusWindow?(): void
 	/**
 	 * Files for the offline copy of the account (src/api/offline), kept in the
 	 * app's user data folder. Missing in builds before offline mode.
