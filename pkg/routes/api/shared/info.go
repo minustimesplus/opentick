@@ -117,7 +117,7 @@ func BuildInfo() VikunjaInfos {
 		TaskAttachmentsEnabled: config.ServiceEnableTaskAttachments.GetBool(),
 		TotpEnabled:            config.ServiceEnableTotp.GetBool(),
 		CaldavEnabled:          config.ServiceEnableCaldav.GetBool(),
-		EmailRemindersEnabled:  config.ServiceEnableEmailReminders.GetBool(),
+		EmailRemindersEnabled:  config.ServiceEnableEmailReminders.GetBool() && config.MailerEnabled.GetBool(),
 		UserDeletionEnabled:    config.ServiceEnableUserDeletion.GetBool(),
 		TrashRetentionDays:     max(config.ServiceTrashRetentionDays.GetInt(), 0),
 		TaskCommentsEnabled:    config.ServiceEnableTaskComments.GetBool(),

@@ -23,6 +23,7 @@ import {ui} from './lib/ui'
 import {featureOn, routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
 import {applyTheme} from './lib/theme'
+import {startReminderNotifier} from './lib/reminderNotifier'
 import {background, clearBackground, loadBackground} from './lib/background'
 import {onboardingPending} from './lib/onboarding'
 import {onReconnect, remapText} from './api/offline'
@@ -147,7 +148,10 @@ onReconnect(ids => {
 	if (path !== route.fullPath) router.replace(path)
 })
 
+let stopReminders: (() => void) | null = null
+
 onMounted(() => {
+	stopReminders = startReminderNotifier()
 	if (data.authed) refresh()
 	timer = window.setInterval(refresh, 60_000)
 	window.addEventListener('focus', refresh)
@@ -155,6 +159,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+	stopReminders?.()
 	clearInterval(timer)
 	window.removeEventListener('focus', refresh)
 	window.removeEventListener('keydown', onKey)

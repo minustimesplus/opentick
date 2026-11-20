@@ -183,7 +183,8 @@ func RegisterOverdueReminderCron() {
 		for _, ut := range uts {
 			tasks := ut.allTasks()
 
-			if emailEnabled && ut.user.OverdueTasksRemindersEnabled {
+			// The daily summary is a mail, so it also needs email notifications on.
+			if emailEnabled && ut.user.OverdueTasksRemindersEnabled && ut.user.EmailRemindersEnabled {
 				var n notifications.Notification = &UndoneTasksOverdueNotification{
 					User:     ut.user,
 					Assigned: ut.assigned,

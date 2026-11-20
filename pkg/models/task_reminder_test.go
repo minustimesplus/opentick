@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"xorm.io/xorm"
 )
 
 func TestReminderGetTasksInTheNextMinute(t *testing.T) {
@@ -495,6 +496,68 @@ func TestSendDueReminders(t *testing.T) {
 		assert.Empty(t, mail.SentMails())
 		assertSingleReminderNotification(t, 1, 27, 1)
 	})
+	t.Run("stops mailing after the daily limit but keeps the in-app notification", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		enableReminderMail(t)
+
+		now, err := time.Parse(time.RFC3339Nano, "2018-12-01T01:12:00Z")
+		require.NoError(t, err)
+
+		s := db.NewSession()
+		defer s.Close()
+
+		_, err = s.Where("id = ?", 1).Cols("email_reminders_enabled", "timezone").Update(&user.User{EmailRemindersEnabled: true, Timezone: "UTC"})
+		require.NoError(t, err)
+		insertReminderNotifications(t, s, 1, maxReminderMailsPerDay, now.Add(-time.Hour))
+		// Yesterday's reminders don't count.
+		insertReminderNotifications(t, s, 1, 1, now.Add(-2*time.Hour))
+
+		err = sendDueReminders(s, now, false)
+		require.NoError(t, err)
+		require.NoError(t, s.Commit())
+
+		assert.Empty(t, mail.SentMails())
+		check := db.NewSession()
+		defer check.Close()
+		count, err := check.Where("notifiable_id = ? AND name = ?", 1, "task.reminder").Count(&notifications.DatabaseNotification{})
+		require.NoError(t, err)
+		assert.Equal(t, int64(maxReminderMailsPerDay+2), count)
+	})
+	t.Run("mails while under the daily limit", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		enableReminderMail(t)
+
+		now, err := time.Parse(time.RFC3339Nano, "2018-12-01T01:12:00Z")
+		require.NoError(t, err)
+
+		s := db.NewSession()
+		defer s.Close()
+
+		_, err = s.Where("id = ?", 1).Cols("email_reminders_enabled", "timezone").Update(&user.User{EmailRemindersEnabled: true, Timezone: "UTC"})
+		require.NoError(t, err)
+		insertReminderNotifications(t, s, 1, maxReminderMailsPerDay-1, now.Add(-time.Hour))
+
+		err = sendDueReminders(s, now, false)
+		require.NoError(t, err)
+		require.NoError(t, s.Commit())
+
+		assert.Len(t, mail.SentMails(), 1)
+	})
+}
+
+// insertReminderNotifications stores count reminder notifications for the user, created at the given time.
+func insertReminderNotifications(t *testing.T, s *xorm.Session, userID int64, count int, created time.Time) {
+	t.Helper()
+
+	for i := 0; i < count; i++ {
+		_, err := s.NoAutoTime().Insert(&notifications.DatabaseNotification{
+			NotifiableID: userID,
+			Name:         "task.reminder",
+			Notification: json.RawMessage(`{}`),
+			Created:      created,
+		})
+		require.NoError(t, err)
+	}
 }
 
 func enableReminderMail(t *testing.T) {
