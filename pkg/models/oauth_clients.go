@@ -17,7 +17,10 @@
 package models
 
 import (
+	"net"
+	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"code.vikunja.io/api/pkg/utils"
@@ -74,7 +77,42 @@ func GetOAuthClient(s *xorm.Session, clientID string) (*OAuthClient, error) {
 	return c, nil
 }
 
-// AllowsRedirectURI reports whether uri exactly matches a registered redirect URI.
+// AllowsRedirectURI reports whether uri matches a registered redirect URI. A
+// loopback http URI matches whatever its port (RFC 8252 §7.3): native clients
+// such as Claude Code listen on a fresh port each time they sign in.
 func (c *OAuthClient) AllowsRedirectURI(uri string) bool {
-	return slices.Contains(c.RedirectURIs, uri)
+	if slices.Contains(c.RedirectURIs, uri) {
+		return true
+	}
+	want, ok := loopbackWithoutPort(uri)
+	if !ok {
+		return false
+	}
+	for _, registered := range c.RedirectURIs {
+		if got, ok := loopbackWithoutPort(registered); ok && got == want {
+			return true
+		}
+	}
+	return false
+}
+
+// loopbackWithoutPort returns an http loopback URI with its port removed, or
+// false for any other URI.
+func loopbackWithoutPort(raw string) (string, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" || u.User != nil || u.Fragment != "" {
+		return "", false
+	}
+	host := u.Hostname()
+	if !strings.EqualFold(host, "localhost") {
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			return "", false
+		}
+	}
+	u.Host = strings.ToLower(host)
+	if strings.Contains(host, ":") {
+		u.Host = "[" + u.Host + "]"
+	}
+	return u.String(), true
 }

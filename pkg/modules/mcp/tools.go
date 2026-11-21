@@ -35,6 +35,8 @@ type tool struct {
 	spec        *toolSpec
 	contentType string
 	description string
+	// positional names the arguments the CLI takes without a flag, in order.
+	positional []string
 }
 
 type candidate struct {
@@ -102,7 +104,8 @@ func buildTools(oapi *huma.OpenAPI, groupPrefix string) (map[string]*tool, []*to
 				typed:       typed,
 				spec:        spec,
 				contentType: ct,
-				description: describe(oapi, c.op, spec),
+				description: describe(oapi, c.id, c.op, spec),
+				positional:  positionalArgs(c.id, c.op),
 			}
 		}
 	}
@@ -116,7 +119,10 @@ func buildTools(oapi *huma.OpenAPI, groupPrefix string) (map[string]*tool, []*to
 func echoPath(path string) string { return strings.NewReplacer("{", ":", "}", "").Replace(path) }
 
 // AutoPatch's PATCH prose is boilerplate about JSON Patch, which MCP callers cannot use; read it from the PUT instead.
-func describe(oapi *huma.OpenAPI, op *huma.Operation, spec *toolSpec) string {
+func describe(oapi *huma.OpenAPI, operationID string, op *huma.Operation, spec *toolSpec) string {
+	if o := toolOverrides[operationID]; o.description != "" {
+		return o.description
+	}
 	src := bodySchemaOp(oapi, op)
 	s := src.Summary
 	if src.Description != "" {
@@ -129,6 +135,20 @@ func describe(oapi *huma.OpenAPI, op *huma.Operation, spec *toolSpec) string {
 		s += " " + formatArgHint
 	}
 	return s
+}
+
+// Path parameters in path order, unless the tool names its own.
+func positionalArgs(operationID string, op *huma.Operation) []string {
+	if o := toolOverrides[operationID]; o.positional != nil {
+		return o.positional
+	}
+	var out []string
+	for _, segment := range strings.Split(op.Path, "/") {
+		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			out = append(out, strings.Trim(segment, "{}"))
+		}
+	}
+	return out
 }
 
 func (m *Module) authorized(t *tool, token *models.APIToken) bool {
