@@ -127,6 +127,32 @@ func TestBuildToolSpec_PutKeepsRequiredBodyFields(t *testing.T) {
 	}, spec.schema.Required)
 }
 
+// contacts-add-to-group shipped without required fields, so clients happily sent {} and got a 422.
+func TestBuildToolSpec_NonEmptyBodyFieldsAreRequired(t *testing.T) {
+	cfg := huma.DefaultConfig("test", "1")
+	cfg.FieldsOptionalByDefault = true
+	_, api := humatest.New(t, cfg)
+	huma.Register(api, huma.Operation{
+		OperationID: "things-link",
+		Method:      http.MethodPost,
+		Path:        "/things/link",
+	}, func(_ context.Context, _ *struct {
+		Body struct {
+			Group  string  `json:"group" minLength:"1"`
+			IDs    []int64 `json:"ids" minItems:"1"`
+			DryRun bool    `json:"dry_run,omitempty"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+	spec, err := buildToolSpec(api.OpenAPI(), api.OpenAPI().Paths["/things/link"].Post)
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"group",
+		"ids",
+	}, spec.schema.Required)
+}
+
 type widgetBody struct {
 	ThingID  int64  `json:"thing_id" param:"thing"`
 	Username string `json:"username" param:"user"`
@@ -364,7 +390,7 @@ func describeFor(t *testing.T, api huma.API, method, path string) string {
 		op = item.Patch
 	}
 	require.NotNil(t, op)
-	return describe(api.OpenAPI(), op, specFor(t, api, method, path))
+	return describe(api.OpenAPI(), op.OperationID, op, specFor(t, api, method, path))
 }
 
 func TestDescribe_FormatHint(t *testing.T) {

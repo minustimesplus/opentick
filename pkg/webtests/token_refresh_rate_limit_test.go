@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"code.vikunja.io/api/pkg/config"
@@ -117,7 +118,7 @@ func TestTokenRefreshRateLimit(t *testing.T) {
 			assertRetryAfter(t, rec)
 			// A cross-origin frontend can only read Retry-After if CORS exposes it.
 			assert.Equal(t, "http://localhost:5173", rec.Header().Get(echo.HeaderAccessControlAllowOrigin), "path: %s", path)
-			assert.Contains(t, rec.Header().Values(echo.HeaderAccessControlExposeHeaders), echo.HeaderRetryAfter, "path: %s", path)
+			assert.Contains(t, strings.Split(rec.Header().Get(echo.HeaderAccessControlExposeHeaders), ","), echo.HeaderRetryAfter, "path: %s", path)
 		}
 	})
 }

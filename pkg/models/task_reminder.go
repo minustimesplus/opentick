@@ -356,6 +356,31 @@ func getTasksWithRemindersDueAndTheirUsers(s *xorm.Session, now time.Time) (remi
 	return
 }
 
+// maxReminderMailsPerDay caps how many reminder mails a user gets per day
+// (from midnight in their time zone), like TickTick. Reminders past the cap
+// still show up in the app.
+const maxReminderMailsPerDay = 50
+
+// countRemindersToday counts the reminder notifications the user got since
+// midnight in their time zone. Every reminder is stored in-app, so for a user
+// with email reminders on this is the number of reminder mails sent today.
+func countRemindersToday(s *xorm.Session, u *user.User, now time.Time) (int64, error) {
+	tz := config.GetTimeZone()
+	if u.Timezone != "" {
+		loc, err := time.LoadLocation(u.Timezone)
+		if err != nil {
+			return 0, err
+		}
+		tz = loc
+	}
+	local := now.In(tz)
+	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, tz)
+
+	return s.
+		Where("notifiable_id = ? AND name = ? AND created >= ?", u.ID, (&ReminderDueNotification{}).Name(), midnight).
+		Count(&notifications.DatabaseNotification{})
+}
+
 // The in-app notification is always stored; ReminderDueNotification.ToMail decides about mail.
 func sendDueReminders(s *xorm.Session, now time.Time, webhookEnabled bool) error {
 	reminders, err := getTasksWithRemindersDueAndTheirUsers(s, now)
@@ -369,7 +394,22 @@ func sendDueReminders(s *xorm.Session, now time.Time, webhookEnabled bool) error
 
 	log.Debugf("[Task Reminder Cron] Sending %d reminders", len(reminders))
 
+	// Reminders sent today per user, including the ones from this run.
+	sentToday := make(map[int64]int64)
+
 	for _, n := range reminders {
+		if n.User.EmailRemindersEnabled {
+			count, counted := sentToday[n.User.ID]
+			if !counted {
+				count, err = countRemindersToday(s, n.User, now)
+				if err != nil {
+					return fmt.Errorf("could not count today's reminders of user %d: %w", n.User.ID, err)
+				}
+			}
+			n.mailLimitReached = count >= maxReminderMailsPerDay
+			sentToday[n.User.ID] = count + 1
+		}
+
 		err = notifications.Notify(n.User, n, s)
 		if err != nil {
 			return fmt.Errorf("could not notify user %d: %w", n.User.ID, err)

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('ttDesktop', {
 	minimizeWindow: () => ipcRenderer.send('window:minimize'),
 	toggleMaximizeWindow: () => ipcRenderer.send('window:toggle-maximize'),
 	closeWindow: () => ipcRenderer.send('window:close'),
+	focusWindow: () => ipcRenderer.send('window:focus'),
 	// Files for the offline copy of the account (web/src/api/offline).
 	offlineStore: {
 		read: name => ipcRenderer.invoke('offline:read', name),

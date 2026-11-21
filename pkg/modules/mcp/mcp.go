@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/models"
@@ -80,6 +81,8 @@ func New(api huma.API, allowOrigin func(origin string) bool) (*Module, error) {
 
 func (m *Module) Register(group *echo.Group) {
 	group.POST(routeSuffix, m.handler)
+	// Users paste the endpoint with a trailing slash; clients accept it as the same resource.
+	group.POST(routeSuffix+"/", m.handler)
 }
 
 func (m *Module) newServerForRequest(req *http.Request) *mcp.Server {
@@ -110,12 +113,23 @@ func (m *Module) addToolsAuthorizedBy(srv *mcp.Server, token *models.APIToken) {
 			continue
 		}
 		srv.AddTool(&mcp.Tool{
+			Meta:        toolMeta(t),
 			Name:        t.name,
 			Description: t.description,
 			InputSchema: t.spec.schema,
 		}, m.rawToolHandler(t.name))
 	}
 	m.installCatalogTools(srv, catalog)
+}
+
+// PositionalMetaKey lists a tool's positional CLI arguments in its _meta.
+const PositionalMetaKey = "opentick/positional"
+
+func toolMeta(t *tool) mcp.Meta {
+	if len(t.positional) == 0 {
+		return nil
+	}
+	return mcp.Meta{PositionalMetaKey: t.positional}
 }
 
 func (m *Module) rawToolHandler(name string) mcp.ToolHandler {
@@ -141,11 +155,22 @@ func (m *Module) rawToolHandler(name string) mcp.ToolHandler {
 }
 
 // Stateless builds a server per request, so tools/list is filtered by the caller's token; localhost protection would reject deployments behind a loopback reverse proxy.
+// A stateless server never streams, so plain JSON replies spare clients SSE parsing behind proxies that buffer or rewrite event streams.
 func (m *Module) newStreamableHandler() http.Handler {
 	return mcp.NewStreamableHTTPHandler(m.newServerForRequest, &mcp.StreamableHTTPOptions{
 		Stateless:                  true,
 		DisableLocalhostProtection: true,
+		JSONResponse:               true,
 	})
+}
+
+// The SDK rejects a POST whose Accept lacks either JSON or SSE, which some clients omit; replies are JSON anyway.
+func acceptBoth(req *http.Request) {
+	accept := strings.ToLower(strings.Join(req.Header.Values("Accept"), ","))
+	if strings.Contains(accept, "application/json") && strings.Contains(accept, "text/event-stream") {
+		return
+	}
+	req.Header.Set("Accept", "application/json, text/event-stream")
 }
 
 // handler rejects JWTs, which bypass API-token route scopes.
@@ -173,7 +198,8 @@ func (m *Module) handler(c *echo.Context) error {
 	if proceed, err := limitRequestBody(c, req); !proceed {
 		return err
 	}
-	http.StripPrefix(RoutePrefix, m.streamable).ServeHTTP(c.Response(), req)
+	acceptBoth(req)
+	m.streamable.ServeHTTP(c.Response(), req)
 	return nil
 }
 

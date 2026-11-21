@@ -953,6 +953,69 @@ func TestLinkedinBrowserQueue(t *testing.T) {
 	assert.True(t, IsErrContactNotInContacts(RecordLinkedinBrowserFailure(s, u, "linkedin.com/in/else", true, "")), "another user's contact")
 }
 
+func TestLinkedinBrowserQueueItems(t *testing.T) {
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+	u := &user.User{ID: 1}
+
+	queue, err := GetLinkedinBrowserQueue(s, u, 50)
+	require.NoError(t, err)
+	require.Len(t, queue, 1)
+	assert.False(t, queue[0].MissingExperience)
+	assert.True(t, queue[0].MissingEducation)
+	assert.Empty(t, queue[0].Status)
+	assert.Nil(t, queue[0].LastTried)
+
+	require.NoError(t, RecordLinkedinBrowserFailure(s, u, "https://www.linkedin.com/in/ada", false, "timeout"))
+	queue, err = GetLinkedinBrowserQueue(s, u, 50)
+	require.NoError(t, err)
+	require.Len(t, queue, 1)
+	assert.Equal(t, "error", queue[0].Status)
+	assert.Equal(t, 1, queue[0].Attempts)
+	assert.NotNil(t, queue[0].LastTried)
+
+	require.NoError(t, RecordLinkedinBrowserFailure(s, u, "https://www.linkedin.com/in/ada", true, "gone"))
+	queue, err = GetLinkedinBrowserQueue(s, u, 50)
+	require.NoError(t, err)
+	assert.Empty(t, queue, "unavailable profiles leave the queue")
+}
+
+func TestFindLinkedinContact(t *testing.T) {
+	db.LoadAndAssertFixtures(t)
+	s := db.NewSession()
+	defer s.Close()
+
+	m, err := FindLinkedinContact(s, &user.User{ID: 1}, "linkedin.com/in/Grace/?trk=abc")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), m.ContactID)
+	assert.Equal(t, "Grace Hopper", m.Name)
+	assert.True(t, m.HasExperience)
+	assert.True(t, m.HasEducation)
+
+	_, err = FindLinkedinContact(s, &user.User{ID: 1}, "https://www.linkedin.com/in/else")
+	assert.True(t, IsErrContactNotInContacts(err), "another user's contact")
+	m, err = FindLinkedinContact(s, &user.User{ID: 2}, "https://www.linkedin.com/in/else")
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), m.ContactID)
+}
+
+func TestLinkedinPhotoURLAllowed(t *testing.T) {
+	for url, want := range map[string]bool{
+		"https://media.licdn.com/dms/image/abc/profile.jpg": true,
+		"https://licdn.com/a.jpg":                           true,
+		"http://media.licdn.com/a.jpg":                      false,
+		"https://media.licdn.com.evil.example/a.jpg":        false,
+		"https://evillicdn.com/a.jpg":                       false,
+		"https://media.licdn.com:8443/a.jpg":                false,
+		"https://user@media.licdn.com/a.jpg":                false,
+		"https://127.0.0.1/a.jpg":                           false,
+		"":                                                  false,
+	} {
+		assert.Equal(t, want, LinkedinPhotoURLAllowed(url), url)
+	}
+}
+
 func TestImportContactBundle(t *testing.T) {
 	bundle := func() *ContactBundle {
 		return &ContactBundle{

@@ -133,7 +133,8 @@ func static() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) (err error) {
 			p := c.Request().URL.Path
-			if strings.HasPrefix(p, "/api/") {
+			// Discovery clients must get a 404 for an unknown well-known document, not the SPA's HTML.
+			if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/.well-known/") {
 				return next(c)
 			}
 			if strings.HasSuffix(c.Path(), "*") { // When serving from a group, e.g. `/static*`.

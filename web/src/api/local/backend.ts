@@ -1013,6 +1013,10 @@ function userRoute(db: DB, c: Ctx): unknown {
 	if (rest === 'settings/background' && c.method === 'GET') notFound()
 	if (rest === 'settings/general' && (c.method === 'POST' || c.method === 'PUT' || c.method === 'PATCH')) {
 		if (typeof c.body.name === 'string') db.user.name = c.body.name
+		// The daily notification runs in the browser, so local mode keeps its settings.
+		for (const key of ['overdue_tasks_reminders_enabled', 'overdue_tasks_reminders_time'] as const) {
+			if (key in c.body) db.user.settings = {...db.user.settings, [key]: c.body[key]}
+		}
 		return {}
 	}
 	if (rest === 'token/refresh') return {access_token: 'local'}

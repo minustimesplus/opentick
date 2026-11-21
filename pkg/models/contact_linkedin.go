@@ -1019,9 +1019,14 @@ type LinkedinCoverage struct {
 
 // LinkedinQueueItem is a contact the browser extension should visit.
 type LinkedinQueueItem struct {
-	ContactID   int64  `json:"contact_id"`
-	Name        string `json:"name"`
-	LinkedinURL string `json:"linkedin_url"`
+	ContactID         int64      `json:"contact_id"`
+	Name              string     `json:"name"`
+	LinkedinURL       string     `json:"linkedin_url"`
+	MissingExperience bool       `json:"missing_experience" doc:"The contact has no jobs yet."`
+	MissingEducation  bool       `json:"missing_education" doc:"The contact has no schools yet."`
+	Status            string     `json:"status" doc:"The last browser-extension outcome: empty when never tried, error after a retryable failure."`
+	Attempts          int        `json:"attempts" doc:"Failed browser-extension attempts so far. The contact leaves the queue after three."`
+	LastTried         *time.Time `json:"last_tried" doc:"When the extension last tried this contact; null when never."`
 }
 
 type linkedinCandidates struct {
@@ -1029,6 +1034,9 @@ type linkedinCandidates struct {
 	// missing lack a list; queue is the part of missing the extension still visits.
 	missing []*Contact
 	queue   []*Contact
+	hasExp  map[int64]bool
+	hasEdu  map[int64]bool
+	browser map[int64]*ContactLinkedinStatus
 }
 
 // loadLinkedinCandidates sorts the user's contacts into the ones missing
@@ -1076,6 +1084,9 @@ func loadLinkedinCandidates(s *xorm.Session, userID int64) (*linkedinCandidates,
 			WithExperience: len(hasExp),
 			WithEducation:  len(hasEdu),
 		},
+		hasExp:  hasExp,
+		hasEdu:  hasEdu,
+		browser: browser,
 	}
 	for _, c := range contacts {
 		if c.LinkedinURL == "" {
@@ -1125,13 +1136,62 @@ func GetLinkedinBrowserQueue(s *xorm.Session, a web.Auth, limit int) ([]*Linkedi
 		if len(items) >= limit {
 			break
 		}
-		items = append(items, &LinkedinQueueItem{
-			ContactID:   c.ID,
-			Name:        ContactDisplayName(c.FullName, c.FirstName, c.LastName),
-			LinkedinURL: c.LinkedinURL,
-		})
+		item := &LinkedinQueueItem{
+			ContactID:         c.ID,
+			Name:              ContactDisplayName(c.FullName, c.FirstName, c.LastName),
+			LinkedinURL:       c.LinkedinURL,
+			MissingExperience: !cand.hasExp[c.ID],
+			MissingEducation:  !cand.hasEdu[c.ID],
+		}
+		if st := cand.browser[c.ID]; st != nil {
+			item.Status = st.Status
+			item.Attempts = st.Attempts
+			tried := st.Updated
+			item.LastTried = &tried
+		}
+		items = append(items, item)
 	}
 	return items, nil
+}
+
+// LinkedinContactMatch is the user's contact behind a LinkedIn profile URL.
+type LinkedinContactMatch struct {
+	ContactID     int64  `json:"contact_id"`
+	Name          string `json:"name"`
+	LinkedinURL   string `json:"linkedin_url" doc:"The normalized profile URL."`
+	HasExperience bool   `json:"has_experience"`
+	HasEducation  bool   `json:"has_education"`
+}
+
+// FindLinkedinContact returns the caller's contact with that profile URL, or
+// ErrContactNotInContacts. The browser extension uses it to save the profiles
+// of existing contacts while the user browses LinkedIn.
+func FindLinkedinContact(s *xorm.Session, a web.Auth, url string) (*LinkedinContactMatch, error) {
+	if _, isShareAuth := a.(*LinkSharing); isShareAuth {
+		return nil, ErrGenericForbidden{}
+	}
+	c, err := FindContactByLinkedinURL(s, a.GetID(), url)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, ErrContactNotInContacts{URL: NormalizeLinkedinURL(url)}
+	}
+	hasExp, err := s.Where("contact_id = ?", c.ID).Exist(&ContactExperience{})
+	if err != nil {
+		return nil, err
+	}
+	hasEdu, err := s.Where("contact_id = ?", c.ID).Exist(&ContactEducation{})
+	if err != nil {
+		return nil, err
+	}
+	return &LinkedinContactMatch{
+		ContactID:     c.ID,
+		Name:          ContactDisplayName(c.FullName, c.FirstName, c.LastName),
+		LinkedinURL:   c.LinkedinURL,
+		HasExperience: hasExp,
+		HasEducation:  hasEdu,
+	}, nil
 }
 
 // GetBrightDataTargets returns the LinkedIn profile URLs for a Bright Data
