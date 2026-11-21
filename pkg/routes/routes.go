@@ -263,9 +263,11 @@ func RegisterRoutes(e *echo.Echo) {
 
 	// OAuth discovery for MCP clients (RFC 9728 + RFC 8414). Registered on e so
 	// they win over the SPA fallback, which would otherwise answer with HTML.
-	e.GET(oauth2server.ProtectedResourceMetadataPath, oauth2server.HandleProtectedResourceMetadata, noAuthRateLimit)
-	e.GET(oauth2server.ProtectedResourceMetadataPath+oauth2server.MCPPath, oauth2server.HandleProtectedResourceMetadata, noAuthRateLimit)
-	e.GET(oauth2server.AuthorizationServerMetadataPath, oauth2server.HandleAuthorizationServerMetadata, noAuthRateLimit)
+	// Not rate limited: they are static documents, and sharing the login budget let
+	// a connector's discovery probes (all from one IP behind a reverse proxy) hit 429.
+	e.GET(oauth2server.ProtectedResourceMetadataPath, oauth2server.HandleProtectedResourceMetadata)
+	e.GET(oauth2server.ProtectedResourceMetadataPath+oauth2server.MCPPath, oauth2server.HandleProtectedResourceMetadata)
+	e.GET(oauth2server.AuthorizationServerMetadataPath, oauth2server.HandleAuthorizationServerMetadata)
 
 	// healthcheck
 	e.GET("/health", HealthcheckHandler)
@@ -285,8 +287,13 @@ func RegisterRoutes(e *echo.Echo) {
 				return matchCORSOrigin(origin, allowedOrigins)
 			},
 			AllowCredentials: true,
-			ExposeHeaders:    []string{echo.HeaderRetryAfter},
-			MaxAge:           config.CorsMaxAge.GetInt(),
+			// Browser-based MCP clients read the OAuth challenge and the session id.
+			ExposeHeaders: []string{
+				echo.HeaderRetryAfter,
+				echo.HeaderWWWAuthenticate,
+				"Mcp-Session-Id",
+			},
+			MaxAge: config.CorsMaxAge.GetInt(),
 			Skipper: func(context *echo.Context) bool {
 				// Since it is not possible to register this middleware just for the api group,
 				// we just disable it when for caldav requests.

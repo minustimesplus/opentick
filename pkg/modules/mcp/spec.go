@@ -107,6 +107,10 @@ func buildToolSpec(oapi *huma.OpenAPI, op *huma.Operation) (*toolSpec, error) {
 			if op.Method == http.MethodPatch && !mustHaveValue(ps, slices.Contains(body.Required, name)) {
 				ps = allowNull(ps)
 			}
+			// FieldsOptionalByDefault leaves these optional in the spec, yet leaving one out fails validation.
+			if op.Method != http.MethodPatch && cannotBeEmpty(ps) {
+				required = append(required, name)
+			}
 			props[name] = ps
 		}
 		if op.Method != http.MethodPatch {
@@ -189,6 +193,10 @@ func mustHaveValue(s *jsonschema.Schema, required bool) bool {
 		return true
 	}
 	return false
+}
+
+func cannotBeEmpty(s *jsonschema.Schema) bool {
+	return (s.MinLength != nil && *s.MinLength > 0) || (s.MinItems != nil && *s.MinItems > 0)
 }
 
 // Merge-patch clears a field by sending null; the shape read from the PUT does not allow it.

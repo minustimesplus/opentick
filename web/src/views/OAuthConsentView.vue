@@ -4,6 +4,7 @@ import {useRoute} from 'vue-router'
 import {api} from '@/api/client'
 import {t, type MessageKey} from '@/lib/i18n'
 import {ANDROID_CLIENT_ID, ANDROID_REDIRECT_URI, DESKTOP_CLIENT_ID, takeOAuthReturn} from '@/lib/oauthReturn'
+import {isLoopbackRedirect, redirectRegistered} from '@/lib/oauthRedirect'
 
 // The OAuth authorization endpoint for clients registered via dynamic client
 // registration, e.g. Claude connecting to the MCP server, and for the desktop
@@ -44,16 +45,6 @@ const desktopClient = computed(() => query.value.clientId === DESKTOP_CLIENT_ID)
 const androidClient = computed(() => query.value.clientId === ANDROID_CLIENT_ID)
 const firstPartyClient = computed(() => desktopClient.value || androidClient.value)
 
-/** The desktop app listens on a loopback port for the code (RFC 8252). */
-function isLoopback(uri: string) {
-	try {
-		const url = new URL(uri)
-		return url.protocol === 'http:' && ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)
-	} catch {
-		return false
-	}
-}
-
 const presets: {value: Preset, label: MessageKey, hint: MessageKey}[] = [
 	{value: 'typed', label: 'mcpPresetTyped', hint: 'oauthPresetTypedHint'},
 	{value: 'read_only', label: 'mcpPresetReadOnly', hint: 'oauthPresetReadOnlyHint'},
@@ -77,14 +68,14 @@ onMounted(async () => {
 			throw new Error(t('oauthInvalidRequest'))
 		}
 		if (desktopClient.value || androidClient.value) {
-			const validRedirect = desktopClient.value ? isLoopback(q.redirectUri) : q.redirectUri === ANDROID_REDIRECT_URI
+			const validRedirect = desktopClient.value ? isLoopbackRedirect(q.redirectUri) : q.redirectUri === ANDROID_REDIRECT_URI
 			if (!validRedirect) throw new Error(t('oauthInvalidRequest'))
 			client.value = {client_id: q.clientId, client_name: 'OpenTick', redirect_uris: [q.redirectUri]}
 			return
 		}
 		const info = await api<ClientInfo>('GET', `/oauth/clients/${encodeURIComponent(q.clientId)}`)
 		// Never redirect to a URI the client did not register.
-		if (!info.redirect_uris.includes(q.redirectUri)) throw new Error(t('oauthInvalidRequest'))
+		if (!redirectRegistered(info.redirect_uris, q.redirectUri)) throw new Error(t('oauthInvalidRequest'))
 		client.value = info
 	} catch (e) {
 		error.value = (e as Error).message || t('oauthInvalidRequest')
