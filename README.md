@@ -29,6 +29,7 @@ while you set up.
 	- [Docker](#docker)
 	- [Desktop app (Linux)](#desktop-app-linux)
 	- [Android app](#android-app)
+- [AI assistants and the command line](#ai-assistants-and-the-command-line)
 - [Building from source](#building-from-source)
 - [Development setup](#development-setup)
 - [Contributing](#contributing)
@@ -92,6 +93,29 @@ The app updates itself in the background.
 A native Android app lives in [`android/`](android/README.md). It works
 offline and syncs with OpenTick Cloud or your own server. Build the APK with
 `cd android && ./gradlew assembleRelease` and install it on your phone.
+
+## AI assistants and the command line
+
+OpenTick has an MCP server at `/api/v2/mcp` for Claude, Codex and other
+assistants, covering tasks, projects, labels and people. Settings → AI Features
+shows the endpoint and creates tokens:
+
+```sh
+claude mcp add --transport http opentick https://tasks.example.com/api/v2/mcp \
+  --header "Authorization: Bearer tk_…"
+```
+
+`otk` is a command line client with the same tools, for scripts and agents:
+
+```sh
+go build -o otk ./cmd/otk
+otk login --server https://tasks.example.com
+otk search_contacts --location reims --ids-only | otk tag_contacts Reims --contact-ids - --dry-run
+otk tasks_list --filter "done = false"
+```
+
+See [docs/mcp-and-cli.md](docs/mcp-and-cli.md) for OAuth sign-in, reverse
+proxies and Tailscale, and every option.
 
 ## Building from source
 

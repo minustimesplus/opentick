@@ -5,7 +5,8 @@
 - `/api/v1` (Echo, `pkg/routes/api/v1/`) is frozen. It keeps running and is supported, but does not grow. Touch it only to fix a bug or to port a resource to v2.
 - `/api/v2` (Huma, `pkg/routes/api/v2/`) gets every new route: new entities, non-CRUD actions, new actions on existing resources. "Add an endpoint for X" without a version means v2.
 - Before adding a v2 route, invoke the `api-v2-routes` skill.
-- New v2 operations are not exposed over MCP unless you add their operation ID to the allow-list in `pkg/modules/mcp/exposure.go`, as either a typed tool or a catalog action (`find_action`/`do_action`).
+- New v2 operations are not exposed over MCP unless you add their operation ID to the allow-list in `pkg/modules/mcp/exposure.go`, as either a typed tool or a catalog action (`find_action`/`do_action`). `toolOverrides` there renames a tool and sets its description and positional CLI arguments (the contact tools keep the Personal CRM's names).
+- The `otk` CLI (`pkg/cli`, `cmd/otk`, also `opentick cli`) is an MCP client and reads its commands from the server, so exposing a tool exposes it to the CLI too. User docs: `docs/mcp-and-cli.md`.
 - Models in `pkg/models/` are shared by both APIs. A new entity still gets a model with `Can*` methods (`crudable` skill); only the HTTP surface differs.
 
 ## Conventions

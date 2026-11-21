@@ -73,6 +73,8 @@ Legend: ✅ implemented · ❌ not implemented
 | Background sync every minute and on window focus | ✅ |
 | CSV backup export and import | ✅ |
 | MCP server settings and API tokens for AI clients | ✅ |
+| MCP tools for people (search with match reasons, bulk tag/group with dry run; Personal CRM tool names) | ✅ |
+| Command line client (`otk`) with the same tools as the MCP server | ✅ |
 | Email commands for AI agents without MCP (add, change, complete, delete or skip repeating tasks by mailing a private address; read over IMAP) | ✅ |
 | Basic keyboard shortcuts (`n` new task, `/` search, `g` + key to jump between views) | ✅ |
 | Focus timer desktop notifications | ✅ |
