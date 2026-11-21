@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTick LinkedIn · Options</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  main { max-width: 720px; margin: 0 auto; padding: 28px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+  .wide { flex: 1; }
+  ol { margin: 0; padding-left: 20px; }
+  ol li { margin: 4px 0; }
+  #saved { min-height: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row spread">
+    <div>
+      <h1>OpenTick · LinkedIn enrichment</h1>
+      <div class="muted">Fills your contacts' work history and education from LinkedIn, through your own logged-in session.</div>
+    </div>
+    <a class="btn" href="dashboard.html">Progress</a>
+  </div>
+
+  <section class="card">
+    <h2>Connect to OpenTick</h2>
+    <ol class="muted" style="margin-bottom:12px">
+      <li>In OpenTick, open <b>People → Import → Browser extension</b> and click <b>Create token</b>. It only allows the LinkedIn routes.</li>
+      <li>Paste the server address and the token below and click <b>Save &amp; connect</b>. Chrome asks to let the extension reach your server.</li>
+    </ol>
+    <label class="field">Server <input id="serverUrl" class="wide" type="url" placeholder="https://tick.example.com" autocomplete="off"></label>
+    <label class="field">API token <input id="token" class="wide" type="password" placeholder="tk_…" autocomplete="off"></label>
+    <div class="row" style="margin-top:8px">
+      <button id="connect" class="pri">Save &amp; connect</button>
+      <span id="conn" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Fill missing</h2>
+    <div class="muted">Works through contacts that have a LinkedIn URL but no history yet, one at a time in a background tab. Slow on purpose, to protect your LinkedIn account.</div>
+    <label class="field">Seconds between profiles, at least <input id="minDelay" type="number" min="30" max="3600"></label>
+    <label class="field">…and at most <input id="maxDelay" type="number" min="30" max="7200"></label>
+    <label class="field">Profiles per day <input id="dailyCap" type="number" min="1" max="500"></label>
+    <label class="check"><input id="activeHoursEnabled" type="checkbox"><span>Only between <input id="activeFrom" type="time"> and <input id="activeTo" type="time"></span></label>
+    <label class="check"><input id="autoStartOnBrowser" type="checkbox"><span>Start when the browser starts</span></label>
+    <label class="check"><input id="autoStartDaily" type="checkbox"><span>Start every day at <input id="autoStartTime" type="time"></span></label>
+    <div class="muted">Automatic starts never resume after a LinkedIn security check, and wait a day after a rate limit.</div>
+  </section>
+
+  <section class="card">
+    <h2>While you browse</h2>
+    <label class="check"><input id="showPageButton" type="checkbox"><span>Show a <b>Save to OpenTick</b> button on LinkedIn profiles</span></label>
+    <label class="check"><input id="createContacts" type="checkbox"><span>Add new people: saving a profile of someone who isn't in OpenTick yet adds them as a contact</span></label>
+    <label class="check"><input id="autoSaveBrowsing" type="checkbox"><span>Automatically save profiles of existing contacts when you open them (at most once a day each, counted against the daily limit)</span></label>
+  </section>
+
+  <div id="saved" class="muted"></div>
+</main>
+<script src="core.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

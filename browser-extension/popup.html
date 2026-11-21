@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>OpenTick</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { width: 340px; background: var(--panel); }
+  main { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  section { border-top: 1px solid var(--line); padding-top: 12px; }
+  #result { white-space: pre-line; font-size: 13px; }
+  .title { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .title img { width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row spread">
+    <div class="title"><img src="icons/32.png" alt="">OpenTick · LinkedIn</div>
+    <a href="#" id="options" class="muted">Options</a>
+  </div>
+  <div id="setup" hidden>
+    <div class="err">Not connected to OpenTick yet.</div>
+    <button id="openOptions" class="pri" style="margin-top:6px">Set up</button>
+  </div>
+  <div id="problem" class="warn" hidden></div>
+
+  <section id="page">
+    <div id="pageInfo" class="muted">Open a LinkedIn profile to save it.</div>
+    <div class="row" style="margin-top:8px">
+      <button id="save" class="pri" disabled>Save to OpenTick</button>
+    </div>
+    <div id="result" style="margin-top:8px"></div>
+  </section>
+
+  <section>
+    <div class="row spread">
+      <strong>Fill missing</strong>
+      <span id="status" class="pill idle">Idle</span>
+    </div>
+    <div id="runMsg" class="muted" style="margin-top:4px"></div>
+    <div id="counts" class="muted"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="start" class="pri">Start</button>
+      <button id="pause">Pause</button>
+      <button id="dashboard">Progress</button>
+    </div>
+  </section>
+</main>
+<script src="core.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -58,7 +58,7 @@ func SetupTokenMiddleware() echo.MiddlewareFunc {
 		ErrorHandler: func(c *echo.Context, err error) error {
 			if err != nil {
 				// Point MCP clients at OAuth discovery so they can sign in instead of failing.
-				if c.Request().URL.Path == oauth2server.MCPPath {
+				if strings.TrimSuffix(c.Request().URL.Path, "/") == oauth2server.MCPPath {
 					if challenge := oauth2server.WWWAuthenticateChallenge(); challenge != "" {
 						c.Response().Header().Set("WWW-Authenticate", challenge)
 					}

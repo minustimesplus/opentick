@@ -22,7 +22,107 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
-func toolNameFor(operationID string) string { return strings.ReplaceAll(operationID, "-", "_") }
+func toolNameFor(operationID string) string {
+	if o, ok := toolOverrides[operationID]; ok && o.name != "" {
+		return o.name
+	}
+	return strings.ReplaceAll(operationID, "-", "_")
+}
+
+// toolOverride renames a tool, replaces its description and names its positional CLI arguments.
+type toolOverride struct {
+	name        string
+	description string
+	positional  []string
+}
+
+// The contact tools keep the Personal CRM agent's names and wording, so prompts and scripts written for it carry over.
+var toolOverrides = map[string]toolOverride{
+	"contacts-search": {
+		name:        "search_contacts",
+		description: "Find contacts by structured filters and/or free text. Each result says why it matched (e.g. \"school: Sciences Po (Master, 2019–2021)\"), so you can check edge cases before acting. Tip: call distinct_values first to discover spelling variants of a school, company or location. Pass ids_only to get every matching id for a bulk write.",
+		positional:  []string{"text"},
+	},
+	"contacts-read": {
+		name:        "get_contact",
+		description: "Everything about one contact: fields, experience, education, notes, tags and groups.",
+		positional:  []string{"id"},
+	},
+	"contacts-distinct-values": {
+		name:        "distinct_values",
+		description: "List the distinct values of a field across all contacts, with how many contacts have each. Use it to find every spelling of a school, company or city before searching.",
+		positional: []string{
+			"field",
+			"contains",
+		},
+	},
+	"contact-groups-list": {
+		name:        "list_groups",
+		description: "All groups with id, name, description, color and member count.",
+	},
+	"contact-tags-list": {
+		name:        "list_tags",
+		description: "All tags with id, name and how many contacts have each.",
+	},
+	"contact-groups-create": {
+		name:        "create_group",
+		description: "Create a group. If one with the same name (ignoring case) exists, it is reused and updated.",
+		positional:  []string{"name"},
+	},
+	"contact-groups-update": {
+		name:        "update_group",
+		description: "Rename a group or change its description or color. Takes the group id from list_groups; only the fields you pass change.",
+		positional:  []string{"id"},
+	},
+	"contacts-add-to-group": {
+		name:        "add_to_group",
+		description: "Add contacts to a group. Reports how many were added, how many were already members, and unknown ids. Use dry_run to preview.",
+		positional:  []string{"group"},
+	},
+	"contacts-remove-from-group": {
+		name:        "remove_from_group",
+		description: "Remove contacts from a group. The contacts themselves stay. Reports how many were removed, how many were not members, and unknown ids. Use dry_run to preview.",
+		positional:  []string{"group"},
+	},
+	"contacts-tag": {
+		name:        "tag_contacts",
+		description: "Add a tag to contacts (the tag is created if needed). Reports how many were tagged, how many already had it, and unknown ids. Use dry_run to preview.",
+		positional:  []string{"tag"},
+	},
+	"contacts-untag": {
+		name:        "untag_contacts",
+		description: "Remove a tag from contacts. Reports how many were untagged, how many did not have it, and unknown ids. Use dry_run to preview.",
+		positional:  []string{"tag"},
+	},
+	"contacts-update": {
+		name:        "update_contact",
+		description: "Set fields on a contact: full_name, headline, company, title, location, email, phone, linkedin_url, birthday (YYYY-MM-DD or MM-DD) and about. Only the fields you pass change; an empty string clears a field. Edited fields are locked so LinkedIn enrichment won't overwrite them, the same as editing in the app.",
+		positional:  []string{"id"},
+	},
+	"contacts-create": {
+		name:        "create_contact",
+		description: "Create a contact. Needs a name, LinkedIn URL or email. Refuses if one with the same LinkedIn URL or email already exists (the error names it) unless allow_duplicate is set.",
+		positional:  []string{"full_name"},
+	},
+	"contacts-notes-create": {
+		name:        "add_note",
+		description: "Add a note to a contact.",
+		positional: []string{
+			"id",
+			"body",
+		},
+	},
+	"contacts-experiences-create": {
+		name:        "add_experience",
+		description: "Add a job to a contact's experience. Needs a company or a title; leave end_date out for a current job. Locks the list against LinkedIn re-imports, like a hand edit.",
+		positional:  []string{"id"},
+	},
+	"contacts-educations-create": {
+		name:        "add_education",
+		description: "Add a school to a contact's education. Locks the list against LinkedIn re-imports, like a hand edit.",
+		positional:  []string{"id"},
+	},
+}
 
 type toolTier int
 

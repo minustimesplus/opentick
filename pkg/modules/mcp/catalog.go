@@ -36,6 +36,7 @@ const (
 type actionInfo struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
+	Positional  []string           `json:"positional,omitempty"`
 	InputSchema *jsonschema.Schema `json:"input_schema,omitempty"`
 }
 type findActionArgs struct {
@@ -118,6 +119,7 @@ func catalogActions(catalog []*tool, action, resource string) []actionInfo {
 		}
 		if action != "" || resource != "" {
 			info.InputSchema = t.spec.schema
+			info.Positional = t.positional
 		}
 		out = append(out, info)
 	}

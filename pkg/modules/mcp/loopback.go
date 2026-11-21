@@ -233,6 +233,10 @@ func parseResponse(rec *httptest.ResponseRecorder) (any, error) {
 	if err := dec.Decode(&out); err != nil {
 		return nil, fmt.Errorf("mcp: decode v2 response: %w", err)
 	}
+	// Huma's link to the response schema costs the model tokens and exposes the internal host behind a proxy.
+	if obj, ok := out.(map[string]any); ok {
+		delete(obj, "$schema")
+	}
 	return out, nil
 }
 

@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTick LinkedIn · Progress</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  main { max-width: 1000px; margin: 0 auto; padding: 28px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .stat .num { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  #message { margin-top: 6px; }
+  #message.err { font-weight: 600; }
+  .bar { height: 6px; background: var(--chip); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar > div { height: 100%; background: var(--pri); }
+  .scroll { overflow-x: auto; }
+  td.when { white-space: nowrap; color: var(--muted); }
+  .empty { color: var(--muted); padding: 10px 8px; }
+  .res { font-weight: 600; white-space: nowrap; }
+  .res.saved, .res.created { color: var(--ok); }
+  .res.failed, .res.blocked { color: var(--err); }
+  .res.unavailable, .res.skipped { color: var(--warn); }
+  .res.info { color: var(--muted); font-weight: 400; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row spread">
+    <div>
+      <h1>LinkedIn enrichment</h1>
+      <div class="muted" id="server"></div>
+    </div>
+    <div class="row">
+      <a class="btn" href="options.html">Options</a>
+    </div>
+  </div>
+
+  <div id="setup" class="card" hidden>
+    <strong class="err">Not connected to OpenTick.</strong>
+    <div class="muted">Set the server and API token in the <a href="options.html">options</a>.</div>
+  </div>
+  <div id="problem" class="card warn" hidden></div>
+
+  <section class="card">
+    <div class="row spread">
+      <div class="row">
+        <h2 style="margin:0">Fill missing</h2>
+        <span id="status" class="pill idle">Idle</span>
+      </div>
+      <div class="row">
+        <button id="start" class="pri">Start</button>
+        <button id="pause">Pause</button>
+        <button id="runNow" title="Skip the wait and read the next profile now">Next now</button>
+      </div>
+    </div>
+    <div id="message" class="muted"></div>
+    <div id="current" class="muted"></div>
+  </section>
+
+  <div class="stats">
+    <div class="card stat"><div class="label">Left in queue</div><div class="num" id="queue">–</div><div class="muted" id="queueAt"></div></div>
+    <div class="card stat"><div class="label">Done today</div><div class="num" id="today">–</div><div class="bar"><div id="todayBar" style="width:0"></div></div></div>
+    <div class="card stat"><div class="label">Next profile</div><div class="num" id="next">–</div><div class="muted" id="nextAt"></div></div>
+    <div class="card stat"><div class="label">This run</div><div class="num" id="run">–</div><div class="muted">read · failed</div></div>
+    <div class="card stat"><div class="label">Coverage</div><div class="num" id="coverage">–</div><div class="muted" id="coverageNote">contacts with full history</div></div>
+  </div>
+
+  <section class="card">
+    <div class="row spread">
+      <h2 style="margin:0">Waiting to sync <span class="muted" id="outboxCount"></span></h2>
+      <button id="retryAll">Retry all now</button>
+    </div>
+    <div class="muted" style="margin:4px 0 8px">Every profile is kept here until OpenTick has it.</div>
+    <div class="scroll"><table>
+      <thead><tr><th>Profile</th><th>Kind</th><th>State</th><th>Attempts</th><th></th></tr></thead>
+      <tbody id="outbox"></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <div class="row spread">
+      <h2 style="margin:0">Recent activity</h2>
+      <button id="clearLog">Clear</button>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>When</th><th>Profile</th><th>Result</th><th>Details</th></tr></thead>
+      <tbody id="log"></tbody>
+    </table></div>
+  </section>
+</main>
+<script src="core.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
