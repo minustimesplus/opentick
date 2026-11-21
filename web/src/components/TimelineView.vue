@@ -480,7 +480,7 @@ function barColor(task: Task): string {
 }
 
 .tl-bar.done .label {
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .tl-bar.selected {
@@ -509,7 +509,7 @@ function barColor(task: Task): string {
 
 .tl-outside.done {
 	color: var(--text-3);
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 /* Sticks to the left edge while the bar's start is scrolled out of view. */
@@ -610,7 +610,7 @@ function barColor(task: Task): string {
 
 .ud-item.done .ud-title {
 	color: var(--text-3);
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .ud-item.dragging {

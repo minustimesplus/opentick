@@ -7,7 +7,8 @@ import AgentBadge from './AgentBadge.vue'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {isOverdue, taskDateLabel} from '@/lib/dates'
-import {labelColor, splitEmoji} from '@/lib/tasks'
+import {hasColor, labelColor, projectColor, splitEmoji} from '@/lib/tasks'
+import {prefs} from '@/lib/prefs'
 import {openTaskMenu, ui, type DropZone} from '@/lib/ui'
 import {isMobile} from '@/lib/viewport'
 import {t} from '@/lib/i18n'
@@ -36,6 +37,8 @@ const listLabel = computed(() => {
 	if (project.value.id === data.inboxId) return {emoji: null, name: t('inbox')}
 	return splitEmoji(project.value.title)
 })
+/** Settings > Appearance > Display > List Color: the list's color as a bar at the row's left edge. */
+const listBar = computed(() => prefs.listColor && hasColor(project.value) ? projectColor(project.value) : null)
 const dateLabel = computed(() => taskDateLabel(props.task))
 const overdue = computed(() => isOverdue(props.task))
 const hasDescription = computed(() => !!props.task.description && props.task.description.replace(/<[^>]*>/g, '').trim() !== '')
@@ -89,6 +92,7 @@ function onDragStart(e: DragEvent) {
 		@dragleave="zone = null"
 		@drop="onDrop"
 	>
+		<span v-if="listBar" class="list-bar" :style="{background: listBar}" />
 		<button v-if="childCount" class="fold" :style="{left: `${depth * 28}px`}" @click.stop="emit('toggle', task.id)">
 			<component :is="expanded ? ChevronDown : ChevronRight" :size="14" />
 		</button>
@@ -124,6 +128,20 @@ function onDragStart(e: DragEvent) {
 	border-radius: 6px;
 	cursor: default;
 	position: relative;
+}
+
+.list-bar {
+	position: absolute;
+	left: 0;
+	top: 9px;
+	bottom: 9px;
+	width: 3px;
+	border-radius: 2px;
+	pointer-events: none;
+}
+
+.done .list-bar {
+	opacity: 0.4;
 }
 
 .row::after {
@@ -209,7 +227,7 @@ function onDragStart(e: DragEvent) {
 
 .done .title {
 	color: var(--text-3);
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .wont-do .title {

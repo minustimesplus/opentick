@@ -441,7 +441,7 @@ function onDragEnd() {
 
 .done .card-title {
 	color: var(--text-3);
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .card-meta {

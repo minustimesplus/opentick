@@ -550,7 +550,7 @@ const creatingLabel = computed(() => {
 
 .chip.done {
 	opacity: 0.45;
-	text-decoration: line-through;
+	text-decoration: var(--done-decoration, line-through);
 }
 
 .dot {

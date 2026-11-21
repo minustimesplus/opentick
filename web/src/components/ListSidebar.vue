@@ -39,8 +39,13 @@ watch(() => [prefs.smartLists.completed, prefs.smartLists.wontDo, prefs.smartLis
 /** Smart lists that tasks can be dropped onto. */
 const droppable = new Set(['today', 'tomorrow', 'week', 'inbox', 'assigned'])
 
+/** Settings > Appearance > Display > Sidebar Count. There are no notes yet, so 'hideNote' shows the same counts as 'all'. */
+function shownCount(n: number | null | undefined) {
+	return prefs.sidebarCount === 'none' ? '' : n || ''
+}
+
 function smartCount(def: SmartListDef) {
-	return smart.count(def.key) || ''
+	return shownCount(smart.count(def.key))
 }
 const todayNum = new Date().getDate()
 // Two-letter weekday ("We"), like TickTick's Next 7 Days icon.
@@ -289,7 +294,7 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 						<span class="name">{{ splitEmoji(node.project.title).name }}</span>
 						<Bot v-if="agentOf(node.project.id)" :size="14" class="agent-mark" :class="agentOf(node.project.id)" :title="t('agentListMark', {agent: agentName(agentOf(node.project.id) || 'claude')})" />
 						<span v-if="hasColor(node.project)" class="cdot" :style="{background: projectColor(node.project)}" />
-						<span class="count">{{ data.counts.byProject.get(node.project.id) || '' }}</span>
+						<span class="count">{{ shownCount(data.counts.byProject.get(node.project.id)) }}</span>
 					</button>
 					<template v-if="node.children.length && !prefs.collapsed[`p${node.project.id}`]">
 						<button
@@ -306,7 +311,7 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 							<span class="name">{{ splitEmoji(c.title).name }}</span>
 							<Bot v-if="agentOf(c.id)" :size="14" class="agent-mark" :class="agentOf(c.id)" :title="t('agentListMark', {agent: agentName(agentOf(c.id) || 'claude')})" />
 							<span v-if="hasColor(c)" class="cdot" :style="{background: projectColor(c)}" />
-							<span class="count">{{ data.counts.byProject.get(c.id) || '' }}</span>
+							<span class="count">{{ shownCount(data.counts.byProject.get(c.id)) }}</span>
 						</button>
 					</template>
 				</template>
@@ -350,7 +355,7 @@ function moveList(dragged: Project, target: Project, zone: Zone) {
 				>
 					<Tag :size="16" class="ic" :style="{color: labelColor(l.hex_color)}" />
 					<span class="name">{{ l.title }}</span>
-					<span class="count">{{ data.counts.byLabel.get(l.id) || '' }}</span>
+					<span class="count">{{ shownCount(data.counts.byLabel.get(l.id)) }}</span>
 				</button>
 			</template>
 			</template>

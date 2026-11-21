@@ -27,7 +27,7 @@ import {clearTaskTime, nextWeek, pickTaskDate, setTaskDay, setTaskPriority, targ
 import {toast} from './lib/toast'
 import {featureOn, routeAllowed} from './lib/features'
 import {ownWindowControls} from './lib/desktop'
-import {applyTheme} from './lib/theme'
+import {applyDisplayPrefs, applyTheme} from './lib/theme'
 import {startReminderNotifier} from './lib/reminderNotifier'
 import {background, clearBackground, loadBackground} from './lib/background'
 import {onboardingPending} from './lib/onboarding'
@@ -40,6 +40,7 @@ const router = useRouter()
 const route = useRoute()
 
 applyTheme()
+applyDisplayPrefs()
 watchEffect(() => {
 	document.documentElement.lang = locale.value
 })
