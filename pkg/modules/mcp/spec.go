@@ -50,7 +50,7 @@ const formatArgHint = "Pass format=markdown to exchange rich-text fields as Mark
 
 const serverInstructions = `Rich-text fields (task and project descriptions, comments) are HTML by default. Pass format: "markdown" on read, list and update tools to exchange them as GFM Markdown.
 
-Contacts are the user's personal CRM. For bulk changes: (1) contacts_distinct_values to find every spelling of a school, company or city, (2) contacts_search with those terms, reading each result's matched reasons, (3) show the user borderline matches and ask if unsure, (4) write with contacts_add_to_group or contacts_tag (dry_run first for large sets). Editing a contact field locks it against LinkedIn imports. No tool deletes contacts.`
+Contacts are the user's personal CRM. For bulk changes: (1) distinct_values to find every spelling of a school, company or city, (2) search_contacts with those terms, reading each result's matched reasons, (3) show the user borderline matches and ask if unsure, (4) write with add_to_group or tag_contacts (dry_run first for large sets). Editing a contact field locks it against LinkedIn imports. No tool deletes contacts.`
 
 func buildToolSpec(oapi *huma.OpenAPI, op *huma.Operation) (*toolSpec, error) {
 	props := map[string]*jsonschema.Schema{}

@@ -364,7 +364,7 @@ func describeFor(t *testing.T, api huma.API, method, path string) string {
 		op = item.Patch
 	}
 	require.NotNil(t, op)
-	return describe(api.OpenAPI(), op, specFor(t, api, method, path))
+	return describe(api.OpenAPI(), op.OperationID, op, specFor(t, api, method, path))
 }
 
 func TestDescribe_FormatHint(t *testing.T) {

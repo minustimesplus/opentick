@@ -110,12 +110,23 @@ func (m *Module) addToolsAuthorizedBy(srv *mcp.Server, token *models.APIToken) {
 			continue
 		}
 		srv.AddTool(&mcp.Tool{
+			Meta:        toolMeta(t),
 			Name:        t.name,
 			Description: t.description,
 			InputSchema: t.spec.schema,
 		}, m.rawToolHandler(t.name))
 	}
 	m.installCatalogTools(srv, catalog)
+}
+
+// PositionalMetaKey lists a tool's positional CLI arguments in its _meta.
+const PositionalMetaKey = "opentick/positional"
+
+func toolMeta(t *tool) mcp.Meta {
+	if len(t.positional) == 0 {
+		return nil
+	}
+	return mcp.Meta{PositionalMetaKey: t.positional}
 }
 
 func (m *Module) rawToolHandler(name string) mcp.ToolHandler {
