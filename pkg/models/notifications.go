@@ -64,6 +64,9 @@ type ReminderDueNotification struct {
 	Task         *Task         `json:"task"`
 	Project      *Project      `json:"project"`
 	TaskReminder *TaskReminder `json:"reminder"`
+
+	// Set when the user already got maxReminderMailsPerDay reminder mails today.
+	mailLimitReached bool
 }
 
 // ToTitle returns the translated one-line title for ReminderDueNotification
@@ -73,7 +76,7 @@ func (n *ReminderDueNotification) ToTitle(lang string) string {
 
 // ToMail returns the mail notification for ReminderDueNotification
 func (n *ReminderDueNotification) ToMail(lang string) *notifications.Mail {
-	if !config.ServiceEnableEmailReminders.GetBool() || n.User == nil || !n.User.EmailRemindersEnabled {
+	if !config.ServiceEnableEmailReminders.GetBool() || n.User == nil || !n.User.EmailRemindersEnabled || n.mailLimitReached {
 		return nil
 	}
 

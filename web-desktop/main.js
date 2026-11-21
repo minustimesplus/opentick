@@ -529,6 +529,13 @@ ipcMain.on('window:toggle-maximize', () => {
 	else mainWindow.maximize()
 })
 ipcMain.on('window:close', () => mainWindow?.close())
+// A clicked reminder notification brings the window back to the front.
+ipcMain.on('window:focus', () => {
+	if (!mainWindow) return
+	if (mainWindow.isMinimized()) mainWindow.restore()
+	mainWindow.show()
+	mainWindow.focus()
+})
 
 // Manual check from Settings → About. An available update downloads in the
 // background (autoDownload) and announces itself via 'update:ready'.

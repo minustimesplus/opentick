@@ -122,6 +122,12 @@ export interface UserSettings {
 	notify_shared_task_done?: boolean
 	notify_shared_task_created?: boolean
 	notify_shared_task_deleted?: boolean
+	/** Task reminders are also mailed (at most 50 a day). */
+	email_reminders_enabled?: boolean
+	/** Daily notification: a summary of today's tasks at overdue_tasks_reminders_time. */
+	overdue_tasks_reminders_enabled?: boolean
+	/** HH:MM in the user's time zone. */
+	overdue_tasks_reminders_time?: string
 	/** Free-form client settings; `views` holds the prefs synced between devices (lib/viewSync.ts). */
 	frontend_settings?: Record<string, unknown> | null
 }

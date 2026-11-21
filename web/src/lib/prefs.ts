@@ -82,6 +82,10 @@ export interface Prefs {
 	/** Start the break right after a pomo ends, and the next pomo after a break. */
 	focusAutoStartBreak: boolean
 	focusAutoStartPomo: boolean
+	/** Settings > Notifications: desktop notifications when a task reminder is due, on this device. */
+	webReminder: boolean
+	/** Repeat reminder notifications until the task is opened or completed. */
+	constantReminder: boolean
 	features: Record<Feature, boolean>
 	/** Order of the view icons in the nav rail (keys), set by dragging them. Unknown or missing keys keep their default place. */
 	navOrder: string[]
@@ -141,6 +145,8 @@ const defaults: Prefs = {
 	focusLongBreakEvery: 4,
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
+	webReminder: true,
+	constantReminder: false,
 	navOrder: [],
 	features: {calendar: true, matrix: true, habit: true, pomo: true, countdown: true, people: true, search: true, ai: true},
 	smartLists: {...smartListDefaults},
