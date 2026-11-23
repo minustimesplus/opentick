@@ -2,6 +2,11 @@ import type {Task} from '@/api/types'
 import type {CalEvent} from '@/stores/calendars'
 import {addDays, getSchedule, minutesOfDay, startOfDay, type Schedule} from '@/lib/dates'
 
+/** A stable key for a task on the grid; projected repeats share their task's id. */
+export function taskKey(task: Task): string {
+	return task.occurrence ? `t${task.id}@${task.occurrence}` : `t${task.id}`
+}
+
 /** Visual length used for tasks that have a time but no duration. */
 export const POINT_MINUTES = 25
 
@@ -44,7 +49,7 @@ export function layoutDay(tasks: Task[], day: Date, events: CalEvent[] = []): Ti
 	}
 	for (const task of tasks) {
 		const s = getSchedule(task)
-		if (s && !s.allDay) add(s, {key: `t${task.id}`, task})
+		if (s && !s.allDay) add(s, {key: taskKey(task), task})
 	}
 	for (const event of events) {
 		if (!event.allDay) add(eventSchedule(event), {key: `e${event.key}`, event})

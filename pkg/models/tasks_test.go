@@ -253,6 +253,28 @@ func TestTask_Update(t *testing.T) {
 			"project_id":  1,
 		}, false)
 	})
+	t.Run("show future occurrences can be set and cleared", func(t *testing.T) {
+		db.LoadAndAssertFixtures(t)
+		s := db.NewSession()
+		defer s.Close()
+
+		task := &Task{ID: 1, Title: "test", ProjectID: 1, ShowFutureOccurrences: true}
+		require.NoError(t, task.Update(s, u))
+		assert.True(t, task.ShowFutureOccurrences)
+
+		task = &Task{ID: 1, Title: "test", ProjectID: 1}
+		require.NoError(t, task.Update(s, u))
+		assert.False(t, task.ShowFutureOccurrences)
+
+		task = &Task{ID: 1, ShowFutureOccurrences: true}
+		require.NoError(t, task.UpdateColumns(s, u, []string{"show_future_occurrences"}))
+		require.NoError(t, s.Commit())
+		db.AssertExists(t, "tasks", map[string]interface{}{
+			"id":                      1,
+			"title":                   "test",
+			"show_future_occurrences": true,
+		}, false)
+	})
 	t.Run("hex color with leading #", func(t *testing.T) {
 		db.LoadAndAssertFixtures(t)
 		s := db.NewSession()

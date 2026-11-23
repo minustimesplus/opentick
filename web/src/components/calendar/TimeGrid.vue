@@ -3,6 +3,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import Popover from '@/components/Popover.vue'
 import EventIcon from './EventIcon.vue'
+import {Repeat} from 'lucide-vue-next'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {
@@ -15,7 +16,7 @@ import {prefs} from '@/lib/prefs'
 import {isMobile} from '@/lib/viewport'
 import {t} from '@/lib/i18n'
 import type {CalEvent} from '@/stores/calendars'
-import {allDayEventsFor, allDayFor, layoutDay, minOf, POINT_MINUTES, snap, totalHeight, yOf, type Scale, type TimedItem} from './layout'
+import {allDayEventsFor, allDayFor, layoutDay, taskKey, minOf, POINT_MINUTES, snap, totalHeight, yOf, type Scale, type TimedItem} from './layout'
 
 const props = withDefaults(defineProps<{
 	/** The days on screen. */
@@ -139,7 +140,7 @@ const columns = computed(() => strip.value.days.map(day => ({
 	items: layoutDay(props.tasks, day, props.events),
 	allDay: [
 		...allDayEventsFor(props.events, day).map(event => ({key: `e${event.key}`, event, task: undefined})),
-		...allDayFor(props.tasks, day).map(task => ({key: `t${task.id}`, task, event: undefined})),
+		...allDayFor(props.tasks, day).map(task => ({key: taskKey(task), task, event: undefined})),
 	],
 })))
 
@@ -449,6 +450,8 @@ function startCreate(e: PointerEvent) {
 function onMove(e: PointerEvent) {
 	if (!drag) return
 	if (!drag.started) {
+		// Projected repeats can't be moved; they only open their task.
+		if (drag.task?.occurrence) return
 		if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return
 		drag.started = true
 		dragging.value = true
@@ -651,12 +654,14 @@ const today0 = computed(() => startOfDay(now.value))
 								<div
 									v-else-if="entry.task"
 									class="ad-chip"
-									:class="{done: entry.task.done}"
+									:class="{done: entry.task.done, occ: !!entry.task.occurrence}"
 									:style="{'--c': color(entry.task)}"
+									:title="entry.task.occurrence ? t('upcomingRepeat') : undefined"
 									@pointerdown="startOnAllDay($event, entry.task!, i)"
 									@contextmenu="openTaskMenu(entry.task!.id, $event)"
 								>
-									<TaskCheckbox :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
+									<Repeat v-if="entry.task.occurrence" :size="13" class="occ-ic" />
+									<TaskCheckbox v-else :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="13" @toggle="data.toggleDone(entry.task!.id)" />
 									<span class="ad-title">{{ entry.task.title }}</span>
 								</div>
 							</template>
@@ -719,17 +724,19 @@ const today0 = computed(() => startOfDay(now.value))
 								<div
 									v-else-if="it.task"
 									class="ev"
-									:class="{point: it.point, done: it.task.done, ghost: preview?.task?.id === it.task.id, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
+									:class="{point: it.point, done: it.task.done, ghost: !it.task.occurrence && preview?.task?.id === it.task.id, occ: !!it.task.occurrence, short: yOf(it.endMin, scale) - yOf(it.startMin, scale) < 40}"
 									:style="itemStyle(it)"
+									:title="it.task.occurrence ? t('upcomingRepeat') : undefined"
 									@pointerdown.stop="startOnItem($event, it, i, 'move')"
 									@contextmenu="openTaskMenu(it.task!.id, $event)"
 								>
 									<div class="ev-top">
-										<TaskCheckbox :done="it.task.done" :wont-do="it.task.wont_do" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
+										<Repeat v-if="it.task.occurrence" :size="13" class="occ-ic" />
+										<TaskCheckbox v-else :done="it.task.done" :wont-do="it.task.wont_do" on-color :size="13" @toggle="data.toggleDone(it.task!.id)" />
 										<span class="ev-title">{{ it.task.title }}</span>
 									</div>
 									<div v-if="!it.point" class="ev-time">{{ timeRange(it.schedule) }}</div>
-									<div class="resize" @pointerdown.stop="startOnItem($event, it, i, 'resize')" />
+									<div v-if="!it.task.occurrence" class="resize" @pointerdown.stop="startOnItem($event, it, i, 'resize')" />
 								</div>
 							</template>
 
@@ -1049,6 +1056,17 @@ const today0 = computed(() => startOfDay(now.value))
 .ev.point,
 .ev.short {
 	padding: 2px 6px;
+}
+
+/* Projected repeats of a task: read-only previews. */
+.occ {
+	opacity: 0.6;
+	outline: 1px dashed color-mix(in srgb, var(--c) 70%, transparent);
+	outline-offset: -1px;
+}
+
+.occ-ic {
+	flex-shrink: 0;
 }
 
 .ev.ghost {

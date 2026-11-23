@@ -25,6 +25,7 @@ import {
 	startOfMonth, startOfWeek,
 } from '@/lib/dates'
 import {hasColor, projectColor, splitEmoji} from '@/lib/tasks'
+import {futureOccurrences} from '@/lib/occurrences'
 import {openTaskDrawer} from '@/lib/ui'
 import {isMobile} from '@/lib/viewport'
 import {toast} from '@/lib/toast'
@@ -99,15 +100,21 @@ const taskRange = computed(() => {
 	return {start: addDays(range.value.start, -pageDays.value), end: addDays(range.value.end, pageDays.value)}
 })
 
-const visibleTasks = computed<Task[]>(() => data.allTasks.filter(task => {
-	if (!data.projectMap.has(task.project_id) || hidden.value.has(task.project_id)) return false
-	// Completed tasks never show on the calendar; ticking one off removes it.
-	if (task.done) return false
-	const s = getSchedule(task)
-	if (!s) return false
-	const end = s.end ?? s.date
-	return end >= taskRange.value.start && s.start < taskRange.value.end
-}))
+const visibleTasks = computed<Task[]>(() => {
+	const {start, end} = taskRange.value
+	const out: Task[] = []
+	for (const task of data.allTasks) {
+		if (!data.projectMap.has(task.project_id) || hidden.value.has(task.project_id)) continue
+		// Completed tasks never show on the calendar; ticking one off removes it.
+		if (task.done) continue
+		const s = getSchedule(task)
+		if (!s) continue
+		if ((s.end ?? s.date) >= start && s.start < end) out.push(task)
+		// Repeating tasks can opt in to showing their upcoming repeats too.
+		out.push(...futureOccurrences(task, start, end))
+	}
+	return out
+})
 
 // ---- subscribed calendars ----
 onMounted(() => {

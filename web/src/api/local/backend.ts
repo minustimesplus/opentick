@@ -179,7 +179,7 @@ function queryTasks(db: DB, source: StoredTask[], query: Query, viewId?: number)
 
 const TASK_FIELDS = [
 	'title', 'description', 'done', 'done_at', 'wont_do', 'due_date', 'start_date', 'end_date', 'priority', 'project_id',
-	'reminders', 'repeat_after', 'repeat_mode', 'repeat_rule', 'hex_color', 'is_favorite', 'percent_done', 'bucket_id',
+	'reminders', 'repeat_after', 'repeat_mode', 'repeat_rule', 'show_future_occurrences', 'hex_color', 'is_favorite', 'percent_done', 'bucket_id',
 ] as const
 
 function applyTaskFields(task: StoredTask, body: Body) {
@@ -282,6 +282,7 @@ function newTask(db: DB, projectId: number, body: Body): StoredTask {
 		repeat_after: 0,
 		repeat_mode: 0,
 		repeat_rule: '',
+		show_future_occurrences: false,
 		hex_color: '',
 		is_favorite: false,
 		created: stamp,

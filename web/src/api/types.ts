@@ -37,6 +37,10 @@ export interface Task {
 	repeat_mode?: number
 	/** RFC 5545 RRULE value; takes precedence over repeat_after. */
 	repeat_rule?: string
+	/** Calendars show all upcoming repeats of the task, not just the current one. */
+	show_future_occurrences?: boolean
+	/** Client-only: set on the projected copies of a repeating task the calendar draws (1 = the next repeat). */
+	occurrence?: number
 	hex_color?: string
 	is_favorite?: boolean
 	created?: string
