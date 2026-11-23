@@ -3,6 +3,8 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
 import Popover from '@/components/Popover.vue'
 import EventIcon from './EventIcon.vue'
+import {Repeat} from 'lucide-vue-next'
+import {taskKey} from './layout'
 import type {Task} from '@/api/types'
 import {useData} from '@/stores/data'
 import {
@@ -205,7 +207,7 @@ const byDay = computed(() => {
 	for (const task of props.tasks) {
 		const s = getSchedule(task)
 		if (!s) continue
-		add(s.start, s.end && s.allDay ? s.end : s.date, {key: `t${task.id}`, task, allDay: s.allDay, start: s.start})
+		add(s.start, s.end && s.allDay ? s.end : s.date, {key: taskKey(task), task, allDay: s.allDay, start: s.start})
 	}
 	for (const event of props.events) {
 		// The end is exclusive: an event ending at midnight does not show on the next day.
@@ -391,14 +393,16 @@ const creatingLabel = computed(() => {
 						<div
 							v-else-if="entry.task"
 							class="chip"
-							:class="{timed: !!chipTime(entry), done: entry.task.done}"
+							:class="{timed: !!chipTime(entry), done: entry.task.done, occ: !!entry.task.occurrence}"
 							:style="{'--c': color(entry.task)}"
-							:draggable="!isMobile"
+							:title="entry.task.occurrence ? t('upcomingRepeat') : undefined"
+							:draggable="!isMobile && !entry.task.occurrence"
 							@dragstart="onDragStart($event, entry.task!)"
 							@click="openTaskDrawer(entry.task!.id)"
 							@contextmenu="openTaskMenu(entry.task!.id, $event)"
 						>
-							<TaskCheckbox v-if="!chipTime(entry)" :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="12" @toggle="data.toggleDone(entry.task!.id)" />
+							<Repeat v-if="entry.task.occurrence && !chipTime(entry)" :size="12" class="occ-ic" />
+							<TaskCheckbox v-else-if="!chipTime(entry)" :done="entry.task.done" :wont-do="entry.task.wont_do" on-color :size="12" @toggle="data.toggleDone(entry.task!.id)" />
 							<span v-else class="dot" />
 							<span class="title">{{ entry.task.title }}</span>
 							<span v-if="chipTime(entry)" class="time">{{ chipTime(entry) }}</span>
@@ -546,6 +550,17 @@ const creatingLabel = computed(() => {
 
 .chip.timed:hover {
 	background: var(--bg-hover);
+}
+
+/* Projected repeats of a task: read-only previews. */
+.occ {
+	opacity: 0.6;
+	outline: 1px dashed color-mix(in srgb, var(--c) 70%, transparent);
+	outline-offset: -1px;
+}
+
+.occ-ic {
+	flex-shrink: 0;
 }
 
 .chip.done {

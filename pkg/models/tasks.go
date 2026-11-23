@@ -115,6 +115,8 @@ type Task struct {
 	RepeatMode TaskRepeatMode `xorm:"not null default 0" json:"repeat_mode" doc:"How the task repeats when marked done: 0 = after repeat_after seconds, 1 = monthly (ignores repeat_after), 2 = from the current date rather than the last set date."`
 	// An RFC 5545 recurrence rule. When set it takes precedence over repeat_after and repeat_mode 1.
 	RepeatRule string `xorm:"varchar(500) null 'repeat_rule'" json:"repeat_rule" maxLength:"500" doc:"An RFC 5545 RRULE value (without the RRULE: prefix) describing how the task repeats, e.g. FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR or FREQ=MONTHLY;BYDAY=-1FR;COUNT=5. Supports FREQ=DAILY|WEEKLY|MONTHLY|YEARLY with INTERVAL, BYDAY (ordinals for monthly/yearly), BYMONTHDAY, BYMONTH, WKST and one of COUNT or UNTIL. COUNT is the number of occurrences left including the current one and counts down as the task is completed. Takes precedence over repeat_after; with repeat_mode 2 the next occurrence counts from the completion date. Stored in canonical form; empty means no rule."`
+	// Whether calendars show the task's upcoming repeats ahead of time.
+	ShowFutureOccurrences bool `xorm:"bool not null default false 'show_future_occurrences'" json:"show_future_occurrences" doc:"Whether calendar views show all upcoming occurrences of a repeating task ahead of time, rather than only the current one. Display-only: it does not change how the task repeats."`
 	// The task priority. Can be anything you want, it is possible to sort by this later.
 	Priority int64 `xorm:"bigint null" json:"priority"`
 	// When this task starts.
@@ -1365,6 +1367,7 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		"bucket_id",
 		"repeat_mode",
 		"repeat_rule",
+		"show_future_occurrences",
 		"cover_image_attachment_id",
 	}
 
@@ -1437,6 +1440,9 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 		}
 		if !fieldSet["repeat_rule"] {
 			t.RepeatRule = ot.RepeatRule
+		}
+		if !fieldSet["show_future_occurrences"] {
+			t.ShowFutureOccurrences = ot.ShowFutureOccurrences
 		}
 		if !fieldSet["cover_image_attachment_id"] {
 			t.CoverImageAttachmentID = ot.CoverImageAttachmentID
@@ -1714,6 +1720,10 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// Repeat rule
 	if t.RepeatRule == "" {
 		ot.RepeatRule = ""
+	}
+	// Show future occurrences
+	if !t.ShowFutureOccurrences {
+		ot.ShowFutureOccurrences = false
 	}
 	// Is Favorite
 	if !t.IsFavorite {

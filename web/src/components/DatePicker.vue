@@ -86,6 +86,9 @@ const repeatChoice = computed<RepeatPreset | 'custom' | 'edit'>({
 	},
 })
 
+// Whether calendars show all upcoming repeats, not just the next one.
+const showOccurrences = ref(!!props.task?.show_future_occurrences)
+
 function saveRepeat(spec: RepeatSpec) {
 	repeatSpec.value = spec
 	repeatDirty.value = true
@@ -150,7 +153,9 @@ function buildPatch(): TaskPatch {
 	// An nth-weekday rule is pinned to the date, so it follows a date change.
 	const rebuild = repeatDirty.value || (spec && !spec.raw && spec.freq === 'MONTHLY' && spec.monthMode === 'nth')
 	const rep = !d ? repeatPatch(null, today) : rebuild ? repeatPatch(spec, d) : {}
-	return {...sched, reminders, ...rep}
+	const occ = showOccurrences.value && !!d && !!spec
+	const occPatch = occ !== !!props.task?.show_future_occurrences ? {show_future_occurrences: occ} : {}
+	return {...sched, reminders, ...rep, ...occPatch}
 }
 
 function apply() {
@@ -159,7 +164,10 @@ function apply() {
 }
 
 function clear() {
-	emit('apply', {...schedulePatch(null, false), reminders: [], ...repeatPatch(null, today)})
+	emit('apply', {
+		...schedulePatch(null, false), reminders: [], ...repeatPatch(null, today),
+		...(props.task?.show_future_occurrences ? {show_future_occurrences: false} : {}),
+	})
 	emit('close')
 }
 </script>
@@ -240,6 +248,10 @@ function clear() {
 					<option v-if="repeatChoice === 'custom'" value="custom">{{ describeRepeat(repeatSpec, anchorDay) }}</option>
 					<option value="edit">{{ t('repCustomEdit') }}</option>
 				</select>
+			</label>
+			<label v-if="repeatSpec" class="row occ-row" :title="t('repShowOccurrencesHint')">
+				<input v-model="showOccurrences" type="checkbox" class="occ-check">
+				<span class="row-label">{{ t('repShowOccurrences') }}</span>
 			</label>
 		</div>
 
@@ -382,6 +394,17 @@ function clear() {
 
 .row-label {
 	flex: 1;
+}
+
+.occ-row {
+	height: 28px;
+	font-size: 13px;
+}
+
+.occ-check {
+	width: 16px;
+	margin: 0;
+	accent-color: var(--accent);
 }
 
 .time,

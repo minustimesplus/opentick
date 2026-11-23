@@ -4,6 +4,8 @@ import type {Task} from '@/api/types'
 import {AGENDA_DAYS, type CalEvent} from '@/stores/calendars'
 import {useData} from '@/stores/data'
 import TaskCheckbox from '@/components/TaskCheckbox.vue'
+import {Repeat} from 'lucide-vue-next'
+import {taskKey} from './layout'
 import {addDays, dayDiff, fmtLongDate, fmtTime, fmtWeekdayLong, getSchedule, startOfDay} from '@/lib/dates'
 import {t} from '@/lib/i18n'
 import {openTaskMenu} from '@/lib/ui'
@@ -25,7 +27,7 @@ const days = computed(() => {
 		if (!s) continue
 		const i = dayDiff(s.date, first)
 		if (i < 0 || i >= AGENDA_DAYS) continue
-		out[i].items.push({kind: 'task', key: `t${task.id}`, task, time: s.allDay ? '' : fmtTime(s.start), sort: s.allDay ? -1 : s.start.getTime()})
+		out[i].items.push({kind: 'task', key: taskKey(task), task, time: s.allDay ? '' : fmtTime(s.start), sort: s.allDay ? -1 : s.start.getTime()})
 	}
 	for (const event of props.events) {
 		// Every day an event covers within the window.
@@ -63,11 +65,14 @@ function dayTitle(d: Date): string {
 				<div
 					v-if="item.kind === 'task'"
 					class="item"
+					:class="{occ: !!item.task.occurrence}"
 					:data-task-id="item.task.id"
+					:title="item.task.occurrence ? t('upcomingRepeat') : undefined"
 					@click="emit('openTask', item.task.id)"
 					@contextmenu="openTaskMenu(item.task.id, $event)"
 				>
-					<TaskCheckbox :done="item.task.done" :wont-do="item.task.wont_do" :priority="item.task.priority" @toggle="data.toggleDone(item.task.id)" />
+					<span v-if="item.task.occurrence" class="occ-box"><Repeat :size="14" /></span>
+					<TaskCheckbox v-else :done="item.task.done" :wont-do="item.task.wont_do" :priority="item.task.priority" @toggle="data.toggleDone(item.task.id)" />
 					<span class="time">{{ item.time || t('allDay') }}</span>
 					<span class="title">{{ item.task.title }}</span>
 				</div>
@@ -102,6 +107,19 @@ h3 {
 
 h3.today {
 	color: var(--accent);
+}
+
+/* Projected repeats of a task: read-only previews. */
+.item.occ {
+	opacity: 0.6;
+}
+
+.occ-box {
+	display: inline-flex;
+	justify-content: center;
+	width: 16px;
+	flex-shrink: 0;
+	color: var(--text-3);
 }
 
 .item {
