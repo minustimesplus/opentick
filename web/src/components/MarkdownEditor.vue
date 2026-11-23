@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import {computed, nextTick, ref, watch} from 'vue'
-import {renderMarkdown, toggleTaskLine} from '@/lib/markdown'
+import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
+import {X} from 'lucide-vue-next'
+import {attachmentImageUrl, renderMarkdown, toggleTaskLine} from '@/lib/markdown'
+import {attachmentImage} from '@/lib/attachmentImages'
+import {useData} from '@/stores/data'
 import {t, type MessageKey} from '@/lib/i18n'
 
-const props = defineProps<{modelValue: string, placeholder?: string}>()
+// With a taskId, pasted (and dropped) images upload as attachments of that task
+// and are embedded inline as `![name](attachment:<id>)`, as in TickTick.
+const props = defineProps<{modelValue: string, placeholder?: string, taskId?: number}>()
 const emit = defineEmits<{'update:modelValue': [v: string], focus: [], blur: []}>()
+const data = useData()
 
 const el = ref<HTMLTextAreaElement | null>(null)
+const previewEl = ref<HTMLElement | null>(null)
 const editing = ref(false)
 const html = computed(() => renderMarkdown(props.modelValue))
 const showPreview = computed(() => !editing.value && props.modelValue.trim() !== '')
@@ -27,11 +34,14 @@ function focus() {
 		autosize()
 	})
 }
-defineExpose({focus})
 
 function onPreviewClick(e: MouseEvent) {
 	const target = e.target as HTMLElement
 	if (target.closest('a')) return
+	if (target instanceof HTMLImageElement) {
+		openLightbox(target)
+		return
+	}
 	if (target instanceof HTMLInputElement && target.type === 'checkbox') {
 		const line = Number(target.dataset.line)
 		emit('update:modelValue', toggleTaskLine(props.modelValue, line))
@@ -76,6 +86,111 @@ function wrap(mark: string) {
 		return
 	}
 	set(value.slice(0, s) + mark + sel + mark + value.slice(e), s + mark.length, e + mark.length)
+}
+
+// --- images -----------------------------------------------------------------
+
+// v-html re-creates the <img>s on every render, so fill in their sources afterwards.
+watch([html, showPreview, () => props.taskId], () => nextTick(() => {
+	const taskId = props.taskId
+	previewEl.value?.querySelectorAll<HTMLImageElement>('img[data-attachment]').forEach(img => {
+		if (!taskId) return
+		attachmentImage(taskId, Number(img.dataset.attachment))
+			.then(url => { img.src = url })
+			.catch(() => img.classList.add('broken'))
+	})
+}), {immediate: true})
+
+const lightbox = ref<{src: string, alt: string} | null>(null)
+
+function openLightbox(img: HTMLImageElement) {
+	if (img.src && !img.classList.contains('broken')) lightbox.value = {src: img.src, alt: img.alt}
+}
+
+function onWindowKey(e: KeyboardEvent) {
+	if (e.key === 'Escape' && lightbox.value) {
+		e.stopPropagation()
+		lightbox.value = null
+	}
+}
+watch(lightbox, open => {
+	if (open) window.addEventListener('keydown', onWindowKey, true)
+	else window.removeEventListener('keydown', onWindowKey, true)
+})
+
+let alive = true
+onBeforeUnmount(() => {
+	alive = false
+	window.removeEventListener('keydown', onWindowKey, true)
+})
+
+/** Replaces `from` with `to` in the description, keeping the caret where it was. */
+function replaceText(from: string, to: string): boolean {
+	if (!alive) {
+		// The editor closed mid-upload; the token may already be saved, so patch the task.
+		const desc = props.taskId ? data.tasks.get(props.taskId)?.description : undefined
+		if (!props.taskId || !desc?.includes(from)) return false
+		data.updateTask(props.taskId, {description: desc.replace(from, to)})
+		return true
+	}
+	const at = props.modelValue.indexOf(from)
+	if (at === -1) return false
+	const value = props.modelValue.slice(0, at) + to + props.modelValue.slice(at + from.length)
+	const ta = el.value
+	if (ta && document.activeElement === ta) {
+		const shift = (p: number) => p >= at + from.length ? p + to.length - from.length : Math.min(p, at + to.length)
+		set(value, shift(ta.selectionStart), shift(ta.selectionEnd))
+	} else {
+		emit('update:modelValue', value)
+	}
+	return true
+}
+
+let uploadSeq = 0
+const altText = (name: string) => name.replace(/[[\]\n\r]/g, ' ').trim() || 'image'
+
+/**
+ * Embeds images at the caret (or at the end when not editing): each shows an
+ * "Uploading…" placeholder until its attachment exists, then becomes a reference.
+ */
+async function insertImages(files: File[]) {
+	const taskId = props.taskId
+	if (!taskId || !files.length) return
+	const tokens = files.map(f => `![${altText(t('imageUploading', {name: f.name}))}](uploading:${Date.now()}-${++uploadSeq})`)
+	const ta = el.value
+	const value = props.modelValue
+	const active = editing.value && ta
+	const s = active ? ta.selectionStart : value.length
+	const e = active ? ta.selectionEnd : value.length
+	const before = value.slice(0, s)
+	const after = value.slice(e)
+	const lead = before === '' || before.endsWith('\n') ? '' : '\n'
+	const trail = after.startsWith('\n') ? '' : '\n'
+	const block = lead + tokens.join('\n') + trail
+	if (active) set(before + block + after, s + block.length)
+	else emit('update:modelValue', before + block + after)
+
+	await Promise.all(files.map(async (f, i) => {
+		const [att] = await data.uploadAttachments(taskId, [f])
+		const token = tokens[i]!
+		if (att) replaceText(token, `![${altText(att.file.name)}](${attachmentImageUrl(att.id)})`)
+		else if (!replaceText(token + '\n', '')) replaceText(token, '')
+	}))
+}
+defineExpose({focus, insertImages})
+
+const imageFiles = (list?: FileList | null) => [...(list ?? [])].filter(f => f.type.startsWith('image/'))
+
+function onPaste(e: ClipboardEvent) {
+	if (!props.taskId || !e.clipboardData) return
+	const files = imageFiles(e.clipboardData.files)
+	if (!files.length) return
+	// Office apps put both the text and a rendered picture of it on the clipboard;
+	// keep the text there. Copied web images come with an <img> in the HTML.
+	const html = e.clipboardData.getData('text/html')
+	if (html && !/<img\b/i.test(html) && e.clipboardData.getData('text/plain').trim()) return
+	e.preventDefault()
+	insertImages(files)
 }
 
 // --- slash commands ---------------------------------------------------------
@@ -231,7 +346,7 @@ function onInput(e: Event) {
 <template>
 	<div class="md-editor">
 		<!-- eslint-disable-next-line vue/no-v-html -->
-		<div v-if="showPreview" class="md-preview" tabindex="0" @click="onPreviewClick" @focus="focus" v-html="html" />
+		<div v-if="showPreview" ref="previewEl" class="md-preview" tabindex="0" @click="onPreviewClick" @focus="focus" v-html="html" />
 		<textarea
 			v-show="!showPreview"
 			ref="el"
@@ -242,6 +357,7 @@ function onInput(e: Event) {
 			spellcheck="true"
 			@input="onInput"
 			@keydown="onKeydown"
+			@paste="onPaste"
 			@keyup="e => ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) && updateSlash()"
 			@click="updateSlash"
 			@focus="editing = true; emit('focus')"
@@ -260,6 +376,12 @@ function onInput(e: Event) {
 				{{ t(c.label) }}
 			</button>
 		</div>
+		<Teleport to="body">
+			<div v-if="lightbox" class="md-lightbox" @click="lightbox = null">
+				<img :src="lightbox.src" :alt="lightbox.alt" @click.stop>
+				<button class="icon-btn md-lightbox-close" :title="t('close')" @click="lightbox = null"><X :size="20" /></button>
+			</div>
+		</Teleport>
 	</div>
 </template>
 
@@ -384,6 +506,58 @@ function onInput(e: Event) {
 .md-preview :deep(li.task.done span) {
 	color: var(--text-4);
 	text-decoration: line-through;
+}
+
+.md-preview :deep(.md-img) {
+	display: block;
+	max-width: 100%;
+	max-height: 480px;
+	margin: 4px 0;
+	border-radius: 6px;
+	background: var(--bg-active);
+	cursor: zoom-in;
+}
+
+.md-preview :deep(.md-img:not([src])) {
+	width: 160px;
+	height: 90px;
+	cursor: default;
+}
+
+.md-preview :deep(.md-img-uploading) {
+	display: inline-block;
+	padding: 24px 16px;
+	border: 1px dashed var(--border-strong);
+	border-radius: 6px;
+	color: var(--text-4);
+	font-size: 13px;
+}
+
+.md-lightbox {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40px;
+	background: rgb(0 0 0 / 80%);
+	cursor: zoom-out;
+}
+
+.md-lightbox img {
+	max-width: 100%;
+	max-height: 100%;
+	border-radius: 4px;
+	cursor: default;
+	object-fit: contain;
+}
+
+.md-lightbox-close {
+	position: absolute;
+	top: 16px;
+	right: 16px;
+	color: #fff;
 }
 
 .slash-menu {

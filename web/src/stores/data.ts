@@ -750,8 +750,19 @@ export const useData = defineStore('data', () => {
 		if (t) tasks.set(id, {...t, ...patch})
 	}
 
-	async function uploadAttachments(taskId: number, files: File[]) {
-		if (!files.length) return
+	// Concurrent uploads can lose files (SQLite in particular rejects parallel
+	// writes), so they run one after another.
+	let uploadQueue: Promise<unknown> = Promise.resolve()
+
+	/** Uploads files to a task; returns the attachments that were created. */
+	function uploadAttachments(taskId: number, files: File[]): Promise<Attachment[]> {
+		if (!files.length) return Promise.resolve([])
+		const run = uploadQueue.then(() => uploadNow(taskId, files))
+		uploadQueue = run
+		return run
+	}
+
+	async function uploadNow(taskId: number, files: File[]): Promise<Attachment[]> {
 		const body = new FormData()
 		files.forEach(f => body.append('files', f))
 		try {
@@ -759,8 +770,10 @@ export const useData = defineStore('data', () => {
 			const added = res.success ?? []
 			patchLocal(taskId, {attachments: [...(tasks.get(taskId)?.attachments ?? []), ...added]})
 			res.errors?.forEach(e => toast(e.message ?? 'Upload failed'))
+			return added
 		} catch (e) {
 			toast(String((e as Error).message))
+			return []
 		}
 	}
 
