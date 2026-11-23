@@ -9,14 +9,29 @@ function safeUrl(u: string): string {
 	return /^(https?:|mailto:|\/|#)/i.test(u) ? u : ''
 }
 
+/** Markdown image source for an image stored as an attachment of the task. */
+export const attachmentImageUrl = (id: number) => `attachment:${id}`
+
+// `![alt](src)`. Attachment images carry no src; the editor resolves them with auth.
+function image(alt: string, url: string): string {
+	const att = url.match(/^attachment:(\d+)$/)
+	if (att) return `<img class="md-img" data-attachment="${att[1]}" alt="${alt}">`
+	if (url.startsWith('uploading:')) return `<span class="md-img-uploading">${alt}</span>`
+	const src = /^https?:/i.test(url) ? url.replace(/&amp;/g, '&') : ''
+	return src ? `<img class="md-img" src="${esc(src)}" alt="${alt}">` : alt
+}
+
 function inline(src: string): string {
 	const codes: string[] = []
-	let s = esc(src).replace(/`([^`]+)`/g, (_, c) => {
-		codes.push(`<code>${c}</code>`)
+	const stash = (html: string) => {
+		codes.push(html)
 		return `\u0000${codes.length - 1}\u0000`
-	})
+	}
+	let s = esc(src)
+		.replace(/`([^`]+)`/g, (_, c) => stash(`<code>${c}</code>`))
+		.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, url) => stash(image(alt, url)))
 	s = s
-		.replace(/!?\[([^\]]+)\]\(([^)\s]+)\)/g, (_, text, url) => {
+		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, text, url) => {
 			const href = safeUrl(url.replace(/&amp;/g, '&'))
 			return href ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${text}</a>` : text
 		})

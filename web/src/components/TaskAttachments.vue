@@ -9,10 +9,10 @@ import {fmtDayMonth, parseDate} from '@/lib/dates'
 import {t} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
 
-const props = defineProps<{taskId: number}>()
+const props = defineProps<{taskId: number, hidden?: Set<number>}>()
 const data = useData()
 
-const attachments = computed(() => data.tasks.get(props.taskId)?.attachments ?? [])
+const attachments = computed(() => (data.tasks.get(props.taskId)?.attachments ?? []).filter(a => !props.hidden?.has(a.id)))
 
 const isImage = (a: Attachment) => a.file.mime.startsWith('image/')
 
