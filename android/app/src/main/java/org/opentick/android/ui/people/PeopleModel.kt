@@ -206,6 +206,85 @@ class PeopleStore(private val api: Api, private val prefs: Prefs, private val sc
         _contacts.value = emptyList(); _groups.value = emptyList(); _tags.value = emptyList()
         _loaded.value = false; _error.value = null; openId.value = null; _open.value = null
         photos.clear()
+        matchingPhone.value = false; _phoneSuggestions.value = null; deviceContacts = emptyList()
+    }
+
+    // ─── Numbers from the phone's contacts ───────────────────────────────
+
+    /** Whether the phone contacts screen is open. */
+    val matchingPhone = MutableStateFlow(false)
+
+    /** Suggestions from the last scan of the phone's contacts; null before the first one. */
+    private val _phoneSuggestions = MutableStateFlow<List<PhoneSuggestion>?>(null)
+    val phoneSuggestions: StateFlow<List<PhoneSuggestion>?> = _phoneSuggestions
+    private val _phoneScanning = MutableStateFlow(false)
+    val phoneScanning: StateFlow<Boolean> = _phoneScanning
+
+    /** The phone's contacts as of the last scan. Kept in memory only. */
+    private var deviceContacts: List<DeviceContact> = emptyList()
+
+    /**
+     * Rereads the contacts from the server and the phone's contacts with
+     * [read], and suggests numbers to add. Nothing is saved until [acceptPhone].
+     */
+    fun scanPhone(read: () -> List<DeviceContact>) {
+        if (_phoneScanning.value) return
+        _phoneScanning.value = true
+        scope.launch {
+            try {
+                val o = call { api.contactOverview() } ?: return@launch
+                _contacts.value = o.contacts.orEmpty()
+                deviceContacts = call(read) ?: return@launch
+                rematchPhone()
+            } finally {
+                _phoneScanning.value = false
+            }
+        }
+    }
+
+    private suspend fun rematchPhone() {
+        val contacts = _contacts.value
+        val device = deviceContacts
+        val ignored = prefs.ignoredPhoneMatches
+        _phoneSuggestions.value = withContext(Dispatchers.Default) { matchPhoneContacts(contacts, device, ignored) }
+    }
+
+    private fun dropSuggestion(s: PhoneSuggestion) {
+        _phoneSuggestions.value = _phoneSuggestions.value?.filter { it.contact.id != s.contact.id }
+    }
+
+    /** Saves [number] as the person's phone number, replacing the one they had. */
+    fun acceptPhone(s: PhoneSuggestion, number: String) = scope.launch {
+        val c = call { api.updateContact(s.contact.id, buildJsonObject { put("phone", number) }) } ?: return@launch
+        applyToRow(c)
+        dropSuggestion(s)
+        message.value = "Added the number to ${c.name.ifBlank { "the contact" }}."
+    }
+
+    /** Adds the first (preferably mobile) number of every suggestion. */
+    fun acceptAllPhone() = scope.launch {
+        var added = 0
+        for (s in _phoneSuggestions.value.orEmpty()) {
+            val c = call { api.updateContact(s.contact.id, buildJsonObject { put("phone", s.options.first().number) }) } ?: break
+            applyToRow(c)
+            dropSuggestion(s)
+            added++
+        }
+        if (added > 0 && message.value == null) message.value = "Added $added ${if (added == 1) "number" else "numbers"}."
+    }
+
+    /** Hides a suggestion for good, until its phone contact gets another number or [resetIgnoredPhone]. */
+    fun ignorePhone(s: PhoneSuggestion) {
+        prefs.ignoredPhoneMatches = prefs.ignoredPhoneMatches + s.key
+        dropSuggestion(s)
+    }
+
+    fun hasIgnoredPhone(): Boolean = prefs.ignoredPhoneMatches.isNotEmpty()
+
+    /** Shows ignored suggestions again. */
+    fun resetIgnoredPhone() = scope.launch {
+        prefs.ignoredPhoneMatches = emptySet()
+        rematchPhone()
     }
 
     private suspend fun <T> call(block: () -> T): T? = try {

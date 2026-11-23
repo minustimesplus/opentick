@@ -168,6 +168,11 @@ class Prefs(context: Context) {
     private fun readJson(key: String): JsonObject? =
         sp.getString(key, null)?.let { runCatching { Json.parseToJsonElement(it) as JsonObject }.getOrNull() }
 
+    /** Phone contact suggestions the user ignored in People (see PhoneSuggestion.key). */
+    var ignoredPhoneMatches: Set<String>
+        get() = sp.getStringSet("ignored_phone_matches", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("ignored_phone_matches", v).apply()
+
     /** Ids of reminder alarms currently scheduled, so they can be cancelled. */
     var scheduledReminders: Set<String>
         get() = sp.getStringSet("scheduled_reminders", emptySet()) ?: emptySet()
@@ -184,6 +189,7 @@ class Prefs(context: Context) {
             .remove("server_url").remove("access_token").remove("refresh_token")
             .remove("username").remove("display_name").remove("last_sync")
             .remove("views").remove("views_snapshot").remove("hidden_calendars")
+            .remove("ignored_phone_matches")
             .apply()
         _views.value = Views()
         _hiddenCalendars.value = emptySet()
