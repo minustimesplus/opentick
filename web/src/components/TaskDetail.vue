@@ -22,6 +22,7 @@ import {fmtDayMonth, fmtTime, getSchedule, isOverdue, parseDate, scheduleLabel} 
 import {labelColor, level, PRIORITY_COLORS, splitEmoji} from '@/lib/tasks'
 import {t} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
+import {embeddedAttachmentIds} from '@/lib/attachmentImages'
 import {router} from '@/router'
 
 const props = defineProps<{taskId: number, closable?: boolean}>()
@@ -145,13 +146,20 @@ function onFileDrag(e: DragEvent) {
 	dropping.value = true
 }
 
+// Like TickTick, dropped images go inline into the description; other files
+// become attachments.
 function onFileDrop(e: DragEvent) {
 	dropping.value = false
 	const files = [...(e.dataTransfer?.files ?? [])]
 	if (!files.length) return
 	e.preventDefault()
-	data.uploadAttachments(props.taskId, files)
+	const images = descEl.value ? files.filter(f => f.type.startsWith('image/')) : []
+	descEl.value?.insertImages(images)
+	data.uploadAttachments(props.taskId, files.filter(f => !images.includes(f)))
 }
+
+// Images shown inline in the description are not listed again as attachments.
+const embedded = computed(() => embeddedAttachmentIds(description.value))
 
 function detach() {
 	pop.value = null
@@ -272,6 +280,7 @@ const meta = computed(() => {
 			<MarkdownEditor
 					ref="descEl"
 					v-model="description"
+					:task-id="task.id"
 					:placeholder="t('descriptionPlaceholder')"
 					@focus="descFocused = true"
 					@blur="descFocused = false; saveDescription()"
@@ -287,7 +296,7 @@ const meta = computed(() => {
 				<button ref="tagEl" class="add-tag" @click="pop = 'tag'"><Tag :size="13" /> {{ t('tags_add') }}</button>
 			</div>
 
-			<TaskAttachments :task-id="task.id" />
+			<TaskAttachments :task-id="task.id" :hidden="embedded" />
 			<TaskAgentPanel :task-id="task.id" />
 			<TaskComments ref="commentsEl" :task-id="task.id" />
 			<input ref="fileEl" type="file" multiple hidden @change="onFiles">

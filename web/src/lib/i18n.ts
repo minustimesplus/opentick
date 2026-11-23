@@ -524,6 +524,7 @@ const en = {
 	deleteCommentConfirm: 'Delete this comment?',
 	uploadAttachment: 'Upload Attachment',
 	deleteAttachmentConfirm: 'Delete "{name}"?',
+	imageUploading: 'Uploading {name}…',
 	download: 'Download',
 	view: 'View',
 	viewList: 'List',
