@@ -7,6 +7,7 @@ import LocalAccountDialog from './LocalAccountDialog.vue'
 import UserAvatar from './UserAvatar.vue'
 import {useData} from '@/stores/data'
 import {useFocus} from '@/stores/focus'
+import {usePeople} from '@/stores/people'
 import {t} from '@/lib/i18n'
 import {
 	BellIcon,
@@ -36,6 +37,7 @@ import {binding, formatBinding, type ShortcutId} from '@/lib/shortcuts'
 
 const data = useData()
 const focus = useFocus()
+const people = usePeople()
 const route = useRoute()
 const router = useRouter()
 
@@ -257,7 +259,7 @@ function startSpin(minTurns: number) {
 
 function onSpinTurn() {
 	syncTurns++
-	if (syncTurns >= syncMinTurns && !data.loading) {
+	if (syncTurns >= syncMinTurns && !data.loading && !people.loading) {
 		syncSpinning.value = false
 		syncMinTurns = 0
 	}
@@ -270,6 +272,9 @@ watch(() => data.loading, loading => {
 function sync() {
 	startSpin(MIN_SYNC_TURNS)
 	data.loadAll().catch(() => {})
+	// Contacts load once per session; a sync picks up people added elsewhere
+	// (browser extension, MCP, otk). Not loaded yet: the People view will.
+	if (people.loaded && !people.loading) people.load()
 }
 
 // The sync shortcut.
