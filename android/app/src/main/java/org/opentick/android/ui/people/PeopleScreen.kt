@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.outlined.ContactPhone
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PersonAdd
@@ -91,6 +92,7 @@ fun PeopleScreen(vm: MainViewModel) {
     val store = vm.people
     val mode by vm.prefs.mode.collectAsState()
     val openId by store.openId.collectAsState()
+    val matchingPhone by store.matchingPhone.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val message by store.message.collectAsState()
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); store.message.value = null } }
@@ -101,6 +103,10 @@ fun PeopleScreen(vm: MainViewModel) {
             mode != AccountMode.SERVER -> Column(Modifier.fillMaxSize()) {
                 PageHeader("People")
                 EmptyState("Sign in to see your contacts", "People are kept on your OpenTick server. Sign in from Settings → Account.")
+            }
+            matchingPhone -> {
+                BackHandler { store.matchingPhone.value = false }
+                PhoneMatchScreen(store)
             }
             openId != null -> {
                 BackHandler { store.closeContact() }
@@ -151,6 +157,7 @@ private fun PeopleList(vm: MainViewModel) {
                     }
                 }
             }
+            IconButton(onClick = { store.matchingPhone.value = true }) { Icon(Icons.Outlined.ContactPhone, "Numbers from phone contacts", tint = p.icon) }
             IconButton(onClick = { adding = true }) { Icon(Icons.Rounded.PersonAdd, "New contact", tint = p.icon) }
         })
         SearchField(query) { store.query.value = it }

@@ -26,6 +26,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 import java.util.Locale
+import org.opentick.android.ui.people.DeviceContact
+import org.opentick.android.ui.people.DeviceNumber
 
 /**
  * Renders the Habits and People tabs with data from a running server, on its own
@@ -135,6 +137,34 @@ class HabitsPeopleScreenshotTest {
                 .performScrollToNode(androidx.compose.ui.test.hasText("Ask about the notes", substring = true))
             waitFor("University of London")
             shot("people_3_history")
+        }
+    }
+
+    @Test
+    fun phoneContacts() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            compose.onNodeWithContentDescription("People").performClick()
+            waitFor("Grace Hopper")
+            compose.onNodeWithContentDescription("Numbers from phone contacts").performClick()
+            waitFor("Compare phone contacts")
+            shot("people_4_phone_intro")
+            // Robolectric has no address book; hand the store the phone's contacts.
+            it.onActivity { a ->
+                androidx.lifecycle.ViewModelProvider(a)[org.opentick.android.ui.MainViewModel::class.java].people.scanPhone {
+                    listOf(
+                        DeviceContact("Alan Turing", numbers = listOf(DeviceNumber("+44 7700 900461", "Mobile"))),
+                        DeviceContact("Amazing Grace", listOf("grace@example.com"), listOf(DeviceNumber("+1 703 555 0142", "Work"), DeviceNumber("+1 703 555 0199", "Mobile"))),
+                        DeviceContact("Ada Lovelace", numbers = listOf(DeviceNumber("+44 7700 900815", "Mobile"))),
+                        DeviceContact("Dijkstra, Edsger", numbers = listOf(DeviceNumber("+1 512 555 0110", "Home"))),
+                        DeviceContact("Pizza place", numbers = listOf(DeviceNumber("+44 20 7946 0999", "Work"))),
+                    )
+                }
+            }
+            waitFor("suggestions")
+            shot("people_5_phone_suggestions")
+            compose.onAllNodesWithText("Add number")[0].performClick()
+            waitFor("Added the number")
+            shot("people_6_phone_added")
         }
     }
 }
