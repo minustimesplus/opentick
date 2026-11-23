@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import type {ContactListItem} from '@/api/types'
-import {contactSubtitle, filterContacts, fold, indexContacts, initials, nameColor, sortContacts} from './people'
+import {contactSubtitle, filterContacts, fold, indexContacts, initials, nameColor, sortContacts, truncateText} from './people'
 
 function contact(patch: Partial<ContactListItem>): ContactListItem {
 	return {
@@ -100,5 +100,21 @@ describe('contactSubtitle', () => {
 		expect(contactSubtitle({title: 'Consultant', company: 'BCG', headline: 'x'})).toBe('Consultant · BCG')
 		expect(contactSubtitle({title: '', company: 'BCG', headline: 'x'})).toBe('BCG')
 		expect(contactSubtitle({title: '', company: '', headline: 'Student'})).toBe('Student')
+	})
+})
+
+describe('truncateText', () => {
+	it('leaves text that fits, and any text without a limit', () => {
+		expect(truncateText('short', 10)).toBeNull()
+		expect(truncateText('exactly10!', 10)).toBeNull()
+		expect(truncateText('a long text', 0)).toBeNull()
+	})
+
+	it('cuts at a word break with an ellipsis', () => {
+		expect(truncateText('The quick brown fox jumps', 18)).toBe('The quick brown…')
+	})
+
+	it('cuts mid-word when no break is close', () => {
+		expect(truncateText('Supercalifragilistic expialidocious', 10)).toBe('Supercalif…')
 	})
 })

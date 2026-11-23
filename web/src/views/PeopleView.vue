@@ -14,6 +14,7 @@ import {
 	Pencil,
 	Plus,
 	Search,
+	Settings,
 	Tag,
 	Trash2,
 	Upload,
@@ -25,7 +26,7 @@ import ContactAvatar from '@/components/people/ContactAvatar.vue'
 import ContactDetail from '@/components/people/ContactDetail.vue'
 import ContactDialog from '@/components/people/ContactDialog.vue'
 import GroupDialog from '@/components/people/GroupDialog.vue'
-import PeopleImport from '@/components/people/PeopleImport.vue'
+import PeopleSettings from '@/components/people/PeopleSettings.vue'
 import PeopleStats from '@/components/people/PeopleStats.vue'
 import Popover from '@/components/Popover.vue'
 import type {ContactGroup, ContactListItem} from '@/api/types'
@@ -64,16 +65,21 @@ const groupId = computed(() => /^g\d+$/.test(list.value) ? Number(list.value.sli
 const tagId = computed(() => /^t\d+$/.test(list.value) ? Number(list.value.slice(1)) : undefined)
 const group = computed(() => people.groups.find(g => g.id === groupId.value))
 const tag = computed(() => people.tags.find(x => x.id === tagId.value))
-const pane = computed<'contacts' | 'stats' | 'import'>(() => list.value === 'stats' || list.value === 'import' ? list.value : 'contacts')
+// Import lives in settings; old /people/import links land there.
+const pane = computed<'contacts' | 'stats' | 'settings'>(() => {
+	if (list.value === 'stats') return 'stats'
+	if (list.value === 'settings' || list.value === 'import') return 'settings'
+	return 'contacts'
+})
 const contactId = computed(() => {
 	if (route.name !== 'people') return undefined
 	const id = Number(route.params.contactId)
-	return pane.value !== 'import' && Number.isInteger(id) && id > 0 ? id : undefined
+	return pane.value !== 'settings' && Number.isInteger(id) && id > 0 ? id : undefined
 })
 
 const heading = computed(() => {
 	if (pane.value === 'stats') return t('peopleStats')
-	if (pane.value === 'import') return t('importContacts')
+	if (pane.value === 'settings') return t('settings')
 	return group.value?.name ?? (tag.value ? '#' + tag.value.name : t('allContacts'))
 })
 
@@ -274,9 +280,9 @@ async function deleteTag() {
 					<ChartPie :size="18" />
 					<span class="grow">{{ t('peopleStats') }}</span>
 				</button>
-				<button class="item" :class="{active: list === 'import'}" @click="openList('import')">
-					<Upload :size="18" />
-					<span class="grow">{{ t('import') }}</span>
+				<button class="item" :class="{active: pane === 'settings'}" @click="openList('settings')">
+					<Settings :size="18" />
+					<span class="grow">{{ t('settings') }}</span>
 				</button>
 
 				<div
@@ -363,7 +369,7 @@ async function deleteTag() {
 				</template>
 			</header>
 
-			<PeopleImport v-if="pane === 'import'" />
+			<PeopleSettings v-if="pane === 'settings'" />
 
 			<PeopleStats v-else-if="pane === 'stats'" :open-id="contactId" @open="openContact" />
 
@@ -393,7 +399,7 @@ async function deleteTag() {
 					<div class="sub">{{ t('noContactsHint') }}</div>
 					<div class="empty-actions">
 						<button class="btn primary" @click="addingContact = true"><Plus :size="16" /> {{ t('newContact') }}</button>
-						<button class="btn" @click="openList('import')"><Upload :size="15" /> {{ t('import') }}</button>
+						<button class="btn" @click="openList('settings')"><Upload :size="15" /> {{ t('import') }}</button>
 					</div>
 				</div>
 				<div v-else-if="people.loaded && !shown.length" class="empty-state">

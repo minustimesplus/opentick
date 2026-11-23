@@ -54,6 +54,9 @@ export interface Prefs {
 	peopleSidebarWidth: number
 	peopleDetailWidth: number
 	peopleGlobeWidth: number
+	/** People > Settings: characters of a contact's About, and of other long texts (experience descriptions), shown before "more". 0 shows everything. */
+	peopleAboutCutoff: number
+	peopleEntryCutoff: number
 	/** Width (px) of the habit detail pane, set by dragging its border. */
 	habitDetailWidth: number
 	/** Whether the weight panel above the habits list is open. */
@@ -134,6 +137,9 @@ const defaults: Prefs = {
 	peopleSidebarWidth: 260,
 	peopleDetailWidth: 400,
 	peopleGlobeWidth: 560,
+	// About three lines each in the default-width contact pane.
+	peopleAboutCutoff: 80,
+	peopleEntryCutoff: 120,
 	habitDetailWidth: 460,
 	habitWeightOpen: false,
 	calendarShowArchived: false,
