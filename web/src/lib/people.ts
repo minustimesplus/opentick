@@ -103,3 +103,15 @@ export function sortContacts(contacts: ContactListItem[], sort: ContactSort): Co
 export function contactSubtitle(c: Pick<ContactListItem, 'title' | 'company' | 'headline'>): string {
 	return [c.title, c.company].filter(Boolean).join(' · ') || c.headline
 }
+
+/**
+ * Shortens text to at most `max` characters (0 or less: no limit), cutting at
+ * the last word break when there is one reasonably close, and adding an ellipsis.
+ * Returns null when the text already fits.
+ */
+export function truncateText(text: string, max: number): string | null {
+	if (max <= 0 || text.length <= max) return null
+	const cut = text.slice(0, max)
+	const space = cut.search(/\s\S*$/)
+	return (space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd() + '…'
+}
