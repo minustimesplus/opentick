@@ -13,6 +13,7 @@ import {
 	X,
 } from 'lucide-vue-next'
 import ContactAvatar from './ContactAvatar.vue'
+import ContactPhotoViewer from './ContactPhotoViewer.vue'
 import Popover from '@/components/Popover.vue'
 import type {Contact, ContactEducation, ContactExperience, ContactField, ContactNote} from '@/api/types'
 import {usePeople, type EducationInput, type ExperienceInput} from '@/stores/people'
@@ -126,6 +127,19 @@ function shortUrl(url: string) {
 // ---------- photo ----------
 
 const photoInput = ref<HTMLInputElement | null>(null)
+const viewingPhoto = ref(false)
+
+// With a photo, a click enlarges it (change and remove live in the viewer);
+// without one it goes straight to picking a file.
+function onPhotoClick() {
+	if (contact.value?.has_photo) viewingPhoto.value = true
+	else photoInput.value?.click()
+}
+
+function changeFromViewer() {
+	viewingPhoto.value = false
+	photoInput.value?.click()
+}
 
 async function pickPhoto(e: Event) {
 	const input = e.target as HTMLInputElement
@@ -135,6 +149,7 @@ async function pickPhoto(e: Event) {
 }
 
 async function removePhoto() {
+	viewingPhoto.value = false
 	if (contact.value) show(await people.setPhoto(contact.value.id, null))
 }
 
@@ -308,6 +323,7 @@ async function remove() {
 watch(() => props.contactId, async id => {
 	contact.value = null
 	editing.value = null
+	viewingPhoto.value = false
 	entry.value = null
 	expanded.value = new Set()
 	loading.value = true
@@ -354,10 +370,17 @@ function onScroll() {
 
 			<div v-show="!collapsed" ref="scroller" class="scroll" @scroll.passive="onScroll">
 				<div class="identity">
-					<button class="photo" :title="t('contactChangePhoto')" @click="photoInput?.click()">
+					<button class="photo" :class="{'has-photo': contact.has_photo}" :title="t(contact.has_photo ? 'contactViewPhoto' : 'contactAddPhoto')" @click="onPhotoClick">
 						<ContactAvatar :contact="contact" :size="72" />
 					</button>
 					<input ref="photoInput" type="file" accept="image/png,image/jpeg,image/gif" hidden @change="pickPhoto">
+					<ContactPhotoViewer
+						v-if="viewingPhoto"
+						:contact="contact"
+						@close="viewingPhoto = false"
+						@change="changeFromViewer"
+						@remove="removePhoto"
+					/>
 					<div class="who">
 						<input
 							v-if="editing === 'full_name'"
@@ -681,6 +704,10 @@ function onScroll() {
 
 .photo:hover {
 	filter: brightness(0.92);
+}
+
+.photo.has-photo {
+	cursor: zoom-in;
 }
 
 .who {

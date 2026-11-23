@@ -835,6 +835,8 @@ const en = {
 	contactPresent: 'Present',
 	contactChangePhoto: 'Change photo',
 	contactRemovePhoto: 'Remove photo',
+	contactViewPhoto: 'View photo',
+	contactAddPhoto: 'Add photo',
 	contactDuplicate: 'This person seems to be in your contacts already.',
 	contactCreateAnyway: 'Add anyway',
 	contactSelect: 'Select a contact',

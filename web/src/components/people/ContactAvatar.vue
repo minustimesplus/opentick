@@ -1,33 +1,8 @@
-<script lang="ts">
-import {api} from '@/api/client'
-
-// One request per contact and photo version for the whole session; null when
-// the image failed. Bounded, as the list scrolls through hundreds of photos.
-const MAX_CACHED = 400
-const cache = new Map<string, Promise<string | null>>()
-
-function load(id: number, version: number): Promise<string | null> {
-	const key = `${id}:${version}`
-	let p = cache.get(key)
-	if (!p) {
-		p = api<Blob>('GET', `/contacts/${id}/photo`, {blob: true})
-			.then(b => URL.createObjectURL(b))
-			.catch(() => null)
-		cache.set(key, p)
-		if (cache.size > MAX_CACHED) {
-			const [oldest, url] = cache.entries().next().value!
-			cache.delete(oldest)
-			url.then(u => u && URL.revokeObjectURL(u))
-		}
-	}
-	return p
-}
-</script>
-
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
 import {initials, nameColor} from '@/lib/people'
 import {usePeople} from '@/stores/people'
+import {loadContactPhoto} from '@/lib/contactPhoto'
 
 const props = withDefaults(defineProps<{
 	contact: {id: number, name: string, has_photo: boolean}
@@ -41,7 +16,7 @@ const version = computed(() => people.photoVersions[props.contact.id] ?? 0)
 watch(() => [props.contact.id, props.contact.has_photo, version.value] as const, async ([id, hasPhoto, v]) => {
 	src.value = null
 	if (!hasPhoto) return
-	const url = await load(id, v)
+	const url = await loadContactPhoto(id, v)
 	// The row may show someone else by the time the photo arrives.
 	if (props.contact.id === id && version.value === v) src.value = url
 }, {immediate: true})
