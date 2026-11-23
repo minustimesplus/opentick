@@ -4,6 +4,7 @@ import {
 	Briefcase,
 	GraduationCap,
 	Lock,
+	Pencil,
 	PanelRightClose,
 	PanelRightOpen,
 	Plus,
@@ -15,7 +16,8 @@ import ContactAvatar from './ContactAvatar.vue'
 import Popover from '@/components/Popover.vue'
 import type {Contact, ContactEducation, ContactExperience, ContactField, ContactNote} from '@/api/types'
 import {usePeople, type EducationInput, type ExperienceInput} from '@/stores/people'
-import {contactSubtitle, nameColor} from '@/lib/people'
+import {contactSubtitle, nameColor, truncateText} from '@/lib/people'
+import {prefs} from '@/lib/prefs'
 import {fmtDayMonth, parseDate} from '@/lib/dates'
 import {t, type MessageKey} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
@@ -93,6 +95,28 @@ async function unlock(key: string) {
 	const c = contact.value
 	if (!c) return
 	show(await people.update(c.id, {locked_fields: c.locked_fields.filter(l => l !== key)}))
+}
+
+// ---------- long texts ----------
+
+// Long texts show their first characters (People > Settings); clicking one shows it whole.
+// Editing goes through the pencil, so reading never opens an editor by accident.
+const expanded = ref(new Set<string>())
+
+function clipped(key: string, text: string, max: number) {
+	return expanded.value.has(key) ? null : truncateText(text, max)
+}
+
+function canExpand(text: string, max: number) {
+	return truncateText(text, max) !== null
+}
+
+function toggleExpanded(key: string) {
+	// Selecting text to copy it shouldn't fold it away.
+	if (window.getSelection()?.toString()) return
+	const next = new Set(expanded.value)
+	if (!next.delete(key)) next.add(key)
+	expanded.value = next
 }
 
 function shortUrl(url: string) {
@@ -285,6 +309,7 @@ watch(() => props.contactId, async id => {
 	contact.value = null
 	editing.value = null
 	entry.value = null
+	expanded.value = new Set()
 	loading.value = true
 	const c = await people.read(id)
 	// Another contact may have been opened while this one loaded.
@@ -408,6 +433,20 @@ function onScroll() {
 								@blur="commit"
 							>
 						</template>
+						<div v-else-if="f.long && contact[f.key]" class="value-row editable">
+							<div
+								class="value long-value"
+								:class="{expandable: canExpand(contact[f.key], prefs.peopleAboutCutoff)}"
+								@click="canExpand(contact[f.key], prefs.peopleAboutCutoff) && toggleExpanded(f.key)"
+							>{{ clipped(f.key, contact[f.key], prefs.peopleAboutCutoff) ?? contact[f.key] }}
+								<button
+									v-if="canExpand(contact[f.key], prefs.peopleAboutCutoff)"
+									class="more"
+									@click.stop="toggleExpanded(f.key)"
+								>{{ expanded.has(f.key) ? t('showLess') : t('showMore') }}</button>
+							</div>
+							<button class="pencil" :title="t('edit')" :aria-label="t('edit')" @click="edit(f.key)"><Pencil :size="14" /></button>
+						</div>
 						<div v-else class="value-row">
 							<button class="value" :class="{empty: !contact[f.key]}" @click="edit(f.key)">
 								{{ contact[f.key] ? (f.key === 'linkedin_url' ? shortUrl(contact[f.key]) : contact[f.key]) : t('contactAddField', {field: t(f.label).toLowerCase()}) }}
@@ -449,20 +488,28 @@ function onScroll() {
 						</div>
 					</form>
 					<div v-if="!contact.experiences.length && entry?.kind !== 'experience'" class="none">{{ t('contactNoHistory') }}</div>
-					<button
+					<div
 						v-for="e in contact.experiences"
 						v-show="!(entry?.kind === 'experience' && entry.id === e.id)"
 						:key="e.id"
-						class="entry"
-						@click="editExperience(e)"
+						class="entry editable"
+						:class="{expandable: canExpand(e.description, prefs.peopleEntryCutoff)}"
+						@click="canExpand(e.description, prefs.peopleEntryCutoff) && toggleExpanded('e' + e.id)"
 					>
 						<span class="entry-title">{{ e.title || e.company }}</span>
 						<span v-if="e.title && e.company" class="entry-sub">{{ e.company }}</span>
 						<span class="entry-meta">
 							{{ [years(e.start_date, e.end_date, t('contactPresent')), e.location].filter(Boolean).join(' · ') }}
 						</span>
-						<span v-if="e.description" class="entry-desc">{{ e.description }}</span>
-					</button>
+						<span v-if="e.description" class="entry-desc">{{ clipped('e' + e.id, e.description, prefs.peopleEntryCutoff) ?? e.description }}
+							<button
+								v-if="canExpand(e.description, prefs.peopleEntryCutoff)"
+								class="more"
+								@click.stop="toggleExpanded('e' + e.id)"
+							>{{ expanded.has('e' + e.id) ? t('showLess') : t('showMore') }}</button>
+						</span>
+						<button class="pencil" :title="t('edit')" :aria-label="t('edit')" @click.stop="editExperience(e)"><Pencil :size="14" /></button>
+					</div>
 				</section>
 
 				<section class="block">
@@ -490,19 +537,19 @@ function onScroll() {
 						</div>
 					</form>
 					<div v-if="!contact.educations.length && entry?.kind !== 'education'" class="none">{{ t('contactNoHistory') }}</div>
-					<button
+					<div
 						v-for="e in contact.educations"
 						v-show="!(entry?.kind === 'education' && entry.id === e.id)"
 						:key="e.id"
-						class="entry"
-						@click="editEducation(e)"
+						class="entry editable"
 					>
 						<span class="entry-title">{{ e.school }}</span>
 						<span v-if="e.degree || e.field_of_study" class="entry-sub">
 							{{ [e.degree, e.field_of_study].filter(Boolean).join(', ') }}
 						</span>
 						<span v-if="e.start_year || e.end_year" class="entry-meta">{{ years(e.start_year, e.end_year) }}</span>
-					</button>
+						<button class="pencil" :title="t('edit')" :aria-label="t('edit')" @click.stop="editEducation(e)"><Pencil :size="14" /></button>
+					</div>
 				</section>
 
 				<section class="block">
@@ -832,8 +879,80 @@ h4 {
 	text-align: left;
 }
 
-.entry:hover {
+.entry {
+	position: relative;
+	padding-right: 34px;
+}
+
+.entry.expandable,
+.long-value.expandable {
+	cursor: pointer;
+}
+
+.entry.expandable:hover,
+.long-value.expandable:hover {
 	background: var(--bg-hover);
+}
+
+.long-value {
+	cursor: text;
+}
+
+.long-value:hover {
+	background: none;
+}
+
+.more {
+	margin-left: 2px;
+	color: var(--accent);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.more:hover {
+	text-decoration: underline;
+}
+
+/* The edit button shows on hover (always on touch screens); delete is inside the edit form. */
+.editable {
+	position: relative;
+}
+
+.pencil {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	color: var(--text-3);
+	opacity: 0;
+}
+
+.entry .pencil {
+	position: absolute;
+	top: 6px;
+	right: 4px;
+}
+
+.value-row.editable {
+	align-items: flex-start;
+}
+
+.editable:hover > .pencil,
+.pencil:focus-visible {
+	opacity: 1;
+}
+
+.pencil:hover {
+	background: var(--bg-hover);
+	color: var(--accent);
+}
+
+@media (hover: none) {
+	.pencil {
+		opacity: 1;
+	}
 }
 
 .entry-title {
