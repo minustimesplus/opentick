@@ -35,6 +35,10 @@ interface DesktopBridge {
 	closeWindow?(): void
 	/** Raises and focuses the window, e.g. when a notification is clicked. Missing in older builds. */
 	focusWindow?(): void
+	/** Moves the focus timer's mini window with the cursor: 'start', then 'move' per pointer move, then 'end'. Missing in older builds. */
+	dragFocusMini?(phase: 'start' | 'move' | 'end'): void
+	/** Sets the mini window's opacity (0.1..1); Linux ignores it. Missing in older builds. */
+	setFocusMiniOpacity?(opacity: number): void
 	/**
 	 * Files for the offline copy of the account (src/api/offline), kept in the
 	 * app's user data folder. Missing in builds before offline mode.

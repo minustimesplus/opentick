@@ -5,7 +5,7 @@
 // the user picks on the login screen. Keeping everything same-origin means
 // the refresh-token cookie and fetch() work exactly as in the browser.
 
-const {app, BrowserWindow, ipcMain, shell, Menu, session} = require('electron')
+const {app, BrowserWindow, ipcMain, shell, Menu, screen, session} = require('electron')
 const {autoUpdater} = require('electron-updater')
 const crypto = require('crypto')
 const fs = require('fs')
@@ -58,6 +58,8 @@ const FRAME_COLORS = {
 const FOCUS_MINI_NAME = 'opentick-focus-mini'
 
 let mainWindow = null
+// The focus timer's mini window while it is open.
+let focusMiniWindow = null
 let origin = null
 let downloadedVersion = null
 
@@ -418,12 +420,13 @@ function createMainWindow() {
 		if (frameName === FOCUS_MINI_NAME && (url === 'about:blank' || url === '')) {
 			return {
 				action: 'allow',
+				// The page picks the size (window.open features), so it can follow the user's scale.
 				overrideBrowserWindowOptions: {
-					width: 300,
-					height: 168,
-					minWidth: 220,
-					minHeight: 120,
+					minWidth: 56,
+					minHeight: 24,
 					frame: false,
+					// Its own shadow would outline the window even when it is nearly transparent.
+					hasShadow: false,
 					alwaysOnTop: true,
 					skipTaskbar: false,
 					resizable: true,
@@ -445,6 +448,10 @@ function createMainWindow() {
 		child.setAlwaysOnTop(true, 'floating')
 		child.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true})
 		child.webContents.on('will-navigate', event => event.preventDefault())
+		focusMiniWindow = child
+		child.on('closed', () => {
+			if (focusMiniWindow === child) focusMiniWindow = null
+		})
 	})
 	mainWindow.webContents.on('will-navigate', (event, url) => {
 		if (!url.startsWith(origin + '/')) {
@@ -562,6 +569,31 @@ ipcMain.on('window:toggle-maximize', () => {
 })
 ipcMain.on('window:close', () => mainWindow?.close())
 // A clicked reminder notification brings the window back to the front.
+// The mini window is moved by the page (a CSS drag region would swallow the
+// hover that shows its controls) and can be made see-through.
+let miniDrag = null
+ipcMain.on('focus-mini:drag', (_event, phase) => {
+	if (!focusMiniWindow) return
+	const cursor = screen.getCursorScreenPoint()
+	if (phase === 'start') {
+		const [x, y] = focusMiniWindow.getPosition()
+		miniDrag = {x, y, cursor}
+	} else if (phase === 'move' && miniDrag) {
+		focusMiniWindow.setPosition(
+			Math.round(miniDrag.x + cursor.x - miniDrag.cursor.x),
+			Math.round(miniDrag.y + cursor.y - miniDrag.cursor.y),
+		)
+	} else {
+		miniDrag = null
+	}
+})
+
+ipcMain.on('focus-mini:opacity', (_event, value) => {
+	const opacity = Number(value)
+	// Window opacity works on Windows and macOS; Linux ignores it.
+	if (focusMiniWindow && Number.isFinite(opacity)) focusMiniWindow.setOpacity(Math.min(1, Math.max(0.1, opacity)))
+})
+
 ipcMain.on('window:focus', () => {
 	if (!mainWindow) return
 	if (mainWindow.isMinimized()) mainWindow.restore()

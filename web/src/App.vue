@@ -13,6 +13,8 @@ import AgentSendDialog from './components/AgentSendDialog.vue'
 import CommandMenu from './components/CommandMenu.vue'
 import FocusMiniHost from './components/focus/FocusMiniHost.vue'
 import FocusDoneDialog from './components/focus/FocusDoneDialog.vue'
+import FocusEndPrompt from './components/focus/FocusEndPrompt.vue'
+import Modal from './components/Modal.vue'
 import {useFocus} from './stores/focus'
 import {useAgents} from './stores/agents'
 import {useCalendars} from './stores/calendars'
@@ -263,6 +265,9 @@ onBeforeUnmount(() => {
 		<InviteDialog v-if="inviteToken && data.loaded && !showOnboarding" :token="inviteToken" @close="inviteToken = pendingInviteToken()" />
 		<FocusMiniHost v-if="data.loaded" />
 		<FocusDoneDialog v-if="focus.state.prompt && prefs.features.pomo && data.loaded" />
+		<Modal v-if="focus.ending" :width="400" @close="focus.ending = null">
+			<FocusEndPrompt :kind="focus.ending" @close="focus.ending = null" />
+		</Modal>
 	</div>
 	<template v-else>
 		<InviteBanner v-if="inviteToken" :token="inviteToken" />

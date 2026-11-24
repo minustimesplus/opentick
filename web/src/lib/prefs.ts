@@ -96,6 +96,9 @@ export interface Prefs {
 	focusMini: boolean
 	/** Where the in-app mini timer was dragged to (px from the bottom-right corner). */
 	focusMiniPos: {right: number, bottom: number}
+	/** Size of the mini timer (1 = default) and how opaque it is while the mouse is elsewhere. */
+	focusMiniScale: number
+	focusMiniOpacity: number
 	/** Enter full-screen mode when a session is started from the Focus view. */
 	focusAutoFullscreen: boolean
 	focusFullscreenStyle: 'digital' | 'flip'
@@ -186,6 +189,8 @@ const defaults: Prefs = {
 	focusTitle: true,
 	focusMini: true,
 	focusMiniPos: {right: 24, bottom: 24},
+	focusMiniScale: 1,
+	focusMiniOpacity: 1,
 	focusAutoFullscreen: false,
 	focusFullscreenStyle: 'digital',
 	focusGoalPomos: 4,
