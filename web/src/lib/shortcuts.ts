@@ -65,6 +65,8 @@ export const SHORTCUTS = {
 	goFocus: ['g f'],
 	goCountdowns: ['g d'],
 	goPeople: ['g p'],
+	// focus timer: start, pause or resume from anywhere
+	toggleFocus: ['alt+shift+f'],
 	// calendar
 	dayView: ['d', '1'],
 	weekView: ['w', '2'],
@@ -177,6 +179,9 @@ export const SHORTCUT_SECTIONS: {title: MessageKey, desc?: MessageKey, rows: Sho
 		{label: 'scGoFocus', id: 'goFocus'},
 		{label: 'scGoCountdowns', id: 'goCountdowns'},
 		{label: 'scGoPeople', id: 'goPeople'},
+	]},
+	{title: 'featPomo', rows: [
+		{label: 'scToggleFocus', id: 'toggleFocus'},
 	]},
 	{title: 'featCalendar', rows: [
 		{label: 'scDayView', id: 'dayView'},

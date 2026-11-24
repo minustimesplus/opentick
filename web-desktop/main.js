@@ -54,6 +54,9 @@ const FRAME_COLORS = {
 	light: '#f3f3f3',
 }
 
+// Must match POPOUT_NAME in web/src/lib/focusPopout.ts.
+const FOCUS_MINI_NAME = 'opentick-focus-mini'
+
 let mainWindow = null
 let origin = null
 let downloadedVersion = null
@@ -410,9 +413,38 @@ function createMainWindow() {
 	// Don't leave the app invisible if the page never paints (e.g. load error).
 	setTimeout(showWindow, 3000)
 
-	mainWindow.webContents.setWindowOpenHandler(({url}) => {
+	mainWindow.webContents.setWindowOpenHandler(({url, frameName}) => {
+		// The focus timer's mini window: the page renders into it itself.
+		if (frameName === FOCUS_MINI_NAME && (url === 'about:blank' || url === '')) {
+			return {
+				action: 'allow',
+				overrideBrowserWindowOptions: {
+					width: 300,
+					height: 168,
+					minWidth: 220,
+					minHeight: 120,
+					frame: false,
+					alwaysOnTop: true,
+					skipTaskbar: false,
+					resizable: true,
+					minimizable: false,
+					maximizable: false,
+					fullscreenable: false,
+					autoHideMenuBar: true,
+					title: 'OpenTick',
+					backgroundColor: config.frameColor || FRAME_COLORS.dark,
+				},
+			}
+		}
 		if (/^(https?|mailto):/i.test(url)) shell.openExternal(url)
 		return {action: 'deny'}
+	})
+	mainWindow.webContents.on('did-create-window', (child, {frameName}) => {
+		if (frameName !== FOCUS_MINI_NAME) return
+		// Above full-screen apps too, on every workspace.
+		child.setAlwaysOnTop(true, 'floating')
+		child.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true})
+		child.webContents.on('will-navigate', event => event.preventDefault())
 	})
 	mainWindow.webContents.on('will-navigate', (event, url) => {
 		if (!url.startsWith(origin + '/')) {

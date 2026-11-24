@@ -85,6 +85,23 @@ export interface Prefs {
 	/** Start the break right after a pomo ends, and the next pomo after a break. */
 	focusAutoStartBreak: boolean
 	focusAutoStartPomo: boolean
+	/** Chime when a pomo or break ends (TickTick's "Pomo Sound"). */
+	focusChime: boolean
+	/** White noise played while focusing, and its volume (0..1). */
+	focusSound: FocusSound
+	focusSoundVolume: number
+	/** Show the time left in the tab / window title while a session runs. */
+	focusTitle: boolean
+	/** Show the floating mini timer over other views while a session runs. */
+	focusMini: boolean
+	/** Where the in-app mini timer was dragged to (px from the bottom-right corner). */
+	focusMiniPos: {right: number, bottom: number}
+	/** Enter full-screen mode when a session is started from the Focus view. */
+	focusAutoFullscreen: boolean
+	focusFullscreenStyle: 'digital' | 'flip'
+	/** Daily goals; 0 means no goal. */
+	focusGoalPomos: number
+	focusGoalMinutes: number
 	/** Settings > Notifications: desktop notifications when a task reminder is due, on this device. */
 	webReminder: boolean
 	/** Repeat reminder notifications until the task is opened or completed. */
@@ -107,6 +124,10 @@ export interface Prefs {
 }
 
 export type SidebarCount = 'all' | 'hideNote' | 'none'
+
+/** White noise for the focus timer, generated in the browser. */
+export const FOCUS_SOUNDS = ['none', 'white', 'pink', 'brown', 'rain', 'ocean', 'ticking'] as const
+export type FocusSound = typeof FOCUS_SOUNDS[number]
 
 const KEY = 'tt.prefs'
 
@@ -159,6 +180,16 @@ const defaults: Prefs = {
 	focusLongBreakEvery: 4,
 	focusAutoStartBreak: true,
 	focusAutoStartPomo: false,
+	focusChime: true,
+	focusSound: 'none',
+	focusSoundVolume: 0.5,
+	focusTitle: true,
+	focusMini: true,
+	focusMiniPos: {right: 24, bottom: 24},
+	focusAutoFullscreen: false,
+	focusFullscreenStyle: 'digital',
+	focusGoalPomos: 4,
+	focusGoalMinutes: 0,
 	webReminder: true,
 	constantReminder: false,
 	navOrder: [],

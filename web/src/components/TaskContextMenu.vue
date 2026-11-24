@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {ArrowUpToLine, Ban, Bot, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Trash2, CalendarX} from 'lucide-vue-next'
+import {ArrowUpToLine, Ban, Bot, CalendarPlus, ChevronRight, Copy, Flag, FolderInput, RotateCcw, Sun, Sunrise, Timer, Trash2, CalendarX, Watch} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import ListPicker from './ListPicker.vue'
 import DatePicker from './DatePicker.vue'
 import {useData} from '@/stores/data'
+import {useFocus} from '@/stores/focus'
+import type {FocusSessionType} from '@/api/types'
+import {featureOn} from '@/lib/features'
 import {AGENTS, agentName, useAgents} from '@/stores/agents'
 import {openAgentSend, ui} from '@/lib/ui'
 import {t} from '@/lib/i18n'
@@ -17,7 +20,15 @@ const agents = useAgents()
 const task = computed(() => ui.ctx ? data.tasks.get(ui.ctx.taskId) : undefined)
 const anchor = computed(() => ui.ctx ? {x: ui.ctx.x, y: ui.ctx.y} : null)
 const moveEl = ref<HTMLElement | null>(null)
-const sub = ref<'move' | 'date' | null>(ui.ctx?.date ? 'date' : null)
+const focusEl = ref<HTMLElement | null>(null)
+const sub = ref<'move' | 'date' | 'focus' | null>(ui.ctx?.date ? 'date' : null)
+const focus = useFocus()
+
+function startFocus(mode: FocusSessionType) {
+	const tk = task.value
+	close()
+	if (tk) focus.startForTask(tk.id, mode)
+}
 
 function close() {
 	ui.ctx = null
@@ -88,6 +99,7 @@ function remove() {
 			<div class="menu-sep" />
 			<button class="menu-item" @click="pin"><ArrowUpToLine :size="16" /> {{ task.is_favorite ? t('unpin') : t('pin') }}</button>
 			<button ref="moveEl" class="menu-item" @click="sub = 'move'"><FolderInput :size="16" /> {{ t('moveTo') }} <ChevronRight :size="14" class="end" /></button>
+			<button v-if="featureOn('pomo') && !task.done" ref="focusEl" class="menu-item" @click="sub = 'focus'"><Timer :size="16" /> {{ t('startFocus') }} <ChevronRight :size="14" class="end" /></button>
 			<button class="menu-item" @click="toggleWontDo">
 				<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
 				<template v-else><Ban :size="16" /> {{ t('wontDo') }}</template>
@@ -103,6 +115,12 @@ function remove() {
 	</Popover>
 	<Popover v-if="task && sub === 'move'" :anchor="moveEl" placement="right-start" @close="sub = null">
 		<ListPicker :value="task.project_id" @select="move" />
+	</Popover>
+	<Popover v-if="task && sub === 'focus'" :anchor="focusEl" placement="right-start" @close="sub = null">
+		<div class="menu">
+			<button class="menu-item" @click="startFocus('pomo')"><Timer :size="16" /> {{ t('startPomo') }}</button>
+			<button class="menu-item" @click="startFocus('stopwatch')"><Watch :size="16" /> {{ t('startStopwatch') }}</button>
+		</div>
 	</Popover>
 	<Popover v-if="task && sub === 'date' && anchor" :anchor="anchor" placement="bottom-start" @close="close">
 		<DatePicker :task="task" @apply="p => data.updateTask(task!.id, p)" @close="close" />
