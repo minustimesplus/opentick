@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('ttDesktop', {
 	toggleMaximizeWindow: () => ipcRenderer.send('window:toggle-maximize'),
 	closeWindow: () => ipcRenderer.send('window:close'),
 	focusWindow: () => ipcRenderer.send('window:focus'),
+	// The focus timer's mini window (web/src/lib/focusPopout.ts).
+	dragFocusMini: phase => ipcRenderer.send('focus-mini:drag', phase),
+	setFocusMiniOpacity: opacity => ipcRenderer.send('focus-mini:opacity', opacity),
 	// Files for the offline copy of the account (web/src/api/offline).
 	offlineStore: {
 		read: name => ipcRenderer.invoke('offline:read', name),

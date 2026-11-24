@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, ref} from 'vue'
 import {Check, Ellipsis, Expand, Headphones, Minus, Pause, Pencil, PictureInPicture2, Play, Plus, Settings2, SkipForward, Square, Timer, Trash2, X} from 'lucide-vue-next'
-import Modal from '@/components/Modal.vue'
 import Popover from '@/components/Popover.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
-import FocusEndPrompt from '@/components/focus/FocusEndPrompt.vue'
 import FocusFullscreen from '@/components/focus/FocusFullscreen.vue'
 import FocusRecordDialog from '@/components/focus/FocusRecordDialog.vue'
 import type {FocusSession} from '@/api/types'
 import {useData} from '@/stores/data'
-import {type EarlyEnd, fmtMinutes, useFocus} from '@/stores/focus'
+import {fmtMinutes, useFocus} from '@/stores/focus'
 import {dateKey, fmtDayMonth, fmtRelativeDay, fmtTime, fmtWeekdayNarrow, parseDate} from '@/lib/dates'
 import {FOCUS_SOUNDS, type FocusSound, prefs} from '@/lib/prefs'
 import {type MessageKey, t} from '@/lib/i18n'
@@ -48,14 +46,6 @@ const ADJUST_STEP = 5
 const adjustable = computed(() => focus.phaseLength !== null)
 
 const cycleDots = computed(() => Math.max(1, Math.min(12, prefs.focusLongBreakEvery)))
-
-const ending = ref<EarlyEnd | null>(null)
-
-function end() {
-	const kind = focus.earlyEnd()
-	if (kind) ending.value = kind
-	else focus.stop()
-}
 
 const fullscreen = ref(false)
 
@@ -339,7 +329,7 @@ function removeRecord(s: FocusSession) {
 						<button v-if="state.running" class="btn primary big" @click="focus.pause()"><Pause :size="16" /> {{ t('focusPause') }}</button>
 						<template v-else>
 							<button class="btn primary big" @click="focus.resume()"><Play :size="16" /> {{ t('focusContinue') }}</button>
-							<button class="btn big" @click="end"><Square :size="14" /> {{ t('focusEnd') }}</button>
+							<button class="btn big" @click="focus.requestEnd()"><Square :size="14" /> {{ t('focusEnd') }}</button>
 						</template>
 					</template>
 					<template v-else>
@@ -526,6 +516,20 @@ function removeRecord(s: FocusSession) {
 					<span>{{ t('focusMiniSetting') }}</span>
 					<SettingToggle v-model="prefs.focusMini" />
 				</div>
+				<label class="setting">
+					<span>{{ t('miniTimerSize') }}</span>
+					<span class="setting-value">
+						<input v-model.number="prefs.focusMiniScale" class="slider" type="range" min="0.5" max="3" step="0.1">
+						<span class="slider-value">{{ Math.round(prefs.focusMiniScale * 100) }}%</span>
+					</span>
+				</label>
+				<label class="setting" :title="t('miniTimerOpacityHint')">
+					<span>{{ t('miniTimerOpacity') }}</span>
+					<span class="setting-value">
+						<input v-model.number="prefs.focusMiniOpacity" class="slider" type="range" min="0.1" max="1" step="0.05">
+						<span class="slider-value">{{ Math.round(prefs.focusMiniOpacity * 100) }}%</span>
+					</span>
+				</label>
 				<div class="setting">
 					<span>{{ t('focusAutoFullscreen') }}</span>
 					<SettingToggle v-model="prefs.focusAutoFullscreen" />
@@ -575,9 +579,6 @@ function removeRecord(s: FocusSession) {
 			</div>
 		</Popover>
 
-		<Modal v-if="ending" :width="400" @close="ending = null">
-			<FocusEndPrompt :kind="ending" @close="ending = null" />
-		</Modal>
 		<FocusRecordDialog v-if="addingRecord" @close="addingRecord = false" />
 		<FocusFullscreen v-if="fullscreen" @close="fullscreen = false" />
 	</div>
@@ -1024,6 +1025,17 @@ h1 {
 	gap: 6px;
 	color: var(--text-3);
 	white-space: nowrap;
+}
+
+.slider {
+	width: 96px;
+	accent-color: var(--accent);
+}
+
+.slider-value {
+	width: 36px;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
 }
 
 .num-input {

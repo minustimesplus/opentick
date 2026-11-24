@@ -1,4 +1,5 @@
 import {shallowRef} from 'vue'
+import {prefs} from './prefs'
 
 /**
  * The focus timer's pop-out mini window (TickTick's desktop "mini window"):
@@ -15,8 +16,12 @@ import {shallowRef} from 'vue'
  */
 
 export const POPOUT_NAME = 'opentick-focus-mini'
-const WIDTH = 300
-const HEIGHT = 168
+
+/** Opening size: just the clock, at the user's mini timer scale. The window can be resized afterwards. */
+function size() {
+	const scale = Math.max(0.5, Math.min(3, prefs.focusMiniScale || 1))
+	return {width: Math.round(136 * scale), height: Math.round(52 * scale)}
+}
 
 interface DocumentPictureInPicture {
 	requestWindow(options?: {width?: number, height?: number}): Promise<Window>
@@ -82,12 +87,13 @@ function prepare(win: Window) {
 }
 
 async function openWindow(): Promise<Window | null> {
+	const {width, height} = size()
 	if (!window.ttDesktop && window.documentPictureInPicture) {
-		return window.documentPictureInPicture.requestWindow({width: WIDTH, height: HEIGHT})
+		return window.documentPictureInPicture.requestWindow({width, height})
 	}
-	const left = Math.max(0, window.screenX + window.outerWidth - WIDTH - 40)
+	const left = Math.max(0, window.screenX + window.outerWidth - width - 40)
 	const top = Math.max(0, window.screenY + 80)
-	return window.open('', POPOUT_NAME, `popup,width=${WIDTH},height=${HEIGHT},left=${left},top=${top}`)
+	return window.open('', POPOUT_NAME, `popup,width=${width},height=${height},left=${left},top=${top}`)
 }
 
 /** Opens the mini window (or brings it forward). Call from a click: browsers require a user gesture. */

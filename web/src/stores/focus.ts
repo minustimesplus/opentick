@@ -132,6 +132,9 @@ export const useFocus = defineStore('focus', () => {
 	const state = reactive<TimerState>(loadState())
 	const now = ref(Date.now())
 	const sessions = ref<FocusSession[]>([])
+	/** Confirmation for ending a pomo early, shown by App (the mini window is too small for it). */
+	const ending = ref<EarlyEnd | null>(null)
+	watch(() => state.phase, () => { ending.value = null })
 	const stats = ref<FocusStats | null>(null)
 
 	watch(state, value => {
@@ -342,6 +345,13 @@ export const useFocus = defineStore('focus', () => {
 		}
 		state.prompt = null
 		reset()
+	}
+
+	/** End: stops right away, or asks first when it is a pomo (see earlyEnd). */
+	function requestEnd() {
+		const kind = earlyEnd()
+		if (kind) ending.value = kind
+		else stop()
 	}
 
 	function dismissPrompt() {
@@ -564,7 +574,7 @@ export const useFocus = defineStore('focus', () => {
 	}
 
 	return {
-		state, sessions, stats, historyDays, rangeSessions, yearHistory, phaseLength, elapsed, remaining, progress, display,
+		state, sessions, stats, ending, requestEnd, historyDays, rangeSessions, yearHistory, phaseLength, elapsed, remaining, progress, display,
 		startFocus, pause, resume, stop, toggle, adjust, canAdjust, earlyEnd, endEarly, dismissPrompt, startForTask,
 		setMode, setTask, load, loadStats, loadYear, setHistoryDays, updateSession, removeSession,
 		addExtraTime, editLastDuration, addRecord,
