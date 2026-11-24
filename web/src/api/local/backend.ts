@@ -907,7 +907,18 @@ function focusRoute(db: DB, c: Ctx): unknown {
 	const fields = ['task_id', 'type', 'start_time', 'end_time', 'duration', 'note'] as const
 	if (a === 'stats') return focusStats(db, Math.min(366, Math.max(1, num(c.query.days) || 7)))
 	if (a === undefined) {
-		if (c.method === 'GET') return paginate([...db.focus].sort((x, y) => y.start_time.localeCompare(x.start_time)), c.query)
+		if (c.method === 'GET') {
+			const taskId = num(c.query.task_id)
+			const from = c.query.from ? new Date(String(c.query.from)).getTime() : NaN
+			const to = c.query.to ? new Date(String(c.query.to)).getTime() : NaN
+			const list = db.focus.filter(f => {
+				const start = new Date(f.start_time).getTime()
+				return (!taskId || f.task_id === taskId)
+					&& (Number.isNaN(from) || start >= from)
+					&& (Number.isNaN(to) || start < to)
+			})
+			return paginate(list.sort((x, y) => y.start_time.localeCompare(x.start_time)), c.query)
+		}
 		if (c.method === 'POST') {
 			const stamp = now()
 			const s: FocusSession = {id: nextId(), task_id: 0, type: 'pomo', start_time: stamp, end_time: stamp, duration: 0, note: '', created: stamp, updated: stamp}

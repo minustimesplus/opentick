@@ -11,6 +11,9 @@ import TaskContextMenu from './components/TaskContextMenu.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import AgentSendDialog from './components/AgentSendDialog.vue'
 import CommandMenu from './components/CommandMenu.vue'
+import FocusMiniHost from './components/focus/FocusMiniHost.vue'
+import FocusDoneDialog from './components/focus/FocusDoneDialog.vue'
+import {useFocus} from './stores/focus'
 import {useAgents} from './stores/agents'
 import {useCalendars} from './stores/calendars'
 import InviteDialog from './components/collab/InviteDialog.vue'
@@ -36,6 +39,7 @@ import {onReconnect, remapText} from './api/offline'
 const OnboardingFlow = defineAsyncComponent(() => import('./components/onboarding/OnboardingFlow.vue'))
 
 const data = useData()
+const focus = useFocus()
 const router = useRouter()
 const route = useRoute()
 
@@ -195,6 +199,10 @@ useShortcuts({
 	goFocus: go('/focus'),
 	goCountdowns: go('/countdowns'),
 	goPeople: go('/people'),
+	toggleFocus: () => {
+		if (!featureOn('pomo')) return false
+		focus.toggle()
+	},
 })
 
 // The hovered row is gone once the view changes.
@@ -253,6 +261,8 @@ onBeforeUnmount(() => {
 		/>
 		<OnboardingFlow v-if="showOnboarding" @close="showOnboarding = false" />
 		<InviteDialog v-if="inviteToken && data.loaded && !showOnboarding" :token="inviteToken" @close="inviteToken = pendingInviteToken()" />
+		<FocusMiniHost v-if="data.loaded" />
+		<FocusDoneDialog v-if="focus.state.prompt && prefs.features.pomo && data.loaded" />
 	</div>
 	<template v-else>
 		<InviteBanner v-if="inviteToken" :token="inviteToken" />

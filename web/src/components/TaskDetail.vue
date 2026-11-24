@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {ArrowUpToLine, Bot, CalendarDays, ChevronLeft, CircleUserRound, Copy, FileType, Flag, Inbox, Link, Link2, ListChecks, ListTree, Menu, MessageSquare, MoreHorizontal, NotebookPen, Paperclip, Printer, RotateCcw, SquareX, Trash2, Unlink, Upload, X, Tag} from 'lucide-vue-next'
+import {ArrowUpToLine, Bot, CalendarDays, ChevronLeft, CircleUserRound, Copy, FileType, Flag, Inbox, Link, Link2, ListChecks, ListTree, Menu, MessageSquare, MoreHorizontal, NotebookPen, Paperclip, Printer, RotateCcw, SquareX, Timer, Trash2, Unlink, Upload, Watch, X, Tag} from 'lucide-vue-next'
 import Popover from './Popover.vue'
 import TaskCheckbox from './TaskCheckbox.vue'
 import DatePicker from './DatePicker.vue'
@@ -24,6 +24,10 @@ import {t} from '@/lib/i18n'
 import {toast} from '@/lib/toast'
 import {embeddedAttachmentIds} from '@/lib/attachmentImages'
 import {router} from '@/router'
+import {fetchAll} from '@/api/client'
+import type {FocusSession} from '@/api/types'
+import {fmtMinutes, useFocus} from '@/stores/focus'
+import {featureOn} from '@/lib/features'
 
 const props = defineProps<{taskId: number, closable?: boolean}>()
 const emit = defineEmits<{close: [], deleted: [], open: [number]}>()
@@ -223,6 +227,36 @@ async function duplicate() {
 	await data.duplicateTask(props.taskId)
 }
 
+// --- Focus: TickTick's per-task pomo count and focus duration ---
+
+const focus = useFocus()
+const taskFocus = ref<{pomos: number, minutes: number} | null>(null)
+
+async function loadTaskFocus() {
+	if (!featureOn('pomo') || props.taskId <= 0) {
+		taskFocus.value = null
+		return
+	}
+	try {
+		const list = await fetchAll<FocusSession>('/focus-sessions', {task_id: props.taskId, per_page: 250})
+		taskFocus.value = {
+			pomos: list.filter(s => s.type === 'pomo').length,
+			minutes: Math.floor(list.reduce((sum, s) => sum + s.duration, 0) / 60),
+		}
+	} catch {
+		taskFocus.value = null
+	}
+}
+
+onMounted(loadTaskFocus)
+// A session recorded (or deleted) meanwhile may belong to this task.
+watch(() => focus.sessions.length, loadTaskFocus)
+
+function startFocus(mode: 'pomo' | 'stopwatch') {
+	pop.value = null
+	if (task.value) focus.startForTask(task.value.id, mode)
+}
+
 const meta = computed(() => {
 	const tk = task.value
 	if (!tk) return ''
@@ -310,6 +344,15 @@ const meta = computed(() => {
 				{{ listLabel.name }}
 			</button>
 			<span class="muted small">{{ meta }}</span>
+			<button
+				v-if="taskFocus && taskFocus.minutes > 0"
+				class="focus-chip"
+				:title="t('focus')"
+				@click="router.push('/focus')"
+			>
+				<Timer :size="13" />
+				{{ t('taskFocused', {pomos: t(taskFocus.pomos === 1 ? 'nPomo' : 'nPomos', {n: taskFocus.pomos}), time: fmtMinutes(taskFocus.minutes)}) }}
+			</button>
 			<button class="icon-btn comment-btn" :title="t('comment')" @click="commentsEl?.focusComposer()">
 				<MessageSquare :size="17" />
 				<span v-if="task.comment_count" class="badge">{{ task.comment_count }}</span>
@@ -334,6 +377,10 @@ const meta = computed(() => {
 				<button class="menu-item" @click="addSubtask"><ListTree :size="16" /> {{ t('addSubtask') }}</button>
 				<button v-if="parent" class="menu-item" @click="detach"><Unlink :size="16" /> {{ t('detachSubtask') }}</button>
 				<button v-else class="menu-item" disabled :title="t('comingSoon')"><Link2 :size="16" /> {{ t('linkParentTask') }}</button>
+				<template v-if="featureOn('pomo') && !task.done">
+					<button class="menu-item" @click="startFocus('pomo')"><Timer :size="16" /> {{ t('startPomo') }}</button>
+					<button class="menu-item" @click="startFocus('stopwatch')"><Watch :size="16" /> {{ t('startStopwatch') }}</button>
+				</template>
 				<button class="menu-item" @click="togglePin(task.id); pop = null"><ArrowUpToLine :size="16" /> {{ task.is_favorite ? t('unpin') : t('pin') }}</button>
 				<button class="menu-item" @click="data.toggleWontDo(task.id); pop = null">
 					<template v-if="task.done && task.wont_do"><RotateCcw :size="16" /> {{ t('reopen') }}</template>
@@ -550,6 +597,21 @@ textarea::placeholder {
 	padding: 0 12px 0 16px;
 	border-top: 1px solid var(--border);
 	flex-shrink: 0;
+}
+
+.focus-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
+	font-size: 12px;
+	color: var(--text-3);
+	white-space: nowrap;
+}
+
+.focus-chip:hover {
+	color: var(--accent);
 }
 
 .list-btn {

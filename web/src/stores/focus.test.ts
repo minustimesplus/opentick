@@ -7,6 +7,7 @@ import {fmtClock, fmtMinutes, useFocus} from './focus'
 
 vi.mock('@/api/client', () => ({
 	api: vi.fn(),
+	fetchAll: vi.fn(async () => []),
 	ApiError: class ApiError extends Error {
 		status: number
 		constructor(status: number, message: string) {
@@ -16,7 +17,7 @@ vi.mock('@/api/client', () => ({
 	},
 }))
 vi.mock('@/stores/data', () => {
-	const data = reactive({authed: true})
+	const data = reactive({authed: true, tasks: new Map([[7, {id: 7, title: 'Write report'}], [8, {id: 8, title: 'Read'}]])})
 	return {useData: () => data}
 })
 vi.mock('@/lib/toast', () => ({toast: vi.fn()}))
@@ -53,6 +54,9 @@ beforeEach(() => {
 		focusLongBreakEvery: 4,
 		focusAutoStartBreak: true,
 		focusAutoStartPomo: false,
+		focusChime: false,
+		focusSound: 'none',
+		focusTitle: true,
 	})
 	setActivePinia(createPinia())
 })
@@ -233,5 +237,182 @@ describe('saving', () => {
 		await vi.runOnlyPendingTimersAsync()
 
 		expect(focus.state.pending).toHaveLength(1)
+	})
+})
+
+describe('adjusting the time', () => {
+	it('lengthens and shortens the running pomo in five-minute steps', async () => {
+		const focus = useFocus()
+		await start(focus)
+		focus.adjust(5)
+		expect(focus.display).toBe('30:00')
+		focus.adjust(-5)
+		focus.adjust(-5)
+		expect(focus.display).toBe('20:00')
+
+		vi.advanceTimersByTime(20 * MIN)
+		expect(posted()).toEqual([expect.objectContaining({type: 'pomo', duration: 20 * 60})])
+		// the break is not affected
+		expect(focus.display).toBe('05:00')
+	})
+
+	it('never goes below the time already focused plus a minute', async () => {
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(18 * MIN)
+		focus.adjust(-5)
+		focus.adjust(-5)
+		expect(focus.phaseLength).toBe(19 * MIN)
+		expect(focus.canAdjust(-5)).toBe(false)
+	})
+
+	it('changes the next pomo while idle', () => {
+		const focus = useFocus()
+		focus.adjust(10)
+		expect(focus.phaseLength).toBe(35 * MIN)
+		focus.startFocus()
+		expect(focus.phaseLength).toBe(35 * MIN)
+	})
+
+	it('has no -/+ for the stopwatch', () => {
+		const focus = useFocus()
+		focus.setMode('stopwatch')
+		expect(focus.canAdjust(5)).toBe(false)
+	})
+})
+
+describe('ending a pomo early', () => {
+	it('offers abandoning only in the first five minutes', async () => {
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(4 * MIN)
+		expect(focus.earlyEnd()).toBe('abandon')
+		focus.endEarly('save')
+		expect(posted()).toHaveLength(0)
+		expect(focus.state.phase).toBe('idle')
+	})
+
+	it('saves the time focused as a stopwatch record, not a pomo', async () => {
+		const focus = useFocus()
+		focus.setTask(7)
+		await start(focus)
+		vi.advanceTimersByTime(12 * MIN)
+		expect(focus.earlyEnd()).toBe('saveOrAbandon')
+		focus.endEarly('save')
+		expect(posted()).toEqual([expect.objectContaining({type: 'stopwatch', task_id: 7, duration: 12 * 60})])
+		expect(focus.state.pomoCount).toBe(0)
+		expect(focus.state.phase).toBe('idle')
+	})
+
+	it('counts a full pomo when less than five minutes are left', async () => {
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(22 * MIN)
+		expect(focus.earlyEnd()).toBe('complete')
+		focus.endEarly('complete')
+		expect(posted()).toEqual([expect.objectContaining({type: 'pomo', duration: 22 * 60})])
+		expect(focus.state.pomoCount).toBe(1)
+		expect(focus.state.phase).toBe('break')
+	})
+
+	it('is not asked for the stopwatch or a break', async () => {
+		const focus = useFocus()
+		focus.setMode('stopwatch')
+		await start(focus)
+		expect(focus.earlyEnd()).toBeNull()
+	})
+})
+
+describe('focus note', () => {
+	it('is saved with the record and cleared for the next session', async () => {
+		const focus = useFocus()
+		await start(focus)
+		focus.state.note = '  drafted the intro '
+		vi.advanceTimersByTime(25 * MIN)
+		expect(posted()[0]).toEqual(expect.objectContaining({note: 'drafted the intro'}))
+		expect(focus.state.note).toBe('')
+	})
+})
+
+describe('completion pop-up', () => {
+	it('opens when a pomo ends and closes when the user moves on', async () => {
+		prefs.focusAutoStartBreak = false
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(25 * MIN)
+		expect(focus.state.prompt).toBe('pomoDone')
+		focus.resume() // start break
+		expect(focus.state.prompt).toBeNull()
+	})
+
+	it('opens when a break ends', async () => {
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(30 * MIN)
+		expect(focus.state.phase).toBe('idle')
+		expect(focus.state.prompt).toBe('breakDone')
+	})
+
+	it('adds the time worked past the end to the record and restarts the break', async () => {
+		prefs.focusAutoStartBreak = false
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(25 * MIN)
+		await vi.runOnlyPendingTimersAsync() // saved, id 1
+		vi.advanceTimersByTime(7 * MIN)
+
+		expect(await focus.addExtraTime()).toBe(true)
+		const patch = apiMock.mock.calls.find(([method]) => method === 'PATCH')
+		expect(patch?.[1]).toBe('/focus-sessions/1')
+		// 7 minutes and the second the save took
+		expect(patch?.[2]?.body).toEqual({end_time: '2026-10-22T09:32:01.000Z', duration: 32 * 60 + 1})
+		expect(focus.state.last?.duration).toBe(32 * 60 + 1)
+	})
+
+	it('changes a queued record in place when editing the duration', async () => {
+		apiMock.mockImplementation(async method => {
+			if (method === 'POST') throw new ApiError(500, 'offline')
+			return {history: []}
+		})
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(25 * MIN)
+		await vi.runOnlyPendingTimersAsync()
+
+		expect(await focus.editLastDuration(20)).toBe(true)
+		expect(focus.state.pending[0]).toEqual(expect.objectContaining({duration: 20 * 60, end_time: '2026-10-22T09:20:00.000Z'}))
+	})
+})
+
+describe('starting from a task', () => {
+	it('starts the chosen mode on the task', () => {
+		const focus = useFocus()
+		focus.startForTask(7, 'stopwatch')
+		expect(focus.state).toEqual(expect.objectContaining({phase: 'focus', mode: 'stopwatch', taskId: 7}))
+	})
+
+	it('moves a running session to another task after asking', () => {
+		const focus = useFocus()
+		focus.startForTask(7, 'pomo')
+		const ask = vi.fn(() => true)
+		vi.stubGlobal('confirm', ask)
+		focus.startForTask(8, 'stopwatch')
+		expect(ask).toHaveBeenCalledWith(expect.stringContaining('Read'))
+		expect(focus.state).toEqual(expect.objectContaining({mode: 'pomo', taskId: 8}))
+		vi.unstubAllGlobals()
+	})
+})
+
+describe('tab title', () => {
+	it('shows the time left while a session runs', async () => {
+		document.title = 'OpenTick'
+		const focus = useFocus()
+		await start(focus)
+		vi.advanceTimersByTime(MIN)
+		await nextTick()
+		expect(document.title).toBe('24:00 · Focusing – OpenTick')
+		focus.stop()
+		await nextTick()
+		expect(document.title).toBe('OpenTick')
 	})
 })

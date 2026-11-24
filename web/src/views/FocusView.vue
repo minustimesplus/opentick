@@ -1,21 +1,30 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, ref} from 'vue'
-import {Pause, Pencil, Play, Settings2, SkipForward, Square, Timer, Trash2, X} from 'lucide-vue-next'
+import {Check, Ellipsis, Expand, Headphones, Minus, Pause, Pencil, PictureInPicture2, Play, Plus, Settings2, SkipForward, Square, Timer, Trash2, X} from 'lucide-vue-next'
+import Modal from '@/components/Modal.vue'
 import Popover from '@/components/Popover.vue'
 import SettingToggle from '@/components/settings/SettingToggle.vue'
+import FocusEndPrompt from '@/components/focus/FocusEndPrompt.vue'
+import FocusFullscreen from '@/components/focus/FocusFullscreen.vue'
+import FocusRecordDialog from '@/components/focus/FocusRecordDialog.vue'
 import type {FocusSession} from '@/api/types'
 import {useData} from '@/stores/data'
-import {fmtMinutes, useFocus} from '@/stores/focus'
-import {dateKey, fmtRelativeDay, fmtTime, fmtWeekdayNarrow, parseDate} from '@/lib/dates'
-import {prefs} from '@/lib/prefs'
-import {t} from '@/lib/i18n'
+import {type EarlyEnd, fmtMinutes, useFocus} from '@/stores/focus'
+import {dateKey, fmtDayMonth, fmtRelativeDay, fmtTime, fmtWeekdayNarrow, parseDate} from '@/lib/dates'
+import {FOCUS_SOUNDS, type FocusSound, prefs} from '@/lib/prefs'
+import {type MessageKey, t} from '@/lib/i18n'
 import {openTaskDrawer} from '@/lib/ui'
+import {openPopout, popout, popoutStaysOnTop} from '@/lib/focusPopout'
+import {toast} from '@/lib/toast'
 
 const data = useData()
 const focus = useFocus()
 const state = focus.state
 
-onMounted(() => focus.load())
+onMounted(() => {
+	focus.load()
+	focus.loadYear()
+})
 
 // --- Timer ---
 
@@ -30,15 +39,60 @@ const status = computed(() => {
 })
 
 /** The clock shows the full pomo length before a pomo starts. */
-const clock = computed(() => state.phase === 'idle' && state.mode === 'pomo'
-	? `${String(prefs.focusPomoMinutes).padStart(2, '0')}:00`
+const clock = computed(() => state.phase === 'idle' && focus.phaseLength !== null
+	? `${String(Math.round(focus.phaseLength / 60_000)).padStart(2, '0')}:00`
 	: focus.display)
+
+/** Countdowns (not the stopwatch) get -/+ buttons beside the clock. */
+const ADJUST_STEP = 5
+const adjustable = computed(() => focus.phaseLength !== null)
 
 const cycleDots = computed(() => Math.max(1, Math.min(12, prefs.focusLongBreakEvery)))
 
+const ending = ref<EarlyEnd | null>(null)
+
 function end() {
-	if (state.phase === 'focus' && state.mode === 'pomo' && !confirm(t('abandonPomoConfirm'))) return
-	focus.stop()
+	const kind = focus.earlyEnd()
+	if (kind) ending.value = kind
+	else focus.stop()
+}
+
+const fullscreen = ref(false)
+
+function start() {
+	focus.startFocus()
+	if (prefs.focusAutoFullscreen) fullscreen.value = true
+}
+
+// --- More menu ---
+
+const moreBtn = ref<HTMLElement | null>(null)
+const showMore = ref(false)
+const addingRecord = ref(false)
+
+async function openMini() {
+	showMore.value = false
+	if (!await openPopout()) toast(t('miniWindowBlocked'))
+	else if (!popoutStaysOnTop()) toast(t('miniWindowNotOnTop'))
+}
+
+function openFullscreen() {
+	showMore.value = false
+	fullscreen.value = true
+}
+
+// --- White noise ---
+
+const soundBtn = ref<HTMLElement | null>(null)
+const showSound = ref(false)
+const SOUND_LABELS: Record<FocusSound, MessageKey> = {
+	none: 'none',
+	white: 'soundWhite',
+	pink: 'soundPink',
+	brown: 'soundBrown',
+	rain: 'soundRain',
+	ocean: 'soundOcean',
+	ticking: 'soundTicking',
 }
 
 // --- Task picker ---
@@ -77,6 +131,56 @@ const showSettings = ref(false)
 function clampMinutes(value: number, max = 180) {
 	return Math.max(1, Math.min(max, Math.round(Number(value) || 1)))
 }
+
+/** Goals may be 0 (no goal). */
+function clampGoal(value: number, max: number) {
+	return Math.max(0, Math.min(max, Math.round(Number(value) || 0)))
+}
+
+// --- Goals ---
+
+function goalPercent(done: number, goal: number) {
+	return goal > 0 ? Math.min(100, Math.round(done / goal * 100)) : 0
+}
+
+// --- Focus ranking (by task, over the chart's range) ---
+
+const ranking = computed(() => {
+	const byTask = new Map<number, number>()
+	for (const s of focus.rangeSessions) byTask.set(s.task_id, (byTask.get(s.task_id) ?? 0) + s.duration)
+	const rows = [...byTask.entries()]
+		.map(([id, seconds]) => ({
+			id,
+			title: id ? data.tasks.get(id)?.title ?? '…' : t('noFocusTask'),
+			minutes: Math.floor(seconds / 60),
+		}))
+		.filter(r => r.minutes > 0)
+		.sort((a, b) => b.minutes - a.minutes)
+		.slice(0, 8)
+	const max = Math.max(1, ...rows.map(r => r.minutes))
+	return rows.map(r => ({...r, share: r.minutes / max}))
+})
+
+// --- Year grid: one cell per day, a column per week ---
+
+const yearCells = computed(() => {
+	const days = focus.yearHistory
+	if (!days.length) return []
+	const first = parseDate(days[0].date + 'T00:00:00')
+	const lead = first ? (first.getDay() - prefs.weekStart + 7) % 7 : 0
+	return [
+		...Array.from({length: lead}, (_, i) => ({key: `pad${i}`, level: -1, title: ''})),
+		...days.map(d => {
+			const date = parseDate(d.date + 'T00:00:00')
+			const m = d.focus_minutes
+			return {
+				key: d.date,
+				level: m <= 0 ? 0 : m < 30 ? 1 : m < 60 ? 2 : m < 120 ? 3 : 4,
+				title: t('yearGridDay', {date: date ? fmtDayMonth(date) : d.date, time: fmtMinutes(m)}),
+			}
+		}),
+	]
+})
 
 // --- Stats ---
 
@@ -161,7 +265,11 @@ function removeRecord(s: FocusSession) {
 		<section class="timer-pane">
 			<header class="head">
 				<h1>{{ t('focus') }}</h1>
-				<button ref="settingsBtn" class="icon-btn" :title="t('focusSettings')" @click="showSettings = true"><Settings2 :size="20" /></button>
+				<div class="head-actions">
+					<button ref="soundBtn" class="icon-btn" :class="{on: prefs.focusSound !== 'none'}" :title="t('whiteNoise')" @click="showSound = true"><Headphones :size="19" /></button>
+					<button ref="moreBtn" class="icon-btn" :title="t('focusMoreActions')" @click="showMore = true"><Ellipsis :size="20" /></button>
+					<button ref="settingsBtn" class="icon-btn" :title="t('focusSettings')" @click="showSettings = true"><Settings2 :size="20" /></button>
+				</div>
 			</header>
 
 			<div class="timer">
@@ -198,7 +306,23 @@ function removeRecord(s: FocusSession) {
 						/>
 					</svg>
 					<div class="ring-center">
-						<div class="clock" role="timer" aria-live="off">{{ clock }}</div>
+						<div class="clock-row">
+							<button
+								v-if="adjustable"
+								class="adjust"
+								:disabled="!focus.canAdjust(-ADJUST_STEP)"
+								:title="t('focusRemoveMinutes', {n: ADJUST_STEP})"
+								@click="focus.adjust(-ADJUST_STEP)"
+							><Minus :size="16" /></button>
+							<div class="clock" role="timer" aria-live="off">{{ clock }}</div>
+							<button
+								v-if="adjustable"
+								class="adjust"
+								:disabled="!focus.canAdjust(ADJUST_STEP)"
+								:title="t('focusAddMinutes', {n: ADJUST_STEP})"
+								@click="focus.adjust(ADJUST_STEP)"
+							><Plus :size="16" /></button>
+						</div>
 						<div class="status">{{ status }}</div>
 					</div>
 				</div>
@@ -209,7 +333,7 @@ function removeRecord(s: FocusSession) {
 
 				<div class="controls">
 					<template v-if="state.phase === 'idle'">
-						<button class="btn primary big" @click="focus.startFocus()"><Play :size="16" /> {{ t('focusStart') }}</button>
+						<button class="btn primary big" @click="start"><Play :size="16" /> {{ t('focusStart') }}</button>
 					</template>
 					<template v-else-if="state.phase === 'focus'">
 						<button v-if="state.running" class="btn primary big" @click="focus.pause()"><Pause :size="16" /> {{ t('focusPause') }}</button>
@@ -223,6 +347,11 @@ function removeRecord(s: FocusSession) {
 						<button class="btn big" @click="focus.stop()"><SkipForward :size="16" /> {{ t('skipBreak') }}</button>
 					</template>
 				</div>
+
+				<label v-if="state.phase === 'focus'" class="note">
+					<span class="note-label">{{ t('focusNote') }}</span>
+					<textarea v-model="state.note" class="input note-area" rows="2" maxlength="2000" :placeholder="t('focusNoteHint')" />
+				</label>
 			</div>
 		</section>
 
@@ -230,12 +359,14 @@ function removeRecord(s: FocusSession) {
 			<h2 class="section">{{ t('focusOverview') }}</h2>
 			<div class="cards">
 				<div class="card">
-					<div class="num">{{ focus.stats?.today_pomos ?? 0 }}</div>
+					<div class="num">{{ focus.stats?.today_pomos ?? 0 }}<span v-if="prefs.focusGoalPomos" class="goal">{{ t('goalOf', {goal: prefs.focusGoalPomos}) }}</span></div>
 					<div class="label">{{ t('todayPomos') }}</div>
+					<div v-if="prefs.focusGoalPomos" class="goal-bar"><div :style="{width: goalPercent(focus.stats?.today_pomos ?? 0, prefs.focusGoalPomos) + '%'}" /></div>
 				</div>
 				<div class="card">
-					<div class="num">{{ fmtMinutes(focus.stats?.today_focus_minutes ?? 0) }}</div>
+					<div class="num">{{ fmtMinutes(focus.stats?.today_focus_minutes ?? 0) }}<span v-if="prefs.focusGoalMinutes" class="goal">{{ t('goalOf', {goal: fmtMinutes(prefs.focusGoalMinutes)}) }}</span></div>
 					<div class="label">{{ t('todayFocus') }}</div>
+					<div v-if="prefs.focusGoalMinutes" class="goal-bar"><div :style="{width: goalPercent(focus.stats?.today_focus_minutes ?? 0, prefs.focusGoalMinutes) + '%'}" /></div>
 				</div>
 				<div class="card">
 					<div class="num">{{ focus.stats?.total_pomos ?? 0 }}</div>
@@ -275,7 +406,28 @@ function removeRecord(s: FocusSession) {
 				</div>
 			</div>
 
-			<h2 class="section">{{ t('focusRecord') }}</h2>
+			<div class="chart-card">
+				<h2 class="section">{{ t('focusRanking') }} · {{ t('lastNDays', {n: focus.historyDays}) }}</h2>
+				<div v-if="!ranking.length" class="muted empty">{{ t('noFocusInRange') }}</div>
+				<div v-for="r in ranking" :key="r.id" class="rank">
+					<button v-if="r.id" class="rank-title" @click="openTaskDrawer(r.id)">{{ r.title }}</button>
+					<span v-else class="rank-title muted">{{ r.title }}</span>
+					<span class="rank-minutes">{{ fmtMinutes(r.minutes) }}</span>
+					<div class="rank-bar"><div :style="{width: (r.share * 100) + '%'}" /></div>
+				</div>
+			</div>
+
+			<div v-if="yearCells.length" class="chart-card">
+				<h2 class="section">{{ t('yearGrid') }}</h2>
+				<div class="year-grid">
+					<span v-for="c in yearCells" :key="c.key" class="cell" :class="'l' + c.level" :title="c.title" />
+				</div>
+			</div>
+
+			<div class="records-head">
+				<h2 class="section inline">{{ t('focusRecord') }}</h2>
+				<button class="icon-btn small" :title="t('addFocusRecord')" @click="addingRecord = true"><Plus :size="16" /></button>
+			</div>
 			<div v-if="!focus.sessions.length" class="muted empty">{{ t('noFocusRecords') }}</div>
 			<div v-for="g in groups" :key="g.key" class="record-group">
 				<div class="group-label">{{ g.label }}</div>
@@ -361,8 +513,73 @@ function removeRecord(s: FocusSession) {
 					<span>{{ t('autoStartPomo') }}</span>
 					<SettingToggle v-model="prefs.focusAutoStartPomo" />
 				</div>
+				<div class="menu-sep" />
+				<div class="setting" :title="t('focusChimeDesc')">
+					<span>{{ t('focusChime') }}</span>
+					<SettingToggle v-model="prefs.focusChime" />
+				</div>
+				<div class="setting">
+					<span>{{ t('focusTitleSetting') }}</span>
+					<SettingToggle v-model="prefs.focusTitle" />
+				</div>
+				<div class="setting">
+					<span>{{ t('focusMiniSetting') }}</span>
+					<SettingToggle v-model="prefs.focusMini" />
+				</div>
+				<div class="setting">
+					<span>{{ t('focusAutoFullscreen') }}</span>
+					<SettingToggle v-model="prefs.focusAutoFullscreen" />
+				</div>
+				<div class="menu-sep" />
+				<div class="menu-label">{{ t('dailyGoals') }}</div>
+				<label class="setting">
+					<span>{{ t('goalPomos') }}</span>
+					<span class="setting-value">
+						<input class="input num-input" type="number" min="0" max="50" :value="prefs.focusGoalPomos" @change="prefs.focusGoalPomos = clampGoal(+($event.target as HTMLInputElement).value, 50)">
+						{{ t('pomosUnit') }}
+					</span>
+				</label>
+				<label class="setting">
+					<span>{{ t('goalFocus') }}</span>
+					<span class="setting-value">
+						<input class="input num-input" type="number" min="0" max="1440" step="5" :value="prefs.focusGoalMinutes" @change="prefs.focusGoalMinutes = clampGoal(+($event.target as HTMLInputElement).value, 1440)">
+						{{ t('minutesUnit') }}
+					</span>
+				</label>
 			</div>
 		</Popover>
+
+		<Popover v-if="showMore" :anchor="moreBtn" placement="bottom-end" @close="showMore = false">
+			<div class="menu">
+				<button class="menu-item" @click="openFullscreen"><Expand :size="16" /> {{ t('fullScreenMode') }}</button>
+				<button class="menu-item" @click="openMini"><PictureInPicture2 :size="16" /> {{ popout ? t('closeMiniWindow') : t('openMiniWindow') }}</button>
+				<button class="menu-item" @click="addingRecord = true; showMore = false"><Plus :size="16" /> {{ t('addFocusRecord') }}</button>
+			</div>
+		</Popover>
+
+		<Popover v-if="showSound" :anchor="soundBtn" placement="bottom-end" @close="showSound = false">
+			<div class="menu sounds">
+				<div class="menu-label">{{ t('whiteNoise') }}</div>
+				<button
+					v-for="snd in FOCUS_SOUNDS"
+					:key="snd"
+					class="menu-item"
+					:class="{active: prefs.focusSound === snd}"
+					@click="prefs.focusSound = snd"
+				>{{ t(SOUND_LABELS[snd]) }}<Check v-if="prefs.focusSound === snd" :size="15" class="menu-chevron" /></button>
+				<div class="menu-sep" />
+				<label class="setting">
+					<span>{{ t('volume') }}</span>
+					<input v-model.number="prefs.focusSoundVolume" class="volume" type="range" min="0" max="1" step="0.05">
+				</label>
+			</div>
+		</Popover>
+
+		<Modal v-if="ending" :width="400" @close="ending = null">
+			<FocusEndPrompt :kind="ending" @close="ending = null" />
+		</Modal>
+		<FocusRecordDialog v-if="addingRecord" @close="addingRecord = false" />
+		<FocusFullscreen v-if="fullscreen" @close="fullscreen = false" />
 	</div>
 </template>
 
@@ -815,8 +1032,185 @@ h1 {
 	color: var(--text);
 }
 
+/* --- header, sound, adjust, note --- */
+
+.head-actions {
+	display: flex;
+	gap: 2px;
+}
+
+.icon-btn.on {
+	color: var(--accent);
+}
+
+.clock-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.adjust {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	color: var(--text-3);
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+
+.ring:hover .adjust,
+.adjust:focus-visible {
+	opacity: 1;
+}
+
+.adjust:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+
+.adjust:disabled {
+	cursor: default;
+	opacity: 0 !important;
+}
+
+.note {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: min(360px, 100%);
+}
+
+.note-label {
+	font-size: 12px;
+	color: var(--text-3);
+}
+
+.note-area {
+	height: auto;
+	min-height: 52px;
+	padding: 8px 10px;
+	resize: vertical;
+	font: inherit;
+	font-size: 13px;
+	color: var(--text);
+}
+
+.sounds {
+	width: 240px;
+}
+
+.volume {
+	width: 120px;
+	accent-color: var(--accent);
+}
+
+/* --- goals, ranking, year grid --- */
+
+.goal {
+	margin-left: 4px;
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--text-3);
+}
+
+.goal-bar {
+	height: 4px;
+	margin-top: 8px;
+	border-radius: 2px;
+	background: var(--border);
+	overflow: hidden;
+}
+
+.goal-bar > div {
+	height: 100%;
+	background: var(--accent);
+}
+
+.rank {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 2px 8px;
+	padding: 4px 0;
+	font-size: 13px;
+}
+
+.rank-title {
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+button.rank-title:hover {
+	color: var(--accent);
+}
+
+.rank-minutes {
+	font-variant-numeric: tabular-nums;
+	color: var(--text-2);
+}
+
+.rank-bar {
+	grid-column: 1 / -1;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--border);
+	overflow: hidden;
+}
+
+.rank-bar > div {
+	height: 100%;
+	border-radius: 2px;
+	background: var(--accent);
+}
+
+.year-grid {
+	display: grid;
+	grid-auto-columns: 1fr;
+	grid-auto-flow: column;
+	grid-template-rows: repeat(7, auto);
+	gap: 2px;
+}
+
+.cell {
+	aspect-ratio: 1;
+	border-radius: 2px;
+	background: var(--border);
+}
+
+.cell.l-1 {
+	background: none;
+}
+
+.cell.l1 {
+	background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.cell.l2 {
+	background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.cell.l3 {
+	background: color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.cell.l4 {
+	background: var(--accent);
+}
+
+.records-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 6px;
+}
+
 @media (hover: none) {
-	.record .hover-action {
+	.record .hover-action,
+	.adjust {
 		opacity: 1;
 	}
 }
